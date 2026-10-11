@@ -1,5 +1,6 @@
 const ERROR_MESSAGES = {
     400: 'ID inválido. Use o account ID do Dota ou o SteamID64.',
+    429: 'Muitas buscas em pouco tempo. Espere um minuto e tente de novo.',
     502: 'O OpenDota está indisponível no momento. Tente novamente em alguns minutos.',
 };
 

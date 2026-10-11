@@ -1,5 +1,7 @@
 # DotaAnalyst
 
+[![CI](https://github.com/andreomorg/dota_analyst/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/andreomorg/dota_analyst/actions/workflows/ci.yml)
+
 Analisador de partidas de Dota 2. Você informa seu account ID do Dota (ou SteamID64) e vê suas partidas recentes — herói, K/D/A, duração e resultado — com dados do [OpenDota](https://www.opendota.com).
 
 - **Back-end:** ASP.NET Core (.NET 10) em DDD — `Domain`, `Application`, `Infrastructure` e `Server` (API).

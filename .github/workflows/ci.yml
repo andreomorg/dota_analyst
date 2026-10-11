@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # Lets release.yml run these same checks before publishing an image.
+  workflow_call:
+
+# Least privilege: the jobs only need to read the code.
+permissions:
+  contents: read
+
+# A new push to the same branch/PR cancels the run that is still going for the old commit.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dotnet:
+    name: .NET tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
+      # setup-dotnet's built-in cache needs packages.lock.json files, which this repo
+      # does not have, so the NuGet folder is cached by hand, keyed on the .csproj files.
+      - uses: actions/cache@v6
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      # ExcludeSpaClient=true drops the reference to the React .esproj, so this job
+      # needs no Node/npm (the client has its own job). The solution is not built
+      # for the same reason.
+      - name: Restore
+        run: dotnet restore DotaAnalyst.Tests -p:ExcludeSpaClient=true
+
+      - name: Test
+        run: dotnet test DotaAnalyst.Tests -c Release --no-restore -p:ExcludeSpaClient=true
+
+  client:
+    name: React lint and build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: dotaanalyst.client
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: dotaanalyst.client/package-lock.json
+
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+
+  docker:
+    name: Docker image build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/setup-buildx-action@v4
+
+      # Only checks that the Dockerfile still builds; nothing is pushed.
+      # type=gha stores the layers in the GitHub Actions cache, so unchanged
+      # stages (npm ci, dotnet restore) are reused between runs.
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

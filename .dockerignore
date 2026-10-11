@@ -22,7 +22,9 @@ work/
 **/*.local
 **/appsettings.*.local.json
 
-# Docker files themselves
+# Docker, CI and hosting files (not needed inside the image)
 Dockerfile
 docker-compose.yml
 .dockerignore
+.github/
+render.yaml

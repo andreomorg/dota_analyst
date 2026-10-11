@@ -2,6 +2,8 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using DotaAnalyst.Application;
 using DotaAnalyst.Infrastructure;
+using DotaAnalyst.Server.RateLimiting;
+using Microsoft.AspNetCore.HttpOverrides;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -15,11 +17,42 @@ builder.Services.AddControllers()
 builder.Services.AddOpenApi();
 builder.Services.AddProblemDetails();
 builder.Services.AddHealthChecks();
+builder.Services.AddApiRateLimiting(builder.Configuration);
+
+// Behind the hosting platform's proxy, HTTPS ends at the proxy: X-Forwarded-For/-Proto carry the real
+// client IP and scheme. Only enabled where such a proxy exists (off locally), otherwise anyone could fake
+// their IP and bypass the rate limit. ForwardLimit = how many proxy hops (from the right of X-Forwarded-For)
+// are trusted: 1 when a single platform proxy appends the client IP. It depends on the host — check the real
+// header after deploying, or every user may end up counted as the proxy's IP.
+var forwardedHeadersEnabled = builder.Configuration.GetValue<bool>("ForwardedHeaders:Enabled");
+if (forwardedHeadersEnabled)
+{
+    var forwardLimit = builder.Configuration.GetValue("ForwardedHeaders:ForwardLimit", 1);
+    if (forwardLimit < 1)
+    {
+        throw new InvalidOperationException("ForwardedHeaders:ForwardLimit must be at least 1.");
+    }
+
+    builder.Services.Configure<ForwardedHeadersOptions>(options =>
+    {
+        options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+        options.ForwardLimit = forwardLimit;
+        // The platform's proxy address is not known in advance.
+        options.KnownIPNetworks.Clear();
+        options.KnownProxies.Clear();
+    });
+}
 
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 
 var app = builder.Build();
+
+if (forwardedHeadersEnabled)
+{
+    // First, so everything after it (rate limiter, future login) sees the real IP and scheme.
+    app.UseForwardedHeaders();
+}
 
 // Unexpected exceptions become a 500 ProblemDetails (with AddProblemDetails) instead of an empty body.
 app.UseExceptionHandler();
@@ -37,9 +70,12 @@ if (app.Environment.IsDevelopment())
     app.UseHttpsRedirection();
 }
 
+app.UseRateLimiter();
+
 app.UseAuthorization();
 
-app.MapControllers();
+// Every controller (the versioned business API) is rate limited; health checks are not.
+app.MapControllers().RequireRateLimiting(ApiRateLimiting.PolicyName);
 // Liveness only: does not call OpenDota, so the status reflects our own process, not OpenDota's.
 app.MapHealthChecks("/api/health");
 
@@ -48,3 +84,6 @@ app.MapFallback("/api/{**rest}", () => Results.Problem(statusCode: StatusCodes.S
 app.MapFallbackToFile("/index.html");
 
 app.Run();
+
+// Lets the integration tests (WebApplicationFactory<Program>) reference this top-level program.
+public partial class Program;

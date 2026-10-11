@@ -1,0 +1,23 @@
+# Render Blueprint: describes the production service (Render reads this when the service is
+# created with New -> Blueprint). Free plan: no credit card, sleeps after 15 min without traffic.
+# Deploys are triggered by .github/workflows/release.yml (deploy hook) when a v* tag is pushed,
+# always with the exact image version that passed CI.
+services:
+  - type: web
+    name: dotaanalyst
+    runtime: image
+    image:
+      url: ghcr.io/andreomorg/dota_analyst:latest
+    plan: free
+    # Closest to Brazil among Render's regions; the production database (Neon) should use us-east-1 too.
+    region: virginia
+    healthCheckPath: /api/health
+    envVars:
+      # Render routes traffic to $PORT (10000 by default); the image listens on 8080.
+      - key: PORT
+        value: "8080"
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      # HTTPS ends at Render's proxy: trust its X-Forwarded-For/-Proto (real client IP and scheme).
+      - key: ForwardedHeaders__Enabled
+        value: "true"

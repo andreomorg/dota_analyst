@@ -1,4 +1,5 @@
 using DotaAnalyst.Application.Abstractions;
+using DotaAnalyst.Infrastructure.Caching;
 using DotaAnalyst.Infrastructure.OpenDota;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -10,7 +11,7 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
-        services.AddMemoryCache();
+        services.AddMemoryCache(options => options.SizeLimit = CacheEntries.SizeLimit);
 
         services.AddOptions<OpenDotaOptions>()
             .Bind(configuration.GetSection(OpenDotaOptions.SectionName))

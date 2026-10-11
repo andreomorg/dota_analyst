@@ -1,5 +1,6 @@
 using DotaAnalyst.Application.Abstractions;
 using DotaAnalyst.Domain.Items;
+using DotaAnalyst.Infrastructure.Caching;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 
@@ -31,7 +32,7 @@ public class OpenDotaItemCatalog(
             await Task.WhenAll(itemIdsTask, itemsTask);
 
             var items = OpenDotaMappings.ToItems(await itemIdsTask, await itemsTask);
-            cache.Set(CacheKey, items, CacheDuration);
+            cache.Set(CacheKey, items, CacheEntries.Catalog(CacheDuration));
             logger.LogInformation("Loaded {ItemCount} items from OpenDota", items.Count);
             return items;
         }
@@ -39,7 +40,7 @@ public class OpenDotaItemCatalog(
         {
             logger.LogWarning(ex, "Could not load items from OpenDota");
             IReadOnlyDictionary<int, Item> empty = new Dictionary<int, Item>();
-            cache.Set(CacheKey, empty, FailureCacheDuration);
+            cache.Set(CacheKey, empty, CacheEntries.Catalog(FailureCacheDuration));
             return empty;
         }
     }

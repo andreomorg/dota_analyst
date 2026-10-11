@@ -30,14 +30,15 @@ public class OpenDotaReplayAnalyzerTests
     }
 
     [Fact]
-    public async Task GetMatchDetailsAsync_NotFound_ReturnsNullWithoutCaching()
+    public async Task GetMatchDetailsAsync_NotFound_ReturnsNullAndCachesIt()
     {
         var handler = new StubHandler(HttpStatusCode.NotFound, """{"error":"Not Found"}""");
         var analyzer = CreateAnalyzer(handler);
 
         Assert.Null(await analyzer.GetMatchDetailsAsync(CreateMatchId(1), CancellationToken.None));
         Assert.Null(await analyzer.GetMatchDetailsAsync(CreateMatchId(1), CancellationToken.None));
-        Assert.Equal(2, handler.Calls);
+        // The second request is answered by the cached "not found", without calling OpenDota.
+        Assert.Equal(1, handler.Calls);
     }
 
     [Theory]
@@ -52,11 +53,27 @@ public class OpenDotaReplayAnalyzerTests
             () => analyzer.GetMatchDetailsAsync(CreateMatchId(1), CancellationToken.None));
     }
 
-    private static OpenDotaReplayAnalyzer CreateAnalyzer(StubHandler handler)
+    [Fact]
+    public async Task GetMatchDetailsAsync_FullCache_StillWorks()
+    {
+        // A tiny cache: with SizeLimit, entries without a size would throw; extra entries are just evicted.
+        var handler = new StubHandler(HttpStatusCode.OK, FixtureJson);
+        var analyzer = CreateAnalyzer(handler, sizeLimit: 1);
+
+        foreach (var matchId in new long[] { 1, 2, 3 })
+        {
+            Assert.NotNull(await analyzer.GetMatchDetailsAsync(CreateMatchId(matchId), CancellationToken.None));
+        }
+
+        Assert.Equal(3, handler.Calls);
+    }
+
+    // Same SizeLimit setup as production (see AddInfrastructure), so every cache entry must declare its size.
+    private static OpenDotaReplayAnalyzer CreateAnalyzer(StubHandler handler, long sizeLimit = 1000)
     {
         var httpClient = new HttpClient(handler) { BaseAddress = new Uri("https://api.opendota.com/api/") };
         return new OpenDotaReplayAnalyzer(
-            new OpenDotaClient(httpClient), new MemoryCache(new MemoryCacheOptions()));
+            new OpenDotaClient(httpClient), new MemoryCache(new MemoryCacheOptions { SizeLimit = sizeLimit }));
     }
 
     private static MatchId CreateMatchId(long value)

@@ -1,5 +1,6 @@
 using DotaAnalyst.Application.Abstractions;
 using DotaAnalyst.Domain.Heroes;
+using DotaAnalyst.Infrastructure.Caching;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 
@@ -30,7 +31,7 @@ public class OpenDotaHeroCatalog(
                 .Where(hero => !string.IsNullOrWhiteSpace(hero.LocalizedName))
                 .DistinctBy(hero => hero.Id)
                 .ToDictionary(hero => hero.Id, hero => new Hero(hero.Id, hero.LocalizedName!));
-            cache.Set(CacheKey, heroes, CacheDuration);
+            cache.Set(CacheKey, heroes, CacheEntries.Catalog(CacheDuration));
             logger.LogInformation("Loaded {HeroCount} heroes from OpenDota", heroes.Count);
             return heroes;
         }
@@ -38,7 +39,7 @@ public class OpenDotaHeroCatalog(
         {
             logger.LogWarning(ex, "Could not load heroes from OpenDota");
             IReadOnlyDictionary<int, Hero> empty = new Dictionary<int, Hero>();
-            cache.Set(CacheKey, empty, FailureCacheDuration);
+            cache.Set(CacheKey, empty, CacheEntries.Catalog(FailureCacheDuration));
             return empty;
         }
     }

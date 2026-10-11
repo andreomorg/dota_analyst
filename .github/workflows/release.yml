@@ -1,0 +1,74 @@
+name: Release
+
+on:
+  push:
+    # Only semver tags (v1.2.0, v1.3.0-rc1): metadata-action needs one to name the image.
+    tags: ['v[0-9]+.[0-9]+.[0-9]+*']
+
+permissions:
+  contents: read
+
+env:
+  # GHCR requires lowercase image names. Hardcoded (instead of derived from
+  # github.repository) because expressions have no lowercase function and a
+  # fixed name is easier to read; change it if the repository is renamed.
+  IMAGE_NAME: ghcr.io/andreomorg/dota_analyst
+
+jobs:
+  # Reuses ci.yml (.NET tests, client lint/build, Docker build) so the checks
+  # live in one place. If any of them fails, publish does not run.
+  test:
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+
+  publish:
+    name: Publish image to GHCR
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write # lets GITHUB_TOKEN push to ghcr.io; no extra secret needed
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Turns the Git tag into image tags (v1.2.0 -> 1.2.0) and generates OCI labels
+      # (source repository, version, revision, created). "latest" is added automatically
+      # for stable versions only, so a pre-release tag like v1.3.0-rc1 doesn't move it.
+      - id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          tags: |
+            type=semver,pattern={{version}}
+
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # Same cache as the CI docker job, so most layers are already built.
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Asks Render to deploy exactly the image version just published (service described in render.yaml).
+      # The hook URL is a secret (anyone with it can trigger deploys); without it, the deploy is skipped.
+      - name: Deploy to Render
+        env:
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+          IMAGE: ${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}
+        run: |
+          if [ -z "$RENDER_DEPLOY_HOOK_URL" ]; then
+            echo "::warning::RENDER_DEPLOY_HOOK_URL secret is not set; skipping the Render deploy."
+            exit 0
+          fi
+          curl --fail --silent --show-error --get "$RENDER_DEPLOY_HOOK_URL" --data-urlencode "imgURL=$IMAGE"

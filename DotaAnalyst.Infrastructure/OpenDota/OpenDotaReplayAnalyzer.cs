@@ -1,5 +1,6 @@
 using DotaAnalyst.Application.Abstractions;
 using DotaAnalyst.Domain.Matches;
+using DotaAnalyst.Infrastructure.Caching;
 using Microsoft.Extensions.Caching.Memory;
 
 namespace DotaAnalyst.Infrastructure.OpenDota;
@@ -10,24 +11,31 @@ public class OpenDotaReplayAnalyzer(OpenDotaClient openDotaClient, IMemoryCache 
 {
     private static readonly TimeSpan ParsedCacheDuration = TimeSpan.FromHours(1);
     private static readonly TimeSpan UnparsedCacheDuration = TimeSpan.FromMinutes(5);
+    // "Not found" is remembered briefly, so repeated requests for a wrong ID don't all reach OpenDota.
+    private static readonly TimeSpan NotFoundCacheDuration = TimeSpan.FromMinutes(1);
 
     public async Task<MatchDetails?> GetMatchDetailsAsync(MatchId matchId, CancellationToken cancellationToken)
     {
         var cacheKey = $"opendota:match:{matchId.Value}";
-        if (cache.TryGetValue(cacheKey, out MatchDetails? cached) && cached is not null)
+        if (cache.TryGetValue(cacheKey, out CachedMatch? cached) && cached is not null)
         {
-            return cached;
+            return cached.Details;
         }
 
-        // Not found (null) and failures (exceptions) are not cached: the next request asks OpenDota again.
+        // Failures (exceptions) are not cached: the next request asks OpenDota again.
         var response = await openDotaClient.GetMatchAsync(matchId.Value, cancellationToken);
         if (response is null)
         {
+            cache.Set(cacheKey, new CachedMatch(null), CacheEntries.NotFound(NotFoundCacheDuration));
             return null;
         }
 
         var details = response.ToMatchDetails();
-        cache.Set(cacheKey, details, details.IsParsed ? ParsedCacheDuration : UnparsedCacheDuration);
+        var duration = details.IsParsed ? ParsedCacheDuration : UnparsedCacheDuration;
+        cache.Set(cacheKey, new CachedMatch(details), CacheEntries.Match(duration));
         return details;
     }
+
+    // Wrapper so a cached "not found" (null details) can be told apart from "not in the cache".
+    private sealed record CachedMatch(MatchDetails? Details);
 }

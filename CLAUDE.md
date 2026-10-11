@@ -38,7 +38,8 @@ Back-end em **.NET 10** organizado em **DDD**, um projeto por camada:
 ## Como rodar
 
 - **Banco local:** `docker compose up -d db` e a connection string no user-secrets do Server (`ConnectionStrings:Database`, já configurado nesta máquina). As migrations rodam sozinhas na subida da API. Para ver o banco: pgAdmin (instalado), `localhost:5432`, banco/usuário `dotaanalyst`, senha do `.env`.
-- Pelo Visual Studio: F5 sobe a API e o Vite juntos.
+- Pelo **VS Code** (editor principal desde 11/10/2026, com a extensão do Claude Code): F5 → "API + React" faz o build, sobe a API (perfil `https` do `launchSettings.json`, que inicia o Vite pelo SPA proxy) e abre o navegador. Testes .NET pela aba Testing (C# Dev Kit) ou tarefa "test .NET"; Go por "test Go". Configuração versionada em `.vscode/` (`launch.json`, `tasks.json`, `extensions.json`, `settings.json`; o resto da pasta fica fora do Git). O Git do VS Code é o do Visual Studio (`git.path` nas configurações do usuário).
+- Pelo Visual Studio: F5 sobe a API e o Vite juntos (continua funcionando; o Go não abre lá).
 - Pela linha de comando: `dotnet run --project DotaAnalyst.Server` (o SPA proxy inicia o Vite) ou, separadamente, `npm run dev` em `dotaanalyst.client/`.
 - API em `https://localhost:7208`; Vite em `https://localhost:59438`.
 - Pelo Docker: `docker compose up --build` na raiz → `http://localhost:8080` (build de produção, só HTTP; API + PostgreSQL). Precisa de um `.env` com `POSTGRES_PASSWORD` (veja `.env.example`); porta por `API_PORT`. `docker compose down` para parar (`-v` apaga os dados do banco).

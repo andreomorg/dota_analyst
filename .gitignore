@@ -10,9 +10,13 @@ work/
 [Bb]in/
 [Oo]bj/
 
-# Rider / VS Code
+# Rider / VS Code (the shared VS Code files are versioned: F5, tasks, recommended extensions, settings)
 .idea/
-.vscode/
+.vscode/*
+!.vscode/launch.json
+!.vscode/tasks.json
+!.vscode/extensions.json
+!.vscode/settings.json
 
 # Segredos locais
 appsettings.*.local.json

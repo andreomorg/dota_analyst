@@ -1,0 +1,47 @@
+{
+  // Ctrl+Shift+P → "Tasks: Run Task". "build server" also runs before F5.
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "build server",
+      "type": "process",
+      "command": "dotnet",
+      "args": ["build", "${workspaceFolder}/DotaAnalyst.Server/DotaAnalyst.Server.csproj", "/property:GenerateFullPaths=true", "/consoleloggerparameters:NoSummary"],
+      "problemMatcher": "$msCompile",
+      "group": { "kind": "build", "isDefault": true }
+    },
+    {
+      // Same command as the CI. The database tests need Docker running.
+      "label": "test .NET",
+      "type": "process",
+      "command": "dotnet",
+      "args": ["test", "${workspaceFolder}/DotaAnalyst.Tests", "-c", "Release", "-p:ExcludeSpaClient=true"],
+      "problemMatcher": "$msCompile",
+      "group": "test"
+    },
+    {
+      "label": "test Go",
+      "type": "process",
+      "command": "go",
+      "args": ["test", "./..."],
+      "options": { "cwd": "${workspaceFolder}/replay-parser" },
+      "problemMatcher": "$go",
+      "group": "test"
+    },
+    {
+      "label": "database up (docker)",
+      "type": "process",
+      "command": "docker",
+      "args": ["compose", "up", "-d", "db"],
+      "problemMatcher": []
+    },
+    {
+      "label": "React lint",
+      "type": "process",
+      "command": "npm",
+      "args": ["run", "lint"],
+      "options": { "cwd": "${workspaceFolder}/dotaanalyst.client" },
+      "problemMatcher": "$eslint-stylish"
+    }
+  ]
+}

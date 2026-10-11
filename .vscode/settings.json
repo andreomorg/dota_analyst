@@ -1,0 +1,7 @@
+{
+  // The solution C# Dev Kit loads (the same one Visual Studio opens).
+  "dotnet.defaultSolution": "DotaAnalyst.slnx",
+  // The Go module lives in replay-parser/ (gopls finds modules in subfolders on its own).
+  "eslint.workingDirectories": ["dotaanalyst.client"],
+  "files.exclude": { "**/bin": true, "**/obj": true }
+}

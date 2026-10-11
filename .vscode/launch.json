@@ -1,0 +1,40 @@
+{
+  // F5 in VS Code, like F5 in Visual Studio.
+  "version": "0.2.0",
+  "configurations": [
+    {
+      // API on https://localhost:7208; the SPA proxy (launchSettings "https" profile) starts Vite on
+      // https://localhost:59438 and the browser page waits for it, then redirects.
+      "name": "API + React",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build server",
+      "program": "${workspaceFolder}/DotaAnalyst.Server/bin/Debug/net10.0/DotaAnalyst.Server.dll",
+      "cwd": "${workspaceFolder}/DotaAnalyst.Server",
+      "launchSettingsProfile": "https",
+      "console": "integratedTerminal",
+      "serverReadyAction": {
+        "action": "openExternally",
+        "pattern": "\\bNow listening on:\\s+(https://\\S+)"
+      }
+    },
+    {
+      "name": "replay-parser (Go)",
+      "type": "go",
+      "request": "launch",
+      "mode": "auto",
+      "program": "${workspaceFolder}/replay-parser/cmd/replay-parser",
+      "cwd": "${workspaceFolder}/replay-parser"
+    },
+    {
+      // Prints entity properties of a downloaded replay (see replay-parser/CLAUDE.md).
+      "name": "inspect replay (Go)",
+      "type": "go",
+      "request": "launch",
+      "mode": "auto",
+      "program": "${workspaceFolder}/replay-parser/cmd/inspect",
+      "cwd": "${workspaceFolder}/replay-parser",
+      "args": ["-replay", "../work/replays/9034320024.dem.bz2"]
+    }
+  ]
+}

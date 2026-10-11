@@ -15,6 +15,9 @@ internal static class CacheEntries
     // One entry per match: there can be many, so they are evicted before catalogs.
     public static MemoryCacheEntryOptions Match(TimeSpan duration) => Create(duration, CacheItemPriority.Normal);
 
+    // Steam profiles (name, avatar) of logged-in users.
+    public static MemoryCacheEntryOptions Profile(TimeSpan duration) => Create(duration, CacheItemPriority.Normal);
+
     // "Not found" answers are cheap to lose and can be flooded with random IDs: evicted first.
     public static MemoryCacheEntryOptions NotFound(TimeSpan duration) => Create(duration, CacheItemPriority.Low);
 

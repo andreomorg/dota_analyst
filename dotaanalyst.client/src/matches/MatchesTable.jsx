@@ -10,7 +10,7 @@ function resultOf(match) {
         : { label: 'Derrota', className: 'result-loss' };
 }
 
-function MatchesTable({ matches }) {
+function MatchesTable({ matches, accountId }) {
     return (
         <div className="table-scroll">
             <table className="matches-table">
@@ -30,7 +30,8 @@ function MatchesTable({ matches }) {
                             <tr key={match.matchId}>
                                 <td>
                                     {/* A real link: reachable with Tab, opens with Enter, works with "open in new tab". */}
-                                    <Link to={`/matches/${match.matchId}`}>
+                                    {/* The state tells the analysis page whose matches these are (may not be the logged-in user's). */}
+                                    <Link to={`/matches/${match.matchId}`} state={{ accountId }}>
                                         {match.heroName}
                                         <span className="visually-hidden"> — ver análise da partida</span>
                                     </Link>

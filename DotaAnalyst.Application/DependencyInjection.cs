@@ -1,4 +1,5 @@
 using DotaAnalyst.Application.Matches;
+using DotaAnalyst.Application.Players;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -13,6 +14,7 @@ public static class DependencyInjection
 
         services.AddScoped<GetRecentMatchesHandler>();
         services.AddScoped<GetMatchAnalysisHandler>();
+        services.AddScoped<GetUserProfileHandler>();
         return services;
     }
 }

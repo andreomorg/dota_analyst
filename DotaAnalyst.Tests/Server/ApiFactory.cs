@@ -1,4 +1,7 @@
 using System.Collections.Concurrent;
+using System.Net;
+using System.Text;
+using AspNet.Security.OpenId.Steam;
 using DotaAnalyst.Application.Abstractions;
 using DotaAnalyst.Domain.Heroes;
 using DotaAnalyst.Domain.Items;
@@ -27,7 +30,9 @@ internal sealed class ApiFactory(IReadOnlyDictionary<string, string?>? settings 
     {
         // No database: an empty connection string wins over the developer's user-secrets (which the
         // Development environment of the tests would otherwise load) and makes the app run without one.
+        // Same for the Steam Web API key: profiles come from the fake below.
         builder.UseSetting("ConnectionStrings:Database", "");
+        builder.UseSetting("Steam:ApiKey", "");
 
         // UseSetting (not ConfigureAppConfiguration) so values read while Program builds the app also see them.
         foreach (var (key, value) in settings ?? new Dictionary<string, string?>())
@@ -44,7 +49,61 @@ internal sealed class ApiFactory(IReadOnlyDictionary<string, string?>? settings 
             services.AddSingleton<IItemCatalog>(new FakeItemCatalog());
             services.AddSingleton<IMatchRepository>(SavedMatches);
             services.AddSingleton<IPlayerSearchRepository>(PlayerSearches);
+            services.AddSingleton<ISteamProfileProvider>(SteamProfiles);
+            // Server-to-Steam calls of the login (OpenID discovery and check_authentication) go to a fake Steam.
+            services.Configure<SteamAuthenticationOptions>(
+                SteamAuthenticationDefaults.AuthenticationScheme,
+                options => options.BackchannelHttpHandler = Steam);
         });
+    }
+
+    public FakeSteamOpenId Steam { get; } = new();
+
+    public FakeSteamProfiles SteamProfiles { get; } = new();
+
+    // Answers like steamcommunity.com/openid does: the discovery document, and the confirmation of a login.
+    public sealed class FakeSteamOpenId : HttpMessageHandler
+    {
+        // What Steam says when asked "did you really sign this login?".
+        public bool LoginIsValid { get; set; } = true;
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            var response = request.Method == HttpMethod.Post
+                ? new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(
+                        $"ns:http://specs.openid.net/auth/2.0\nis_valid:{(LoginIsValid ? "true" : "false")}\n"),
+                }
+                : new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(
+                        """
+                        <?xml version="1.0" encoding="UTF-8"?>
+                        <xrds:XRDS xmlns:xrds="xri://$xrds" xmlns="xri://$xrd*($v*2.0)">
+                          <XRD>
+                            <Service priority="0">
+                              <Type>http://specs.openid.net/auth/2.0/server</Type>
+                              <URI>https://steamcommunity.com/openid/login</URI>
+                            </Service>
+                          </XRD>
+                        </xrds:XRDS>
+                        """,
+                        Encoding.UTF8,
+                        "application/xrds+xml"),
+                };
+            return Task.FromResult(response);
+        }
+    }
+
+    public sealed class FakeSteamProfiles : ISteamProfileProvider
+    {
+        public PlayerProfile? Profile { get; set; }
+
+        public bool Fail { get; set; }
+
+        public Task<PlayerProfile?> GetProfileAsync(AccountId accountId, CancellationToken cancellationToken) =>
+            Fail ? throw new DataSourceUnavailableException("Steam is down.") : Task.FromResult(Profile);
     }
 
     public sealed class FakeMatchRepository : IMatchRepository

@@ -8,6 +8,9 @@ public readonly record struct AccountId
 
     public long Value { get; }
 
+    // The same account as a SteamID64 (the ID Steam uses in profile URLs and in the Steam login).
+    public long SteamId64 => Value + SteamId64Offset;
+
     private AccountId(long value) => Value = value;
 
     // Accepts either a Dota account ID or a SteamID64.

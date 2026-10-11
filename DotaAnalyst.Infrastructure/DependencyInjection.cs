@@ -6,6 +6,7 @@ using DotaAnalyst.Infrastructure.Persistence;
 using DotaAnalyst.Infrastructure.Persistence.Catalogs;
 using DotaAnalyst.Infrastructure.Persistence.Matches;
 using DotaAnalyst.Infrastructure.Persistence.Players;
+using DotaAnalyst.Infrastructure.Steam;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -22,9 +23,32 @@ public static class DependencyInjection
         services.TryAddSingleton(TimeProvider.System);
 
         AddOpenDota(services, configuration);
+        AddSteamProfiles(services, configuration);
         AddDatabase(services, configuration);
 
         return services;
+    }
+
+    private static void AddSteamProfiles(IServiceCollection services, IConfiguration configuration)
+    {
+        var section = configuration.GetSection(SteamOptions.SectionName);
+        services.AddOptions<SteamOptions>().Bind(section);
+
+        // Names and avatars are optional: without a Steam Web API key the site just doesn't show them.
+        if (string.IsNullOrWhiteSpace(section.GetValue<string>(nameof(SteamOptions.ApiKey))))
+        {
+            services.AddSingleton<ISteamProfileProvider, NoSteamProfiles>();
+            return;
+        }
+
+        services.AddHttpClient<ISteamProfileProvider, SteamProfileProvider>((serviceProvider, client) =>
+            {
+                var options = serviceProvider.GetRequiredService<IOptions<SteamOptions>>().Value;
+                client.BaseAddress = options.BaseUrl;
+                client.Timeout = options.Timeout;
+            })
+            // The default HttpClient logs write the full request URL, and Steam's API key travels in it.
+            .RemoveAllLoggers();
     }
 
     private static void AddOpenDota(IServiceCollection services, IConfiguration configuration)

@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router';
+import { Link, useLocation, useParams } from 'react-router';
 import { readSavedAccountId } from '../accountStorage';
 import { fetchMatchAnalysis } from '../api/matches';
+import { useCurrentUser } from '../auth/useCurrentUser';
 import MatchHeader from './MatchHeader';
 import PerformanceSummary from './PerformanceSummary';
 import TeamTable from './TeamTable';
@@ -22,8 +23,24 @@ function BackLink() {
 
 function MatchAnalysisPage() {
     const { matchId } = useParams();
-    const [accountId] = useState(readSavedAccountId);
-    const canFetch = accountId !== '' && isValidMatchId(matchId);
+    const location = useLocation();
+    const { status: sessionStatus, user } = useCurrentUser();
+    const [savedAccountId] = useState(readSavedAccountId);
+
+    // Whose point of view: the player whose list the user clicked (sent by MatchesTable),
+    // else the logged-in user, else the ID saved in this browser. null = session still loading,
+    // so no request goes out with the wrong ID.
+    const linkedAccountId = location.state?.accountId;
+    let accountId;
+    if (typeof linkedAccountId === 'string' && linkedAccountId !== '') {
+        accountId = linkedAccountId;
+    } else if (sessionStatus === 'loading') {
+        accountId = null;
+    } else {
+        accountId = sessionStatus === 'authenticated' ? String(user.accountId) : savedAccountId;
+    }
+
+    const canFetch = accountId !== null && accountId !== '' && isValidMatchId(matchId);
     const requestKey = `${accountId}/${matchId}`;
 
     // The result remembers which request produced it. If the URL changes (another match),
@@ -58,7 +75,7 @@ function MatchAnalysisPage() {
                 <BackLink />
                 <h1>Partida {matchId}</h1>
                 <p>
-                    Para ver a análise, primeiro informe o seu account ID do Dota na{' '}
+                    Para ver a análise, entre com a Steam ou informe o seu account ID do Dota na{' '}
                     <Link to="/">lista de partidas</Link>.
                 </p>
             </main>

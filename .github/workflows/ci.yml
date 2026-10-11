@@ -44,6 +44,13 @@ jobs:
       - name: Test
         run: dotnet test DotaAnalyst.Tests -c Release --no-restore -p:ExcludeSpaClient=true
 
+      # Fails when any NuGet package (direct or indirect) has a known vulnerability, so we hear about it
+      # here instead of only through a Visual Studio warning. Package lines in the report start with ">".
+      - name: Vulnerable packages
+        run: |
+          dotnet list DotaAnalyst.Tests package --vulnerable --include-transitive | tee vulnerable.txt
+          if grep -q '^ *>' vulnerable.txt; then exit 1; fi
+
   client:
     name: React lint and build
     runs-on: ubuntu-latest

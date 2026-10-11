@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/andreomorg/dota_analyst/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/andreomorg/dota_analyst/actions/workflows/ci.yml)
 
-Analisador de partidas de Dota 2. Você informa seu account ID do Dota (ou SteamID64) e vê suas partidas recentes — herói, K/D/A, duração e resultado — com dados do [OpenDota](https://www.opendota.com).
+Analisador de partidas de Dota 2. Entre com a sua conta Steam (senha ou QR code no app Steam) — ou informe qualquer account ID do Dota/SteamID64 — e veja as partidas recentes e a análise de cada uma (herói, K/D/A, pontos fortes e a melhorar), com dados do [OpenDota](https://www.opendota.com).
 
 - **Back-end:** ASP.NET Core (.NET 10) em DDD — `Domain`, `Application`, `Infrastructure` e `Server` (API).
 - **Banco:** PostgreSQL com EF Core — guarda partidas já analisadas, nomes de heróis/itens, jogadores pesquisados e as chaves do Data Protection.
@@ -21,7 +21,9 @@ docker compose up --build
 
 Abra http://localhost:8080. Para parar: `docker compose down` (os dados do banco ficam no volume `db-data`; `docker compose down -v` apaga tudo).
 
-O `.env` define a porta da aplicação (`API_PORT`), a senha do PostgreSQL local (`POSTGRES_PASSWORD`, obrigatória) e a porta do banco na sua máquina (`POSTGRES_PORT`, só em 127.0.0.1).
+O `.env` define a porta da aplicação (`API_PORT`), a senha do PostgreSQL local (`POSTGRES_PASSWORD`, obrigatória), a porta do banco na sua máquina (`POSTGRES_PORT`, só em 127.0.0.1) e, opcionalmente, a [Steam Web API key](https://steamcommunity.com/dev/apikey) (`STEAM_API_KEY`) para mostrar nome e avatar de quem está logado.
+
+O login com a Steam funciona também em `http://localhost:8080`.
 
 ## Rodando para desenvolver
 

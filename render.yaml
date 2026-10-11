@@ -37,3 +37,7 @@ services:
       # Without it the app still runs, on OpenDota alone.
       - key: ConnectionStrings__Database
         sync: false
+      # Steam Web API key (secret, typed in Render's dashboard) for the logged-in user's name and avatar.
+      # Optional: without it the site only shows the account ID.
+      - key: Steam__ApiKey
+        sync: false

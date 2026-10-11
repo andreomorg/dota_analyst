@@ -14,6 +14,14 @@ public class AccountIdTests
         Assert.Equal(expected, accountId.Value);
     }
 
+    [Fact]
+    public void SteamId64_IsTheSameAccountBack()
+    {
+        Assert.True(AccountId.TryCreate(87278757, out var accountId));
+
+        Assert.Equal(76561198047544485, accountId.SteamId64);
+    }
+
     [Theory]
     [InlineData(0)]
     [InlineData(-1)]

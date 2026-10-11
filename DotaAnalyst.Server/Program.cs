@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using DotaAnalyst.Application;
 using DotaAnalyst.Infrastructure;
+using DotaAnalyst.Server.Authentication;
 using DotaAnalyst.Server.Diagnostics;
 using DotaAnalyst.Server.RateLimiting;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -19,6 +20,7 @@ builder.Services.AddOpenApi();
 builder.Services.AddProblemDetails();
 builder.Services.AddHealthChecks();
 builder.Services.AddApiRateLimiting(builder.Configuration);
+builder.Services.AddSteamAuthentication();
 
 // Behind the hosting platform's proxy, HTTPS ends at the proxy: X-Forwarded-For/-Proto carry the real
 // client IP and scheme. Only enabled where such a proxy exists (off locally), otherwise anyone could fake
@@ -79,6 +81,10 @@ if (app.Environment.IsDevelopment())
     // and HTTPS is the job of a reverse proxy in front of it.
     app.UseHttpsRedirection();
 }
+
+// Reads the session cookie and handles Steam's answer at /api/auth/steam/callback. After the forwarded
+// headers, so it sees the real scheme (HTTPS) and host when building the address Steam sends the user back to.
+app.UseAuthentication();
 
 app.UseRateLimiter();
 

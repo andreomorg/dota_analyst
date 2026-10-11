@@ -12,6 +12,8 @@ services:
       # "db" is the database service's name: containers of the same compose project reach each other by name.
       # Timeout=5: give up connecting after 5 s (default 15) when the database is down.
       ConnectionStrings__Database: "Host=db;Port=5432;Database=dotaanalyst;Username=dotaanalyst;Timeout=5;Password=${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the .env file (see .env.example)}"
+      # Optional: Steam Web API key for names/avatars of logged-in users (empty = not shown).
+      Steam__ApiKey: "${STEAM_API_KEY:-}"
     depends_on:
       # Waits for PostgreSQL to accept connections (its health check), not just for its container to start.
       db:

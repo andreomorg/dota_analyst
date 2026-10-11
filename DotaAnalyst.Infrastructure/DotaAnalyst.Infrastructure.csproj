@@ -10,6 +10,11 @@
     <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.12" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Lets tests use OpenDotaClient.JsonOptions to read JSON fixtures exactly like the client. -->
+    <InternalsVisibleTo Include="DotaAnalyst.Tests" />
+  </ItemGroup>
+
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>

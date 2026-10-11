@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using DotaAnalyst.Application.Abstractions;
@@ -7,28 +8,62 @@ namespace DotaAnalyst.Infrastructure.OpenDota;
 // Typed client: the HttpClient is created and configured by AddHttpClient<OpenDotaClient> in DependencyInjection.
 public class OpenDotaClient(HttpClient httpClient)
 {
-    private static readonly JsonSerializerOptions JsonOptions = new()
+    // Internal so tests can deserialize JSON fixtures exactly like the client does.
+    // Only property names are converted: dictionary keys (item IDs, benchmark names) are kept as they come.
+    internal static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
     };
 
-    public Task<IReadOnlyList<OpenDotaRecentMatch>> GetRecentMatchesAsync(
+    public async Task<IReadOnlyList<OpenDotaRecentMatch>> GetRecentMatchesAsync(
         long accountId, CancellationToken cancellationToken)
     {
-        return GetListAsync<OpenDotaRecentMatch>($"players/{accountId}/recentMatches", cancellationToken);
+        return await GetJsonAsync<List<OpenDotaRecentMatch>>(
+            $"players/{accountId}/recentMatches", notFoundAsNull: false, cancellationToken) ?? [];
     }
 
-    public Task<IReadOnlyList<OpenDotaHero>> GetHeroesAsync(CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<OpenDotaHero>> GetHeroesAsync(CancellationToken cancellationToken)
     {
-        return GetListAsync<OpenDotaHero>("heroes", cancellationToken);
+        return await GetJsonAsync<List<OpenDotaHero>>("heroes", notFoundAsNull: false, cancellationToken) ?? [];
     }
 
-    private async Task<IReadOnlyList<T>> GetListAsync<T>(string path, CancellationToken cancellationToken)
+    // Null when OpenDota answers 404: a match that doesn't exist is an expected result, not a failure.
+    public Task<OpenDotaMatch?> GetMatchAsync(long matchId, CancellationToken cancellationToken)
+    {
+        return GetJsonAsync<OpenDotaMatch>($"matches/{matchId}", notFoundAsNull: true, cancellationToken);
+    }
+
+    // GET constants/item_ids: { "1": "blink", ... } (item ID -> item key).
+    public async Task<IReadOnlyDictionary<int, string>> GetItemIdsAsync(CancellationToken cancellationToken)
+    {
+        return await GetJsonAsync<Dictionary<int, string>>(
+            "constants/item_ids", notFoundAsNull: false, cancellationToken) ?? [];
+    }
+
+    // GET constants/items: { "blink": { "dname": "Blink Dagger", ... }, ... } (item key -> item data).
+    public async Task<IReadOnlyDictionary<string, OpenDotaItem>> GetItemsAsync(CancellationToken cancellationToken)
+    {
+        return await GetJsonAsync<Dictionary<string, OpenDotaItem>>(
+            "constants/items", notFoundAsNull: false, cancellationToken) ?? [];
+    }
+
+    // Single place that turns every transport/format problem into DataSourceUnavailableException,
+    // so the Application never sees HttpClient or JSON exceptions.
+    private async Task<T?> GetJsonAsync<T>(string path, bool notFoundAsNull, CancellationToken cancellationToken)
+        where T : class
     {
         try
         {
-            var items = await httpClient.GetFromJsonAsync<List<T>>(path, JsonOptions, cancellationToken);
-            return items ?? [];
+            using var response = await httpClient.GetAsync(
+                path, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+
+            if (notFoundAsNull && response.StatusCode == HttpStatusCode.NotFound)
+            {
+                return null;
+            }
+
+            response.EnsureSuccessStatusCode();
+            return await response.Content.ReadFromJsonAsync<T>(JsonOptions, cancellationToken);
         }
         catch (HttpRequestException ex)
         {

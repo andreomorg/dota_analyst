@@ -29,6 +29,8 @@ public static class DependencyInjection
 
         services.AddScoped<IMatchProvider, OpenDotaMatchProvider>();
         services.AddScoped<IHeroCatalog, OpenDotaHeroCatalog>();
+        services.AddScoped<IReplayAnalyzer, OpenDotaReplayAnalyzer>();
+        services.AddScoped<IItemCatalog, OpenDotaItemCatalog>();
 
         return services;
     }

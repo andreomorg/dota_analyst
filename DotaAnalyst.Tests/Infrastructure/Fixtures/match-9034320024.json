@@ -1,0 +1,670 @@
+{
+  "match_id": 9034320024,
+  "radiant_win": true,
+  "duration": 1725,
+  "start_time": 1791422972,
+  "radiant_score": 60,
+  "dire_score": 22,
+  "players": [
+    {
+      "account_id": 136023365,
+      "player_slot": 0,
+      "hero_id": 32,
+      "kills": 32,
+      "deaths": 3,
+      "assists": 9,
+      "last_hits": 193,
+      "denies": 22,
+      "gold_per_min": 814,
+      "xp_per_min": 1357,
+      "net_worth": 22217,
+      "hero_damage": 39465,
+      "tower_damage": 6274,
+      "hero_healing": 0,
+      "level": 26,
+      "item_0": 1097,
+      "item_1": 147,
+      "item_2": 569,
+      "item_3": 63,
+      "item_4": 75,
+      "item_5": 1808,
+      "item_neutral": 2097,
+      "benchmarks": {
+        "gold_per_min": {
+          "raw": 814,
+          "pct": 0.9887931034482759
+        },
+        "xp_per_min": {
+          "raw": 1357,
+          "pct": 0.9629310344827586
+        },
+        "kills_per_min": {
+          "raw": 1.1130434782608696,
+          "pct": 0.9982758620689656
+        },
+        "deaths_per_min": {
+          "raw": 0.10434782608695653,
+          "pct": 0.8370689655172414
+        },
+        "assists_per_min": {
+          "raw": 0.3130434782608696,
+          "pct": 0.5043103448275862
+        },
+        "last_hits_per_min": {
+          "raw": 6.713043478260869,
+          "pct": 0.946551724137931
+        },
+        "denies_per_min": {
+          "raw": 0.7652173913043478,
+          "pct": 0.9896551724137931
+        },
+        "hero_damage_per_min": {
+          "raw": 1372.695652173913,
+          "pct": 0.9758620689655172
+        },
+        "hero_healing_per_min": {
+          "raw": 0,
+          "pct": 0.8827586206896552
+        },
+        "tower_damage": {
+          "raw": 6274,
+          "pct": 0.8939655172413793
+        }
+      }
+    },
+    {
+      "account_id": 116571085,
+      "player_slot": 1,
+      "hero_id": 29,
+      "kills": 3,
+      "deaths": 5,
+      "assists": 17,
+      "last_hits": 138,
+      "denies": 10,
+      "gold_per_min": 433,
+      "xp_per_min": 513,
+      "net_worth": 11497,
+      "hero_damage": 10290,
+      "tower_damage": 1422,
+      "hero_healing": 4676,
+      "level": 16,
+      "item_0": 231,
+      "item_1": 178,
+      "item_2": 170,
+      "item_3": 1,
+      "item_4": 36,
+      "item_5": 0,
+      "item_neutral": 565,
+      "benchmarks": {
+        "gold_per_min": {
+          "raw": 433,
+          "pct": 0.3925016589250166
+        },
+        "xp_per_min": {
+          "raw": 513,
+          "pct": 0.22793629727936296
+        },
+        "kills_per_min": {
+          "raw": 0.10434782608695653,
+          "pct": 0.4359654943596549
+        },
+        "deaths_per_min": {
+          "raw": 0.17391304347826086,
+          "pct": 0.5351692103516921
+        },
+        "assists_per_min": {
+          "raw": 0.5913043478260869,
+          "pct": 0.8248175182481752
+        },
+        "last_hits_per_min": {
+          "raw": 4.8,
+          "pct": 0.42667551426675515
+        },
+        "denies_per_min": {
+          "raw": 0.34782608695652173,
+          "pct": 0.9482415394824154
+        },
+        "hero_damage_per_min": {
+          "raw": 357.9130434782609,
+          "pct": 0.1672196416721964
+        },
+        "hero_healing_per_min": {
+          "raw": 162.64347826086956,
+          "pct": 0.9804246848042468
+        },
+        "tower_damage": {
+          "raw": 1422,
+          "pct": 0.581950895819509
+        }
+      }
+    },
+    {
+      "account_id": 757581431,
+      "player_slot": 2,
+      "hero_id": 17,
+      "kills": 20,
+      "deaths": 3,
+      "assists": 12,
+      "last_hits": 210,
+      "denies": 24,
+      "gold_per_min": 778,
+      "xp_per_min": 962,
+      "net_worth": 21588,
+      "hero_damage": 29988,
+      "tower_damage": 15674,
+      "hero_healing": 0,
+      "level": 22,
+      "item_0": 119,
+      "item_1": 147,
+      "item_2": 223,
+      "item_3": 1806,
+      "item_4": 63,
+      "item_5": 77,
+      "item_neutral": 1606,
+      "benchmarks": {
+        "gold_per_min": {
+          "raw": 778,
+          "pct": 0.970703125
+        },
+        "xp_per_min": {
+          "raw": 962,
+          "pct": 0.7548828125
+        },
+        "kills_per_min": {
+          "raw": 0.6956521739130435,
+          "pct": 0.984375
+        },
+        "deaths_per_min": {
+          "raw": 0.10434782608695653,
+          "pct": 0.759765625
+        },
+        "assists_per_min": {
+          "raw": 0.4173913043478261,
+          "pct": 0.8046875
+        },
+        "last_hits_per_min": {
+          "raw": 7.304347826086957,
+          "pct": 0.7197265625
+        },
+        "denies_per_min": {
+          "raw": 0.8347826086956522,
+          "pct": 1
+        },
+        "hero_damage_per_min": {
+          "raw": 1043.0608695652172,
+          "pct": 0.896484375
+        },
+        "hero_healing_per_min": {
+          "raw": 0,
+          "pct": 0.9150390625
+        },
+        "tower_damage": {
+          "raw": 15674,
+          "pct": 1
+        }
+      }
+    },
+    {
+      "account_id": 99035702,
+      "player_slot": 3,
+      "hero_id": 88,
+      "kills": 3,
+      "deaths": 7,
+      "assists": 25,
+      "last_hits": 34,
+      "denies": 3,
+      "gold_per_min": 332,
+      "xp_per_min": 510,
+      "net_worth": 9142,
+      "hero_damage": 11346,
+      "tower_damage": 2850,
+      "hero_healing": 125,
+      "level": 16,
+      "item_0": 1,
+      "item_1": 30,
+      "item_2": 267,
+      "item_3": 244,
+      "item_4": 180,
+      "item_5": 16,
+      "item_neutral": 1604,
+      "benchmarks": {
+        "gold_per_min": {
+          "raw": 332,
+          "pct": 0.3672607879924953
+        },
+        "xp_per_min": {
+          "raw": 510,
+          "pct": 0.29831144465290804
+        },
+        "kills_per_min": {
+          "raw": 0.10434782608695653,
+          "pct": 0.2579737335834897
+        },
+        "deaths_per_min": {
+          "raw": 0.24347826086956523,
+          "pct": 0.4305816135084428
+        },
+        "assists_per_min": {
+          "raw": 0.8695652173913043,
+          "pct": 0.9910881801125704
+        },
+        "last_hits_per_min": {
+          "raw": 1.1826086956521737,
+          "pct": 0.34380863039399623
+        },
+        "denies_per_min": {
+          "raw": 0.10434782608695653,
+          "pct": 0.6327392120075047
+        },
+        "hero_damage_per_min": {
+          "raw": 394.6434782608696,
+          "pct": 0.1894934333958724
+        },
+        "hero_healing_per_min": {
+          "raw": 4.3478260869565215,
+          "pct": 0.8161350844277674
+        },
+        "tower_damage": {
+          "raw": 2850,
+          "pct": 0.950750469043152
+        }
+      }
+    },
+    {
+      "account_id": 99517715,
+      "player_slot": 4,
+      "hero_id": 31,
+      "kills": 2,
+      "deaths": 4,
+      "assists": 19,
+      "last_hits": 62,
+      "denies": 18,
+      "gold_per_min": 358,
+      "xp_per_min": 504,
+      "net_worth": 10089,
+      "hero_damage": 12397,
+      "tower_damage": 2200,
+      "hero_healing": 0,
+      "level": 16,
+      "item_0": 214,
+      "item_1": 1,
+      "item_2": 254,
+      "item_3": 36,
+      "item_4": 60,
+      "item_5": 0,
+      "item_neutral": 1599,
+      "benchmarks": {
+        "gold_per_min": {
+          "raw": 358,
+          "pct": 0.5095805282237182
+        },
+        "xp_per_min": {
+          "raw": 504,
+          "pct": 0.38218539616778874
+        },
+        "kills_per_min": {
+          "raw": 0.06956521739130435,
+          "pct": 0.18694976696012428
+        },
+        "deaths_per_min": {
+          "raw": 0.1391304347826087,
+          "pct": 0.8648368720870016
+        },
+        "assists_per_min": {
+          "raw": 0.6608695652173914,
+          "pct": 0.8726048679440704
+        },
+        "last_hits_per_min": {
+          "raw": 2.1565217391304348,
+          "pct": 0.7721387881926463
+        },
+        "denies_per_min": {
+          "raw": 0.6260869565217392,
+          "pct": 0.9735888140859659
+        },
+        "hero_damage_per_min": {
+          "raw": 431.2,
+          "pct": 0.39047125841532887
+        },
+        "hero_healing_per_min": {
+          "raw": 0,
+          "pct": 0.7017089590885551
+        },
+        "tower_damage": {
+          "raw": 2200,
+          "pct": 0.9684101501812532
+        }
+      }
+    },
+    {
+      "account_id": 197670655,
+      "player_slot": 128,
+      "hero_id": 85,
+      "kills": 8,
+      "deaths": 12,
+      "assists": 6,
+      "last_hits": 54,
+      "denies": 0,
+      "gold_per_min": 311,
+      "xp_per_min": 294,
+      "net_worth": 7884,
+      "hero_damage": 9792,
+      "tower_damage": 0,
+      "hero_healing": 149,
+      "level": 12,
+      "item_0": 65,
+      "item_1": 94,
+      "item_2": 127,
+      "item_3": 180,
+      "item_4": 36,
+      "item_5": 42,
+      "item_neutral": 71,
+      "benchmarks": {
+        "gold_per_min": {
+          "raw": 311,
+          "pct": 0.1781190019193858
+        },
+        "xp_per_min": {
+          "raw": 294,
+          "pct": 0.03685220729366603
+        },
+        "kills_per_min": {
+          "raw": 0.2782608695652174,
+          "pct": 0.8487523992322457
+        },
+        "deaths_per_min": {
+          "raw": 0.4173913043478261,
+          "pct": 0.05067178502879077
+        },
+        "assists_per_min": {
+          "raw": 0.20869565217391306,
+          "pct": 0.09635316698656429
+        },
+        "last_hits_per_min": {
+          "raw": 1.8782608695652177,
+          "pct": 0.290978886756238
+        },
+        "denies_per_min": {
+          "raw": 0,
+          "pct": 0.16314779270633398
+        },
+        "hero_damage_per_min": {
+          "raw": 340.59130434782605,
+          "pct": 0.4023032629558541
+        },
+        "hero_healing_per_min": {
+          "raw": 5.182608695652173,
+          "pct": 0.07408829174664107
+        },
+        "tower_damage": {
+          "raw": 0,
+          "pct": 0.14971209213051823
+        }
+      }
+    },
+    {
+      "account_id": 315069551,
+      "player_slot": 129,
+      "hero_id": 68,
+      "kills": 6,
+      "deaths": 9,
+      "assists": 6,
+      "last_hits": 49,
+      "denies": 2,
+      "gold_per_min": 260,
+      "xp_per_min": 287,
+      "net_worth": 6067,
+      "hero_damage": 9304,
+      "tower_damage": 115,
+      "hero_healing": 0,
+      "level": 12,
+      "item_0": 0,
+      "item_1": 77,
+      "item_2": 77,
+      "item_3": 102,
+      "item_4": 36,
+      "item_5": 63,
+      "item_neutral": 840,
+      "benchmarks": {
+        "gold_per_min": {
+          "raw": 260,
+          "pct": 0.1311572700296736
+        },
+        "xp_per_min": {
+          "raw": 287,
+          "pct": 0.0712166172106825
+        },
+        "kills_per_min": {
+          "raw": 0.20869565217391306,
+          "pct": 0.8522255192878339
+        },
+        "deaths_per_min": {
+          "raw": 0.3130434782608696,
+          "pct": 0.17151335311572702
+        },
+        "assists_per_min": {
+          "raw": 0.20869565217391306,
+          "pct": 0.09910979228486647
+        },
+        "last_hits_per_min": {
+          "raw": 1.7043478260869565,
+          "pct": 0.6545994065281899
+        },
+        "denies_per_min": {
+          "raw": 0.06956521739130435,
+          "pct": 0.6189910979228487
+        },
+        "hero_damage_per_min": {
+          "raw": 323.61739130434785,
+          "pct": 0.2308605341246291
+        },
+        "hero_healing_per_min": {
+          "raw": 0,
+          "pct": 0.6955489614243323
+        },
+        "tower_damage": {
+          "raw": 115,
+          "pct": 0.3845697329376855
+        }
+      }
+    },
+    {
+      "account_id": 1093611225,
+      "player_slot": 130,
+      "hero_id": 101,
+      "kills": 0,
+      "deaths": 18,
+      "assists": 6,
+      "last_hits": 46,
+      "denies": 3,
+      "gold_per_min": 210,
+      "xp_per_min": 240,
+      "net_worth": 5089,
+      "hero_damage": 10347,
+      "tower_damage": 23,
+      "hero_healing": 0,
+      "level": 10,
+      "item_0": 206,
+      "item_1": 41,
+      "item_2": 29,
+      "item_3": 77,
+      "item_4": 25,
+      "item_5": 42,
+      "item_neutral": 1604,
+      "benchmarks": {
+        "gold_per_min": {
+          "raw": 210,
+          "pct": 0.033640552995391704
+        },
+        "xp_per_min": {
+          "raw": 240,
+          "pct": 0.025806451612903226
+        },
+        "kills_per_min": {
+          "raw": 0,
+          "pct": 0.016589861751152075
+        },
+        "deaths_per_min": {
+          "raw": 0.6260869565217392,
+          "pct": 0.0023041474654378336
+        },
+        "assists_per_min": {
+          "raw": 0.20869565217391306,
+          "pct": 0.12350230414746544
+        },
+        "last_hits_per_min": {
+          "raw": 1.6,
+          "pct": 0.5341013824884793
+        },
+        "denies_per_min": {
+          "raw": 0.10434782608695653,
+          "pct": 0.7294930875576037
+        },
+        "hero_damage_per_min": {
+          "raw": 359.89565217391305,
+          "pct": 0.08986175115207373
+        },
+        "hero_healing_per_min": {
+          "raw": 0,
+          "pct": 0.8004608294930876
+        },
+        "tower_damage": {
+          "raw": 23,
+          "pct": 0.2184331797235023
+        }
+      }
+    },
+    {
+      "account_id": 109515438,
+      "player_slot": 131,
+      "hero_id": 28,
+      "kills": 1,
+      "deaths": 16,
+      "assists": 11,
+      "last_hits": 63,
+      "denies": 4,
+      "gold_per_min": 244,
+      "xp_per_min": 342,
+      "net_worth": 5651,
+      "hero_damage": 5310,
+      "tower_damage": 33,
+      "hero_healing": 0,
+      "level": 13,
+      "item_0": 63,
+      "item_1": 36,
+      "item_2": 73,
+      "item_3": 3,
+      "item_4": 21,
+      "item_5": 21,
+      "item_neutral": 565,
+      "benchmarks": {
+        "gold_per_min": {
+          "raw": 244,
+          "pct": 0.038694992412746584
+        },
+        "xp_per_min": {
+          "raw": 342,
+          "pct": 0.09104704097116843
+        },
+        "kills_per_min": {
+          "raw": 0.034782608695652174,
+          "pct": 0.08877086494688922
+        },
+        "deaths_per_min": {
+          "raw": 0.5565217391304348,
+          "pct": 0.006828528072837625
+        },
+        "assists_per_min": {
+          "raw": 0.3826086956521739,
+          "pct": 0.6760242792109257
+        },
+        "last_hits_per_min": {
+          "raw": 2.191304347826087,
+          "pct": 0.09104704097116843
+        },
+        "denies_per_min": {
+          "raw": 0.1391304347826087,
+          "pct": 0.424886191198786
+        },
+        "hero_damage_per_min": {
+          "raw": 184.69565217391303,
+          "pct": 0.09635811836115327
+        },
+        "hero_healing_per_min": {
+          "raw": 0,
+          "pct": 0.9643399089529591
+        },
+        "tower_damage": {
+          "raw": 33,
+          "pct": 0.22003034901365706
+        }
+      }
+    },
+    {
+      "account_id": 130532460,
+      "player_slot": 132,
+      "hero_id": 67,
+      "kills": 6,
+      "deaths": 5,
+      "assists": 8,
+      "last_hits": 163,
+      "denies": 21,
+      "gold_per_min": 450,
+      "xp_per_min": 663,
+      "net_worth": 12173,
+      "hero_damage": 18763,
+      "tower_damage": 0,
+      "hero_healing": 0,
+      "level": 18,
+      "item_0": 63,
+      "item_1": 137,
+      "item_2": 170,
+      "item_3": 36,
+      "item_4": 1107,
+      "item_5": 75,
+      "item_neutral": 71,
+      "benchmarks": {
+        "gold_per_min": {
+          "raw": 450,
+          "pct": 0.19036954087346025
+        },
+        "xp_per_min": {
+          "raw": 663,
+          "pct": 0.2637178051511758
+        },
+        "kills_per_min": {
+          "raw": 0.20869565217391306,
+          "pct": 0.4070548712206047
+        },
+        "deaths_per_min": {
+          "raw": 0.17391304347826086,
+          "pct": 0.35386338185890254
+        },
+        "assists_per_min": {
+          "raw": 0.2782608695652174,
+          "pct": 0.23180291153415453
+        },
+        "last_hits_per_min": {
+          "raw": 5.6695652173913045,
+          "pct": 0.24524076147816348
+        },
+        "denies_per_min": {
+          "raw": 0.7304347826086957,
+          "pct": 0.975363941769317
+        },
+        "hero_damage_per_min": {
+          "raw": 652.6260869565217,
+          "pct": 0.22788353863381858
+        },
+        "hero_healing_per_min": {
+          "raw": 0,
+          "pct": 0.8398656215005599
+        },
+        "tower_damage": {
+          "raw": 0,
+          "pct": 0.17245240761478164
+        }
+      }
+    }
+  ]
+}

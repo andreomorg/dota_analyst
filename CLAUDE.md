@@ -19,7 +19,7 @@ O dono do projeto está começando em C# — explique as decisões e os conceito
 - `dotaanalyst.client/` — front-end **React 19 + Vite**, em JavaScript (`.jsx`).
 - `DotaAnalyst.slnx` — solução do Visual Studio 2026 que junta os dois.
 
-Os arquivos `WeatherForecast*` são exemplo do template e podem ser removidos quando o primeiro endpoint real existir.
+Os arquivos `WeatherForecast*` são exemplo do template, não código do projeto.
 
 ## Como rodar
 
@@ -31,11 +31,15 @@ Os arquivos `WeatherForecast*` são exemplo do template e podem ser removidos qu
 
 O Vite só repassa para a API as rotas listadas em `server.proxy` no `dotaanalyst.client/vite.config.js` (hoje só `^/weatherforecast`). Todo controller novo precisa de uma entrada ali — prefira prefixar as rotas com `/api` e usar uma única regra `'^/api'`.
 
-## Direção do projeto
+## Regras de negócio
 
-1. **Agora:** buscar dados de partidas na API pública do OpenDota (https://docs.opendota.com) a partir do C#, usando `HttpClient` registrado via `AddHttpClient`, e exibir no React.
-2. Manter a análise atrás de uma interface (ex.: `IReplayAnalyzer`), com a primeira implementação usando o OpenDota.
-   - **Containers:** tudo roda em Docker, orquestrado por um `docker-compose.yml` na raiz (API com o React embutido, PostgreSQL e, no futuro, o serviço Go). `docker compose up` deve bastar para subir o projeto inteiro.
-   - **Banco:** PostgreSQL com EF Core (Npgsql), como serviço do compose; connection string em user-secrets, nunca no `appsettings.json`.
-   - **Autenticação:** login com Steam (OpenID) e cookie de autenticação `HttpOnly`. Não há senha própria; o SteamID64 do login é convertido no account ID do Dota (`steamId64 - 76561197960265728`).
-3. **Futuro:** um serviço separado em Go usando o parser `manta` para ler os `.dem` diretamente. A API em C# continua sendo a única porta de entrada do React e chama o serviço Go (HTTP/JSON primeiro, fila depois se o parsing ficar lento).
+- **Identidade do usuário:** o login é só pela Steam (OpenID); não existe senha própria. O SteamID64 do login é convertido no account ID do Dota: `accountId = steamId64 - 76561197960265728`.
+- **Sessão:** cookie de autenticação `HttpOnly`.
+- **Porta de entrada única:** o React fala apenas com a API em C#. Serviços externos (OpenDota, futuro serviço Go) são chamados pela API, nunca direto pelo front-end.
+- **Fonte dos dados:** partidas e análises vêm da API pública do OpenDota (https://docs.opendota.com), atrás de uma interface (ex.: `IReplayAnalyzer`) para poder trocar a implementação.
+- **Segredos:** nunca no `appsettings.json` nem no Git — user-secrets ao rodar localmente e variável de ambiente (via `.env` fora do Git) no Docker.
+- **Execução:** `docker compose up` na raiz deve subir o projeto inteiro (API com o React embutido, PostgreSQL e, no futuro, o serviço Go).
+
+## Plano de desenvolvimento
+
+O roteiro do que construir e em que ordem fica em `work/plan.md`. A pasta `work/` é local e está no `.gitignore` — leia esse arquivo antes de começar uma etapa nova e atualize-o quando uma etapa terminar ou a ordem mudar.

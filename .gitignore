@@ -1,3 +1,6 @@
+# Planejamento local (não versionado)
+work/
+
 # Visual Studio
 .vs/
 *.user

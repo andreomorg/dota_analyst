@@ -13,6 +13,10 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <!-- The /// comments of the output DTOs (MatchSummary, MatchAnalysis, UserProfile) become the field
+         descriptions in the API's OpenAPI document. CS1591 ("missing XML comment") is off on purpose. -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
 
 </Project>

@@ -8,6 +8,10 @@
     <SpaProxyLaunchCommand>npm run dev</SpaProxyLaunchCommand>
     <SpaProxyServerUrl>https://localhost:59438</SpaProxyServerUrl>
     <UserSecretsId>3da24362-d452-4e0f-b16f-604688c26d4a</UserSecretsId>
+    <!-- The /// comments of the controllers become the endpoint descriptions in the OpenAPI document.
+         CS1591 ("missing XML comment") is off: only what the API exposes is documented. -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
@@ -24,6 +28,7 @@
     <PackageReference Include="Microsoft.AspNetCore.SpaProxy">
       <Version>10.*-*</Version>
     </PackageReference>
+    <PackageReference Include="Scalar.AspNetCore" Version="2.17.14" />
   </ItemGroup>
 
   <ItemGroup>

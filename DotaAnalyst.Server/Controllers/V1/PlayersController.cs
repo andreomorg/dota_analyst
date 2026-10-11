@@ -15,6 +15,16 @@ public class PlayersController(
     GetMatchAnalysisHandler getMatchAnalysis,
     ILogger<PlayersController> logger) : ControllerBase
 {
+    /// <summary>Recent matches of a player.</summary>
+    /// <remarks>
+    /// The last 20 matches from OpenDota, with hero names. A private Steam/Dota profile returns an empty list.
+    /// Searches that work are recorded (only the account ID and the time; nothing about the visitor).
+    /// </remarks>
+    /// <param name="id">Dota account ID (e.g. 99517715) or SteamID64 (e.g. 76561198059783443).</param>
+    /// <param name="cancellationToken">Cancelled when the client gives up.</param>
+    /// <response code="200">The matches, most recent first.</response>
+    /// <response code="400">The ID is not a valid account ID or SteamID64.</response>
+    /// <response code="502">OpenDota is unavailable.</response>
     [HttpGet("{id}/matches")]
     [ProducesResponseType<IReadOnlyList<MatchSummary>>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -38,6 +48,19 @@ public class PlayersController(
         }
     }
 
+    /// <summary>Analysis of a match from the point of view of a player.</summary>
+    /// <remarks>
+    /// Both teams, plus the player's performance compared to other players of the same hero (strengths and
+    /// points to improve). Matches already analyzed (with a known result) are saved in our database, so they usually
+    /// still work when OpenDota is down.
+    /// </remarks>
+    /// <param name="id">Dota account ID or SteamID64 of the player whose point of view is used.</param>
+    /// <param name="matchId">Dota match ID.</param>
+    /// <param name="cancellationToken">Cancelled when the client gives up.</param>
+    /// <response code="200">The analysis. `performance` is null when the player is not in the match or has an anonymous profile.</response>
+    /// <response code="400">Invalid account ID or match ID.</response>
+    /// <response code="404">The match doesn't exist.</response>
+    /// <response code="502">OpenDota is unavailable.</response>
     [HttpGet("{id}/matches/{matchId}")]
     [ProducesResponseType<MatchAnalysis>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]

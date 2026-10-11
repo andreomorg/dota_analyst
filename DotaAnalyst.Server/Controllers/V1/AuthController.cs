@@ -10,8 +10,14 @@ namespace DotaAnalyst.Server.Controllers.V1;
 [Route("api/v1/auth")]
 public class AuthController(ILogger<AuthController> logger) : ControllerBase
 {
-    // Starts the Steam login: the browser navigates here (a link, not fetch) and is redirected to Steam's
-    // login page (password or QR code). After a successful login it comes back to returnUrl.
+    /// <summary>Starts the Steam login.</summary>
+    /// <remarks>
+    /// Open it in the browser (a link, not fetch): it redirects to Steam's login page, where the user signs in
+    /// with password or the QR code in the Steam app. After a successful login Steam sends the browser back and
+    /// it lands on `returnUrl` with the session cookie; on failure it lands on `/?login=failed`.
+    /// </remarks>
+    /// <param name="returnUrl">Path of this site to come back to (e.g. `/matches/123`). Other sites are ignored (goes to `/`).</param>
+    /// <response code="302">Redirect to Steam (or to `/?login=failed` when the login can't start).</response>
     [HttpGet("login")]
     [ProducesResponseType(StatusCodes.Status302Found)]
     public async Task<IActionResult> Login(string? returnUrl)
@@ -44,6 +50,8 @@ public class AuthController(ILogger<AuthController> logger) : ControllerBase
 
     // POST, not GET: a link or image on another site can't log anyone out (and the SameSite=Lax cookie is
     // not even sent on POSTs coming from other sites). Logging out without a session is fine too.
+    /// <summary>Ends the session.</summary>
+    /// <response code="204">Logged out (also when there was no session).</response>
     [HttpPost("logout")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     public async Task<IActionResult> Logout()

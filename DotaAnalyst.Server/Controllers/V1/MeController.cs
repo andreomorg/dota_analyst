@@ -11,6 +11,11 @@ namespace DotaAnalyst.Server.Controllers.V1;
 [Route("api/v1/me")]
 public class MeController(GetUserProfileHandler getUserProfile) : ControllerBase
 {
+    /// <summary>The logged-in user.</summary>
+    /// <remarks>Needs the session cookie: log in on the site first (Entrar com a Steam).</remarks>
+    /// <param name="cancellationToken">Cancelled when the client gives up.</param>
+    /// <response code="200">The user. `personaName` and `avatarUrl` are null when the Steam profile is unavailable.</response>
+    /// <response code="401">Not logged in.</response>
     [HttpGet]
     [ProducesResponseType<UserProfile>(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]

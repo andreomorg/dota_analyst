@@ -4,6 +4,7 @@ using DotaAnalyst.Application;
 using DotaAnalyst.Infrastructure;
 using DotaAnalyst.Server.Authentication;
 using DotaAnalyst.Server.Diagnostics;
+using DotaAnalyst.Server.OpenApi;
 using DotaAnalyst.Server.RateLimiting;
 using Microsoft.AspNetCore.HttpOverrides;
 
@@ -11,12 +12,21 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 
-builder.Services.AddControllers()
-    // Enums go out as camelCase strings ("goldPerMinute", "strong") instead of numbers.
-    .AddJsonOptions(options =>
-        options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase)));
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-builder.Services.AddOpenApi();
+// Enums go out as camelCase strings ("goldPerMinute", "strong") instead of numbers. Set twice on purpose:
+// controllers write JSON with the MVC options, while the OpenAPI generator reads the minimal-API
+// (Microsoft.AspNetCore.Http.Json) options, so with only the first one the docs would show numbers.
+static void UseEnumsAsCamelCaseText(JsonSerializerOptions options) =>
+    options.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
+
+builder.Services.AddControllers().AddJsonOptions(options => UseEnumsAsCamelCaseText(options.JsonSerializerOptions));
+builder.Services.ConfigureHttpJsonOptions(options =>
+{
+    UseEnumsAsCamelCaseText(options.SerializerOptions);
+    // The minimal-API defaults accept numbers written as text, which made the docs show every number as
+    // "integer or string". The API only ever sends real numbers.
+    options.SerializerOptions.NumberHandling = JsonNumberHandling.Strict;
+});
+builder.Services.AddApiDocumentation();
 builder.Services.AddProblemDetails();
 builder.Services.AddHealthChecks();
 builder.Services.AddApiRateLimiting(builder.Configuration);
@@ -73,10 +83,11 @@ app.UseDefaultFiles();
 app.MapStaticAssets();
 
 // Configure the HTTP request pipeline.
+// OpenAPI document (/api/openapi/v1.json) and the Scalar page (/api/docs), only in Development.
+app.MapApiDocumentation();
+
 if (app.Environment.IsDevelopment())
 {
-    app.MapOpenApi();
-
     // Only in development: in the container the API listens on plain HTTP (port 8080)
     // and HTTPS is the job of a reverse proxy in front of it.
     app.UseHttpsRedirection();

@@ -11,5 +11,5 @@ public record PlayerMatch(
     TimeSpan Duration,
     DateTimeOffset StartTime)
 {
-    public bool? Won => WinningTeam is null ? null : WinningTeam == Team;
+    public bool? Won => MatchResult.Won(Team, WinningTeam);
 }

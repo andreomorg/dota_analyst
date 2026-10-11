@@ -65,14 +65,23 @@ public static class DependencyInjection
                 options => options.BaseUrl is { IsAbsoluteUri: true } && options.BaseUrl.AbsolutePath.EndsWith('/'),
                 "OpenDota:BaseUrl must be an absolute URL ending with '/'.")
             .Validate(options => options.Timeout > TimeSpan.Zero, "OpenDota:Timeout must be positive.")
+            .Validate(options => options.PermitsPerMinute > 0, "OpenDota:PermitsPerMinute must be positive.")
+            .Validate(
+                options => options.MaxQueueWait >= TimeSpan.Zero && options.MaxQueueWait < options.Timeout,
+                "OpenDota:MaxQueueWait must be zero or more and less than OpenDota:Timeout.")
             .ValidateOnStart();
 
+        // Singleton: one count of calls for the whole server, since OpenDota's quota is per IP (ours).
+        services.AddSingleton<OpenDotaRateLimiter>();
+        services.AddTransient<OpenDotaRateLimitHandler>();
+
         services.AddHttpClient<OpenDotaClient>((serviceProvider, client) =>
-        {
-            var options = serviceProvider.GetRequiredService<IOptions<OpenDotaOptions>>().Value;
-            client.BaseAddress = options.BaseUrl;
-            client.Timeout = options.Timeout;
-        });
+            {
+                var options = serviceProvider.GetRequiredService<IOptions<OpenDotaOptions>>().Value;
+                client.BaseAddress = options.BaseUrl;
+                client.Timeout = options.Timeout;
+            })
+            .AddHttpMessageHandler<OpenDotaRateLimitHandler>();
 
         services.AddScoped<IMatchProvider, OpenDotaMatchProvider>();
         services.AddScoped<IReplayAnalyzer, OpenDotaReplayAnalyzer>();

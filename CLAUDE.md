@@ -18,8 +18,8 @@ O dono do projeto está começando em C# — explique as decisões e os conceito
 
 Back-end em **.NET 10** organizado em **DDD**, um projeto por camada:
 
-- `DotaAnalyst.Domain/` — regras do Dota: entidades e value objects (`PlayerMatch`, `Kda`, `AccountId`, `Team`, `Hero`). Não referencia nenhum outro projeto nem pacote.
-- `DotaAnalyst.Application/` — casos de uso (ex.: `Matches/GetRecentMatchesHandler`), DTOs de saída (`MatchSummary`) e as interfaces do que vem de fora (`Abstractions/`: `IMatchProvider`, `IHeroCatalog`). Referencia só o Domain.
+- `DotaAnalyst.Domain/` — regras do Dota: entidades e value objects (`Matches/`: `PlayerMatch`, `MatchDetails` (agregado), `MatchPlayer`, `MatchId`, `Benchmark`, `Kda`, `Team`; `Players/AccountId`; `Heroes/Hero`; `Items/Item`) e domain services (`Analysis/PerformanceEvaluator`). Não referencia nenhum outro projeto nem pacote.
+- `DotaAnalyst.Application/` — casos de uso (`Matches/GetRecentMatchesHandler`, `Matches/GetMatchAnalysisHandler`), DTOs de saída (`MatchSummary`, `MatchAnalysis`) e as interfaces do que vem de fora (`Abstractions/`: `IMatchProvider`, `IReplayAnalyzer`, `IHeroCatalog`, `IItemCatalog`). Referencia só o Domain.
 - `DotaAnalyst.Infrastructure/` — implementações das interfaces: OpenDota (`OpenDota/`), cache e, no futuro, EF Core/PostgreSQL. Referencia Application.
 - `DotaAnalyst.Server/` — a camada de API: controllers por versão (`Controllers/V1/`), `Program.cs` e OpenAPI (`/openapi/v1.json` em Development). Referencia Application e Infrastructure; não tem regra de negócio.
 - `DotaAnalyst.Tests/` — testes xUnit, com uma pasta por camada (`dotnet test`).
@@ -54,6 +54,7 @@ Back-end em **.NET 10** organizado em **DDD**, um projeto por camada:
 
 - **Versionamento:** a API é versionada pela URL. Controllers da versão 1 ficam em `DotaAnalyst.Server/Controllers/V1/` (namespace `DotaAnalyst.Server.Controllers.V1`) com rota `api/v1/...` (ex.: `[Route("api/v1/players")]`). Mudança que quebra o contrato (remover/renomear campo, mudar significado ou código HTTP) não entra na v1: cria `Controllers/V2/` com rota `api/v2/...` e a v1 continua funcionando. Acrescentar endpoint ou campo novo não quebra o contrato e fica na versão atual.
 - Endpoints técnicos ficam fora do versionamento: `/api/health`.
+- JSON em camelCase; enums saem como texto camelCase (`"goldPerMinute"`, `"strong"`), configurado no `Program.cs`. Erros sempre como `ProblemDetails` (400 entrada inválida, 404 não encontrado, 502 OpenDota indisponível).
 - O Vite só repassa para a API as rotas listadas em `server.proxy` no `dotaanalyst.client/vite.config.js`, e a única regra é `'^/api'`. Toda rota deve começar com `/api`; senão o React não a alcança em desenvolvimento.
 
 ## Regras de negócio
@@ -61,7 +62,9 @@ Back-end em **.NET 10** organizado em **DDD**, um projeto por camada:
 - **Identidade do usuário:** o login é só pela Steam (OpenID); não existe senha própria. O SteamID64 do login é convertido no account ID do Dota: `accountId = steamId64 - 76561197960265728`.
 - **Sessão:** cookie de autenticação `HttpOnly`.
 - **Porta de entrada única:** o React fala apenas com a API em C#. Serviços externos (OpenDota, futuro serviço Go) são chamados pela API, nunca direto pelo front-end.
-- **Fonte dos dados:** partidas e análises vêm da API pública do OpenDota (https://docs.opendota.com), sempre atrás de interfaces da Application (`IMatchProvider`, `IHeroCatalog` e, para análise de replay, `IReplayAnalyzer`) para poder trocar a implementação.
+- **Fonte dos dados:** partidas e análises vêm da API pública do OpenDota (https://docs.opendota.com), sempre atrás de interfaces da Application (`IMatchProvider`, `IReplayAnalyzer`, `IHeroCatalog`, `IItemCatalog`) para poder trocar a implementação. O `IReplayAnalyzer` só entrega os dados da partida; quem interpreta é o Domain.
+- **Avaliação de desempenho:** usa os benchmarks da partida (percentil de 0 a 1 comparado a outros jogadores **do mesmo herói**; maior é sempre melhor, inclusive em mortes). Percentil ≥ 0,70 é ponto forte, ≤ 0,30 é ponto a melhorar, o resto é médio (`PerformanceEvaluator`). Cura por minuto igual a zero é ignorada (herói sem cura não é "ponto fraco"). Pontos fortes vêm do melhor para o pior; pontos a melhorar, do pior para o melhor.
+- **Nomes desconhecidos:** herói ou item sem nome no catálogo aparece como `Unknown hero` / `Unknown item`; catálogo indisponível nunca derruba a resposta.
 - **Regra de vitória:** `player_slot` de 0 a 127 é Radiant e de 128 a 255 é Dire; o jogador venceu se o time dele é o vencedor. Sem resultado conhecido, a vitória fica indefinida (`null`), nunca "derrota".
 - **Account ID:** aceita o account ID do Dota (32 bits, maior que zero) ou o SteamID64, que é convertido.
 - **Segredos:** nunca no `appsettings.json` nem no Git — user-secrets ao rodar localmente e variável de ambiente (via `.env` fora do Git) no Docker.

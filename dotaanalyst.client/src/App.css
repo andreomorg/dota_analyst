@@ -10,8 +10,44 @@
     }
 }
 
-.matches-page {
+.matches-page,
+.page {
     padding: 0 16px 32px;
+    /* Lets wide tables scroll inside .table-scroll instead of widening the page. */
+    min-width: 0;
+}
+
+a {
+    color: var(--accent);
+}
+
+a:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+/* Hidden on screen but still read by screen readers. */
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* Tables scroll horizontally inside this box on narrow screens; the page itself never does. */
+.table-scroll {
+    max-width: 100%;
+    overflow-x: auto;
+}
+
+.back-link-row {
+    margin: 16px 0 0;
+    text-align: left;
 }
 
 .search-form {
@@ -79,9 +115,242 @@
     color: var(--text);
 }
 
+.matches-table td {
+    white-space: nowrap;
+}
+
+/* ---------- Match analysis page ---------- */
+
+.analysis-page h1 {
+    font-size: 36px;
+    letter-spacing: -0.8px;
+    margin: 20px 0 12px;
+}
+
+.match-score {
+    font-size: 24px;
+    color: var(--text-h);
+    margin-bottom: 12px;
+}
+
+.match-facts {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px 32px;
+    margin: 0 0 24px;
+}
+
+.match-facts dt {
+    font-size: 14px;
+}
+
+.match-facts dd {
+    margin: 0;
+    color: var(--text-h);
+}
+
+.notice {
+    margin: 0 auto 24px;
+    max-width: 640px;
+    padding: 8px 16px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--code-bg);
+    font-size: 15px;
+}
+
+.performance-summary {
+    text-align: left;
+    margin-bottom: 32px;
+}
+
+.performance-summary h2,
+.performance-intro {
+    text-align: center;
+}
+
+.performance-intro {
+    margin-bottom: 16px;
+}
+
+.performance-summary h3 {
+    color: var(--text-h);
+    font-size: 18px;
+    font-weight: 500;
+    margin: 16px 0 8px;
+}
+
+.highlights {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 16px;
+}
+
+.highlight-list ul {
+    margin: 0;
+    padding-left: 20px;
+}
+
+.metric-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.metric-row {
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(80px, 2fr) auto auto;
+    align-items: center;
+    gap: 12px;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.metric-value {
+    color: var(--text-h);
+    text-align: right;
+}
+
+.percentile-bar {
+    display: block;
+    height: 8px;
+    border-radius: 4px;
+    background: var(--border);
+    overflow: hidden;
+}
+
+.percentile-fill {
+    display: block;
+    height: 100%;
+    background: var(--text);
+}
+
+.percentile-fill.rating-strong {
+    background: var(--win);
+}
+
+.percentile-fill.rating-weak {
+    background: var(--loss);
+}
+
+.metric-percentile {
+    font-size: 15px;
+    white-space: nowrap;
+}
+
+.metric-rating {
+    font-size: 15px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.metric-rating.rating-strong {
+    color: var(--win);
+}
+
+.metric-rating.rating-weak {
+    color: var(--loss);
+}
+
+.teams {
+    display: grid;
+    gap: 32px;
+}
+
+.team {
+    min-width: 0;
+    padding: 12px 0;
+    border-top: 4px solid var(--border);
+}
+
+.team-won {
+    border-top-color: var(--win);
+}
+
+.team-status {
+    font-size: 18px;
+}
+
+.team-table {
+    margin: 0 auto;
+    border-collapse: collapse;
+    font-size: 16px;
+}
+
+.team-table th,
+.team-table td {
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--border);
+    text-align: left;
+    white-space: nowrap;
+}
+
+.team-table thead th {
+    color: var(--text-h);
+    font-weight: 500;
+}
+
+.team-table tbody th {
+    color: var(--text-h);
+    font-weight: 500;
+}
+
+.team-table .items-cell {
+    white-space: normal;
+    min-width: 220px;
+    font-size: 14px;
+}
+
+.hero-level,
+.neutral-item {
+    font-size: 14px;
+    color: var(--text);
+    font-weight: 400;
+}
+
+.current-player {
+    background: var(--accent-bg);
+}
+
+.current-player th:first-child {
+    box-shadow: inset 4px 0 0 var(--accent);
+}
+
+.you-badge {
+    margin-left: 4px;
+    padding: 0 6px;
+    border: 1px solid var(--accent-border);
+    border-radius: 4px;
+    font-size: 13px;
+    color: var(--text-h);
+}
+
 @media (max-width: 600px) {
     .matches-table th,
     .matches-table td {
+        padding: 6px 8px;
+    }
+
+    .analysis-page h1 {
+        font-size: 26px;
+    }
+
+    /* Name and value on the first line; bar, percentile and rating below. */
+    .metric-row {
+        grid-template-columns: minmax(0, 1fr) auto auto;
+    }
+
+    .metric-name {
+        grid-column: 1 / 3;
+    }
+
+    .metric-value {
+        grid-column: 3;
+    }
+
+    .team-table th,
+    .team-table td {
         padding: 6px 8px;
     }
 }

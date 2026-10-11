@@ -3,12 +3,12 @@ const ERROR_MESSAGES = {
     502: 'O OpenDota está indisponível no momento. Tente novamente em alguns minutos.',
 };
 
-const UNEXPECTED_ERROR = 'Erro inesperado ao buscar as partidas.';
-
-export async function fetchRecentMatches(id, signal) {
+// GETs a JSON resource, turning network/HTTP failures into errors with a Portuguese message.
+// An aborted request rethrows the original AbortError so callers can ignore it.
+async function getJson(url, signal, errorMessages, unexpectedError) {
     let response;
     try {
-        response = await fetch(`/api/v1/players/${encodeURIComponent(id)}/matches`, { signal });
+        response = await fetch(url, { signal });
     } catch (error) {
         if (signal?.aborted) {
             throw error;
@@ -17,7 +17,7 @@ export async function fetchRecentMatches(id, signal) {
     }
 
     if (!response.ok) {
-        throw new Error(ERROR_MESSAGES[response.status] ?? UNEXPECTED_ERROR);
+        throw new Error(errorMessages[response.status] ?? unexpectedError);
     }
 
     try {
@@ -26,6 +26,24 @@ export async function fetchRecentMatches(id, signal) {
         if (signal?.aborted) {
             throw error;
         }
-        throw new Error(UNEXPECTED_ERROR, { cause: error });
+        throw new Error(unexpectedError, { cause: error });
     }
+}
+
+export function fetchRecentMatches(id, signal) {
+    return getJson(
+        `/api/v1/players/${encodeURIComponent(id)}/matches`,
+        signal,
+        ERROR_MESSAGES,
+        'Erro inesperado ao buscar as partidas.',
+    );
+}
+
+export function fetchMatchAnalysis(accountId, matchId, signal) {
+    return getJson(
+        `/api/v1/players/${encodeURIComponent(accountId)}/matches/${encodeURIComponent(matchId)}`,
+        signal,
+        { ...ERROR_MESSAGES, 404: 'Partida não encontrada.' },
+        'Erro inesperado ao buscar a análise da partida.',
+    );
 }

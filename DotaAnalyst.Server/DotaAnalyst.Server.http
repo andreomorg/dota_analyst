@@ -5,6 +5,11 @@ Accept: application/json
 
 ###
 
+GET {{DotaAnalyst.Server_HostAddress}}/api/v1/players/99517715/matches/9034320024
+Accept: application/json
+
+###
+
 GET {{DotaAnalyst.Server_HostAddress}}/api/health
 
 ###

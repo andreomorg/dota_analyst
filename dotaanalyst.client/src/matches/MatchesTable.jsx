@@ -1,3 +1,4 @@
+import { Link } from 'react-router';
 import { formatDate, formatDuration } from './format';
 
 function resultOf(match) {
@@ -11,31 +12,39 @@ function resultOf(match) {
 
 function MatchesTable({ matches }) {
     return (
-        <table className="matches-table">
-            <thead>
-                <tr>
-                    <th>Herói</th>
-                    <th>Resultado</th>
-                    <th>K / D / A</th>
-                    <th>Duração</th>
-                    <th>Data</th>
-                </tr>
-            </thead>
-            <tbody>
-                {matches.map(match => {
-                    const result = resultOf(match);
-                    return (
-                        <tr key={match.matchId}>
-                            <td>{match.heroName}</td>
-                            <td className={result.className}>{result.label}</td>
-                            <td>{match.kills} / {match.deaths} / {match.assists}</td>
-                            <td>{formatDuration(match.durationSeconds)}</td>
-                            <td>{formatDate(match.startTime)}</td>
-                        </tr>
-                    );
-                })}
-            </tbody>
-        </table>
+        <div className="table-scroll">
+            <table className="matches-table">
+                <thead>
+                    <tr>
+                        <th>Herói</th>
+                        <th>Resultado</th>
+                        <th>K / D / A</th>
+                        <th>Duração</th>
+                        <th>Data</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {matches.map(match => {
+                        const result = resultOf(match);
+                        return (
+                            <tr key={match.matchId}>
+                                <td>
+                                    {/* A real link: reachable with Tab, opens with Enter, works with "open in new tab". */}
+                                    <Link to={`/matches/${match.matchId}`}>
+                                        {match.heroName}
+                                        <span className="visually-hidden"> — ver análise da partida</span>
+                                    </Link>
+                                </td>
+                                <td className={result.className}>{result.label}</td>
+                                <td>{match.kills} / {match.deaths} / {match.assists}</td>
+                                <td>{formatDuration(match.durationSeconds)}</td>
+                                <td>{formatDate(match.startTime)}</td>
+                            </tr>
+                        );
+                    })}
+                </tbody>
+            </table>
+        </div>
     );
 }
 

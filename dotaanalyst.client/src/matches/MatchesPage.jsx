@@ -1,25 +1,7 @@
 import { useEffect, useState } from 'react';
+import { readSavedAccountId, saveAccountId } from '../accountStorage';
 import { fetchRecentMatches } from '../api/matches';
 import MatchesTable from './MatchesTable';
-
-// Temporary: the account ID is typed by the user until Steam login exists.
-const STORAGE_KEY = 'dotaanalyst.accountId';
-
-function readSavedAccountId() {
-    try {
-        return localStorage.getItem(STORAGE_KEY) ?? '';
-    } catch {
-        return '';
-    }
-}
-
-function saveAccountId(accountId) {
-    try {
-        localStorage.setItem(STORAGE_KEY, accountId);
-    } catch {
-        // Storage unavailable (e.g. private window): the user just types the ID again next time.
-    }
-}
 
 // Only checks the format (account ID or SteamID64); the API decides if the number is valid.
 function isValidAccountId(value) {

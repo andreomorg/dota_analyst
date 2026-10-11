@@ -10,6 +10,11 @@ work/
 [Bb]in/
 [Oo]bj/
 
+# Build do Go (go build gera o executável na pasta atual)
+replay-parser/*.exe
+replay-parser/replay-parser
+replay-parser/inspect
+
 # Rider / VS Code (the shared VS Code files are versioned: F5, tasks, recommended extensions, settings)
 .idea/
 .vscode/*

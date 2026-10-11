@@ -41,6 +41,13 @@ Back-end em **.NET 10** organizado em **DDD**, um projeto por camada:
 - API em `https://localhost:7208`; Vite em `https://localhost:59438`.
 - Pelo Docker: `docker compose up --build` na raiz → `http://localhost:8080` (build de produção, só HTTP; porta configurável por `API_PORT` no `.env`, veja `.env.example`). `docker compose down` para parar.
 
+## Produção (Render)
+
+- No ar em **https://dotaanalyst.onrender.com** — serviço `dotaanalyst` (workspace "DotaAnalyst"), plano Free, região Virginia. Configuração descrita no `render.yaml`; o Render compila o `Dockerfile` do `main`.
+- **Publicar uma versão:** criar e enviar uma tag `v*` a partir do `main`. O `release.yml` roda os testes, publica a imagem no ghcr.io e chama o deploy hook do Render (segredo `RENDER_DEPLOY_HOOK_URL` no GitHub). Auto-deploy está desligado: push no `main` sozinho não muda o site.
+- **Logs e deploys:** painel do Render ou o MCP do Render (`list_logs`, `list_deploys`). Health check: `/api/health`.
+- Plano grátis: dorme após 15 min sem acesso (primeiro acesso ~1 min), 512 MB. Não usar "pingers" para mantê-lo acordado.
+
 ## Docker
 
 - `Dockerfile` multi-stage: estágio Node compila o React; estágio SDK copia o `dist/` para `DotaAnalyst.Server/wwwroot/` **antes** do `dotnet publish` (o `MapStaticAssets` só serve arquivos que existem no publish); estágio final só com o runtime do ASP.NET, usuário não-root, porta 8080.
@@ -56,7 +63,7 @@ Back-end em **.NET 10** organizado em **DDD**, um projeto por camada:
 - Endpoints técnicos ficam fora do versionamento: `/api/health`.
 - JSON em camelCase; enums saem como texto camelCase (`"goldPerMinute"`, `"strong"`), configurado no `Program.cs`. Erros sempre como `ProblemDetails` (400 entrada inválida, 404 não encontrado, 429 limite excedido, 502 OpenDota indisponível, 500 inesperado).
 - **Limite de requisições:** todo controller (`MapControllers().RequireRateLimiting(...)`) tem limite por IP, janela fixa, configurado em `RateLimiting` no `appsettings.json` (padrão 60/minuto) — `DotaAnalyst.Server/RateLimiting/`. `/api/health` fica fora. Excedeu → 429 com `Retry-After`.
-- **Forwarded headers:** `ForwardedHeaders:Enabled` (desligado por padrão e no `docker compose` local) só deve ser ligado atrás do proxy da hospedagem (variável `ForwardedHeaders__Enabled=true`, já no `render.yaml`). Ligado sem proxy, qualquer um falsifica o IP pelo `X-Forwarded-For` e burla o limite. `ForwardedHeaders:ForwardLimit` (padrão 1) é quantos proxies, da direita do `X-Forwarded-For`, são confiáveis: **depende da hospedagem** — conferir o cabeçalho real depois do deploy, senão todos os usuários podem ser contados como o IP do proxy (limite vira global). Pressupõe que o container só é acessível pelo proxy da plataforma.
+- **Forwarded headers:** `ForwardedHeaders:Enabled` (desligado por padrão e no `docker compose` local) só deve ser ligado atrás do proxy da hospedagem (variável `ForwardedHeaders__Enabled=true`, já no `render.yaml`). Ligado sem proxy, qualquer um falsifica o IP pelo `X-Forwarded-For` e burla o limite. `ForwardedHeaders:ForwardedForHeaderName` diz de qual cabeçalho vem o IP do cliente (padrão `X-Forwarded-For`) e `ForwardedHeaders:ForwardLimit` (padrão 1) quantos proxies são confiáveis: **depende da hospedagem**. No **Render** usamos `CF-Connecting-IP` (verificado em 11/10/2026: o caminho é Cloudflare → balanceador do Render → proxy local, o `X-Forwarded-For` tem vários saltos internos e mantém o que o cliente manda; o Cloudflare sobrescreve o `CF-Connecting-IP` com o IP real). Ao trocar de hospedagem, ligar `Diagnostics__LogForwardedHeaders=true` temporariamente para ver os cabeçalhos reais e desligar depois (registra IPs).
 - O limite conta IPv6 pela rede /64 (um usuário costuma controlar uma /64 inteira) e IPv4-mapeado como IPv4 (`ApiRateLimiting.ClientKey`).
 - **Testes de integração** da API ficam em `DotaAnalyst.Tests/Server/` com `ApiFactory` (OpenDota trocado por fakes; nenhum teste acessa a internet). Endpoint novo ganha teste lá.
 - O Vite só repassa para a API as rotas listadas em `server.proxy` no `dotaanalyst.client/vite.config.js`, e a única regra é `'^/api'`. Toda rota deve começar com `/api`; senão o React não a alcança em desenvolvimento.

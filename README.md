@@ -1,4 +1,4 @@
-# DotaAnalyst
+﻿# DotaAnalyst
 
 [![CI](https://github.com/andreomorg/dota_analyst/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/andreomorg/dota_analyst/actions/workflows/ci.yml)
 
@@ -6,6 +6,8 @@ Analisador de partidas de Dota 2. Você informa seu account ID do Dota (ou Steam
 
 - **Back-end:** ASP.NET Core (.NET 10) em DDD — `Domain`, `Application`, `Infrastructure` e `Server` (API).
 - **Front-end:** React 19 + Vite.
+
+**No ar:** https://dotaanalyst.onrender.com (plano grátis do Render: o primeiro acesso depois de 15 min parado demora ~1 min).
 
 ## Rodando com Docker
 

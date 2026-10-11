@@ -1,0 +1,15 @@
+# Visual Studio
+.vs/
+*.user
+*.suo
+
+# Build do .NET
+[Bb]in/
+[Oo]bj/
+
+# Rider / VS Code
+.idea/
+.vscode/
+
+# Segredos locais
+appsettings.*.local.json

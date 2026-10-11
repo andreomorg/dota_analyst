@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="dotaanalyst.client/dotaanalyst.client.esproj">
+    <Build />
+    <Deploy />
+  </Project>
+  <Project Path="DotaAnalyst.Server/DotaAnalyst.Server.csproj" />
+</Solution>

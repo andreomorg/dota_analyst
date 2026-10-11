@@ -22,6 +22,11 @@ services:
         value: "8080"
       - key: ASPNETCORE_ENVIRONMENT
         value: Production
-      # HTTPS ends at Render's proxy: trust its X-Forwarded-For/-Proto (real client IP and scheme).
+      # HTTPS ends at Render's proxy: trust the forwarded headers (real client IP and scheme).
       - key: ForwardedHeaders__Enabled
         value: "true"
+      # Requests go Cloudflare -> Render load balancer -> local proxy -> app, and X-Forwarded-For keeps
+      # whatever the client sent. CF-Connecting-IP is overwritten by Cloudflare with the real client IP
+      # (verified 2026-10-11 with Diagnostics__LogForwardedHeaders).
+      - key: ForwardedHeaders__ForwardedForHeaderName
+        value: CF-Connecting-IP

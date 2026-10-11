@@ -34,9 +34,16 @@ if (forwardedHeadersEnabled)
         throw new InvalidOperationException("ForwardedHeaders:ForwardLimit must be at least 1.");
     }
 
+    // Which header carries the client IP. Default X-Forwarded-For; on Render it is CF-Connecting-IP, set by
+    // the Cloudflare edge in front of it (always overwritten, so clients can't fake it, and independent of
+    // how many internal proxy hops Render adds to X-Forwarded-For).
+    var clientIpHeader = builder.Configuration.GetValue(
+        "ForwardedHeaders:ForwardedForHeaderName", ForwardedHeadersDefaults.XForwardedForHeaderName);
+
     builder.Services.Configure<ForwardedHeadersOptions>(options =>
     {
         options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+        options.ForwardedForHeaderName = clientIpHeader;
         options.ForwardLimit = forwardLimit;
         // The platform's proxy address is not known in advance.
         options.KnownIPNetworks.Clear();

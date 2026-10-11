@@ -54,18 +54,39 @@ public class RateLimitingTests
         Assert.Equal(HttpStatusCode.TooManyRequests, (await SendFromAsync(client, "203.0.113.2")).StatusCode);
     }
 
-    private static ApiFactory CreateFactory(int permitLimit, bool forwardedHeaders = false) =>
+    [Fact]
+    public async Task WithCustomClientIpHeader_UsesItAndIgnoresXForwardedFor()
+    {
+        // Render setup: the client IP comes from CF-Connecting-IP; X-Forwarded-For can be faked by clients.
+        using var factory = CreateFactory(permitLimit: 1, forwardedHeaders: true, clientIpHeader: "CF-Connecting-IP");
+        var client = factory.CreateClient();
+
+        Assert.Equal(HttpStatusCode.OK, (await SendFromAsync(client, "203.0.113.1", "CF-Connecting-IP", fakeForwardedFor: "198.51.100.1")).StatusCode);
+        // Same real client with a different fake X-Forwarded-For: still limited.
+        Assert.Equal(HttpStatusCode.TooManyRequests, (await SendFromAsync(client, "203.0.113.1", "CF-Connecting-IP", fakeForwardedFor: "198.51.100.2")).StatusCode);
+        // Another real client: its own limit.
+        Assert.Equal(HttpStatusCode.OK, (await SendFromAsync(client, "203.0.113.2", "CF-Connecting-IP")).StatusCode);
+    }
+
+    private static ApiFactory CreateFactory(int permitLimit, bool forwardedHeaders = false, string? clientIpHeader = null) =>
         new(new Dictionary<string, string?>
         {
             ["RateLimiting:PermitLimit"] = permitLimit.ToString(),
             ["RateLimiting:Window"] = "00:10:00",
             ["ForwardedHeaders:Enabled"] = forwardedHeaders.ToString(),
+            ["ForwardedHeaders:ForwardedForHeaderName"] = clientIpHeader ?? "X-Forwarded-For",
         });
 
-    private static Task<HttpResponseMessage> SendFromAsync(HttpClient client, string clientIp)
+    private static Task<HttpResponseMessage> SendFromAsync(
+        HttpClient client, string clientIp, string header = "X-Forwarded-For", string? fakeForwardedFor = null)
     {
         var request = new HttpRequestMessage(HttpMethod.Get, MatchesUrl);
-        request.Headers.Add("X-Forwarded-For", clientIp);
+        request.Headers.Add(header, clientIp);
+        if (fakeForwardedFor is not null)
+        {
+            request.Headers.Add("X-Forwarded-For", fakeForwardedFor);
+        }
+
         return client.SendAsync(request);
     }
 }

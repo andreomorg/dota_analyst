@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using DotaAnalyst.Application;
 using DotaAnalyst.Infrastructure;
+using DotaAnalyst.Server.Diagnostics;
 using DotaAnalyst.Server.RateLimiting;
 using Microsoft.AspNetCore.HttpOverrides;
 
@@ -53,6 +54,8 @@ if (forwardedHeadersEnabled)
     // First, so everything after it (rate limiter, future login) sees the real IP and scheme.
     app.UseForwardedHeaders();
 }
+
+app.UseForwardedHeadersDiagnostics();
 
 // Unexpected exceptions become a 500 ProblemDetails (with AddProblemDetails) instead of an empty body.
 app.UseExceptionHandler();

@@ -60,15 +60,15 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # Asks Render to deploy exactly the image version just published (service described in render.yaml).
-      # The hook URL is a secret (anyone with it can trigger deploys); without it, the deploy is skipped.
+      # Asks Render to deploy (service described in render.yaml). Render builds the Dockerfile from the
+      # latest commit on main, so tag releases from main. The hook URL is a secret (anyone with it can
+      # trigger deploys); without it, the deploy is skipped.
       - name: Deploy to Render
         env:
           RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
-          IMAGE: ${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}
         run: |
           if [ -z "$RENDER_DEPLOY_HOOK_URL" ]; then
             echo "::warning::RENDER_DEPLOY_HOOK_URL secret is not set; skipping the Render deploy."
             exit 0
           fi
-          curl --fail --silent --show-error --get "$RENDER_DEPLOY_HOOK_URL" --data-urlencode "imgURL=$IMAGE"
+          curl --fail --silent --show-error -X POST "$RENDER_DEPLOY_HOOK_URL"

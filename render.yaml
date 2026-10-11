@@ -1,14 +1,18 @@
-# Render Blueprint: describes the production service (Render reads this when the service is
-# created with New -> Blueprint). Free plan: no credit card, sleeps after 15 min without traffic.
-# Deploys are triggered by .github/workflows/release.yml (deploy hook) when a v* tag is pushed,
-# always with the exact image version that passed CI.
+# Render Blueprint describing the production service, kept in sync with what exists on Render
+# (service "dotaanalyst", created through the Render MCP). Free plan: no credit card, sleeps after
+# 15 min without traffic. Render builds the root Dockerfile from the main branch.
+# Auto-deploy is off: .github/workflows/release.yml calls the deploy hook when a v* tag is pushed,
+# so the site only changes on releases, not on every push to main.
 services:
   - type: web
     name: dotaanalyst
-    runtime: image
-    image:
-      url: ghcr.io/andreomorg/dota_analyst:latest
+    runtime: docker
+    repo: https://github.com/andreomorg/dota_analyst
+    branch: main
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
     plan: free
+    autoDeployTrigger: off
     # Closest to Brazil among Render's regions; the production database (Neon) should use us-east-1 too.
     region: virginia
     healthCheckPath: /api/health

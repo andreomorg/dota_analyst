@@ -30,3 +30,10 @@ services:
       # (verified 2026-10-11 with Diagnostics__LogForwardedHeaders).
       - key: ForwardedHeaders__ForwardedForHeaderName
         value: CF-Connecting-IP
+      # PostgreSQL on Neon (free, region aws-us-east-1, next to Render's Virginia). A secret: sync: false means
+      # the value is typed in Render's dashboard and never lives in this file or in Git.
+      # Format: Host=...;Database=...;Username=...;Password=...;SSL Mode=Require;Timeout=5
+      # (Timeout=5: give up connecting after 5 s instead of 15 when the database is down).
+      # Without it the app still runs, on OpenDota alone.
+      - key: ConnectionStrings__Database
+        sync: false

@@ -148,7 +148,7 @@ public class OpenDotaMatchMappingsTests
         Assert.Equal(expected, (LoadFixture() with { RadiantWin = radiantWin }).ToMatchDetails().WinningTeam);
     }
 
-    private static OpenDotaMatch LoadFixture()
+    internal static OpenDotaMatch LoadFixture()
     {
         var path = Path.Combine(AppContext.BaseDirectory, "Infrastructure", "Fixtures", "match-9034320024.json");
         return JsonSerializer.Deserialize<OpenDotaMatch>(File.ReadAllText(path), OpenDotaClient.JsonOptions)!;

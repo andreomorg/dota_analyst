@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk.Web">
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -7,6 +7,7 @@
     <SpaRoot>..\dotaanalyst.client</SpaRoot>
     <SpaProxyLaunchCommand>npm run dev</SpaProxyLaunchCommand>
     <SpaProxyServerUrl>https://localhost:59438</SpaProxyServerUrl>
+    <UserSecretsId>3da24362-d452-4e0f-b16f-604688c26d4a</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>

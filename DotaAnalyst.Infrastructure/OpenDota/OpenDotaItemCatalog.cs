@@ -1,47 +1,38 @@
 using DotaAnalyst.Application.Abstractions;
 using DotaAnalyst.Domain.Items;
-using DotaAnalyst.Infrastructure.Caching;
+using DotaAnalyst.Infrastructure.Catalogs;
+using DotaAnalyst.Infrastructure.Persistence.Catalogs;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 
 namespace DotaAnalyst.Infrastructure.OpenDota;
 
-// Item names only change with patches, so they are cached like the hero names (see OpenDotaHeroCatalog).
+// Item names from OpenDota's item constants, kept in memory and in the database (see LayeredCatalog).
 public class OpenDotaItemCatalog(
     OpenDotaClient openDotaClient,
     IMemoryCache cache,
-    ILogger<OpenDotaItemCatalog> logger) : IItemCatalog
+    ICatalogStore store,
+    CatalogLoadLocks locks,
+    TimeProvider timeProvider,
+    ILogger<OpenDotaItemCatalog> logger)
+    : LayeredCatalog<Item>(cache, store, locks, timeProvider, logger), IItemCatalog
 {
-    private const string CacheKey = "opendota:items";
-    private static readonly TimeSpan CacheDuration = TimeSpan.FromHours(24);
-    // After a failure, wait a bit before asking OpenDota again, so every request isn't slowed down by it.
-    private static readonly TimeSpan FailureCacheDuration = TimeSpan.FromMinutes(1);
+    protected override string CatalogName => "items";
 
-    public async Task<IReadOnlyDictionary<int, Item>> GetItemsAsync(CancellationToken cancellationToken)
+    public Task<IReadOnlyDictionary<int, Item>> GetItemsAsync(CancellationToken cancellationToken) =>
+        GetAsync(cancellationToken);
+
+    protected override async Task<IReadOnlyDictionary<int, Item>> LoadFromOpenDotaAsync(CancellationToken cancellationToken)
     {
-        if (cache.TryGetValue(CacheKey, out IReadOnlyDictionary<int, Item>? cached) && cached is not null)
-        {
-            return cached;
-        }
+        // The two constants are independent, so both requests run at the same time.
+        var itemIdsTask = openDotaClient.GetItemIdsAsync(cancellationToken);
+        var itemsTask = openDotaClient.GetItemsAsync(cancellationToken);
+        await Task.WhenAll(itemIdsTask, itemsTask);
 
-        try
-        {
-            // The two constants are independent, so both requests run at the same time.
-            var itemIdsTask = openDotaClient.GetItemIdsAsync(cancellationToken);
-            var itemsTask = openDotaClient.GetItemsAsync(cancellationToken);
-            await Task.WhenAll(itemIdsTask, itemsTask);
-
-            var items = OpenDotaMappings.ToItems(await itemIdsTask, await itemsTask);
-            cache.Set(CacheKey, items, CacheEntries.Catalog(CacheDuration));
-            logger.LogInformation("Loaded {ItemCount} items from OpenDota", items.Count);
-            return items;
-        }
-        catch (DataSourceUnavailableException ex)
-        {
-            logger.LogWarning(ex, "Could not load items from OpenDota");
-            IReadOnlyDictionary<int, Item> empty = new Dictionary<int, Item>();
-            cache.Set(CacheKey, empty, CacheEntries.Catalog(FailureCacheDuration));
-            return empty;
-        }
+        return OpenDotaMappings.ToItems(await itemIdsTask, await itemsTask);
     }
+
+    protected override Item Create(int id, string name) => new(id, name);
+
+    protected override string NameOf(Item item) => item.Name;
 }

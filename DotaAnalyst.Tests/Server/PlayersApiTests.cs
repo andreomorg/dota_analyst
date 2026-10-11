@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json;
+using DotaAnalyst.Application.Abstractions;
 using DotaAnalyst.Domain.Matches;
 using DotaAnalyst.Tests.Domain;
 
@@ -93,6 +94,31 @@ public class PlayersApiTests
         var response = await factory.CreateClient().GetAsync($"/api/v1/players/{MyAccountId}/matches/{MatchIdValue}");
 
         AssertProblem(response, HttpStatusCode.BadGateway);
+    }
+
+    [Fact]
+    public async Task MatchAnalysis_SavedMatchIsServedEvenWhenOpenDotaFails()
+    {
+        using var factory = new ApiFactory();
+        // Saved long ago and unparsed: OpenDota is asked again, fails, and the saved copy is used.
+        factory.SavedMatches.Matches[MatchIdValue] = new SavedMatch(CreateMatch(), DateTimeOffset.UnixEpoch);
+        factory.Analyzer.Fail = true;
+
+        var response = await factory.CreateClient().GetAsync($"/api/v1/players/{MyAccountId}/matches/{MatchIdValue}");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task RecentMatches_RecordsTheSearchedAccount()
+    {
+        using var factory = new ApiFactory();
+        const long steamId64 = MyAccountId + 76561197960265728;
+
+        await factory.CreateClient().GetAsync($"/api/v1/players/{steamId64}/matches");
+
+        // Recorded as the account ID, even when searched by SteamID64.
+        Assert.Equal(MyAccountId, Assert.Single(factory.PlayerSearches.Searches).Value);
     }
 
     [Fact]

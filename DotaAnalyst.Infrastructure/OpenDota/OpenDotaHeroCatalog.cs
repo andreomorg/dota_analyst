@@ -1,46 +1,37 @@
 using DotaAnalyst.Application.Abstractions;
 using DotaAnalyst.Domain.Heroes;
-using DotaAnalyst.Infrastructure.Caching;
+using DotaAnalyst.Infrastructure.Catalogs;
+using DotaAnalyst.Infrastructure.Persistence.Catalogs;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 
 namespace DotaAnalyst.Infrastructure.OpenDota;
 
-// Hero names rarely change, so the OpenDota hero list is cached instead of fetched on every request.
+// Hero names from OpenDota's GET /heroes, kept in memory and in the database (see LayeredCatalog).
 public class OpenDotaHeroCatalog(
     OpenDotaClient openDotaClient,
     IMemoryCache cache,
-    ILogger<OpenDotaHeroCatalog> logger) : IHeroCatalog
+    ICatalogStore store,
+    CatalogLoadLocks locks,
+    TimeProvider timeProvider,
+    ILogger<OpenDotaHeroCatalog> logger)
+    : LayeredCatalog<Hero>(cache, store, locks, timeProvider, logger), IHeroCatalog
 {
-    private const string CacheKey = "opendota:heroes";
-    private static readonly TimeSpan CacheDuration = TimeSpan.FromHours(24);
-    // After a failure, wait a bit before asking OpenDota again, so every request isn't slowed down by it.
-    private static readonly TimeSpan FailureCacheDuration = TimeSpan.FromMinutes(1);
+    protected override string CatalogName => "heroes";
 
-    public async Task<IReadOnlyDictionary<int, Hero>> GetHeroesAsync(CancellationToken cancellationToken)
+    public Task<IReadOnlyDictionary<int, Hero>> GetHeroesAsync(CancellationToken cancellationToken) =>
+        GetAsync(cancellationToken);
+
+    protected override async Task<IReadOnlyDictionary<int, Hero>> LoadFromOpenDotaAsync(CancellationToken cancellationToken)
     {
-        if (cache.TryGetValue(CacheKey, out IReadOnlyDictionary<int, Hero>? cached) && cached is not null)
-        {
-            return cached;
-        }
-
-        try
-        {
-            var response = await openDotaClient.GetHeroesAsync(cancellationToken);
-            IReadOnlyDictionary<int, Hero> heroes = response
-                .Where(hero => !string.IsNullOrWhiteSpace(hero.LocalizedName))
-                .DistinctBy(hero => hero.Id)
-                .ToDictionary(hero => hero.Id, hero => new Hero(hero.Id, hero.LocalizedName!));
-            cache.Set(CacheKey, heroes, CacheEntries.Catalog(CacheDuration));
-            logger.LogInformation("Loaded {HeroCount} heroes from OpenDota", heroes.Count);
-            return heroes;
-        }
-        catch (DataSourceUnavailableException ex)
-        {
-            logger.LogWarning(ex, "Could not load heroes from OpenDota");
-            IReadOnlyDictionary<int, Hero> empty = new Dictionary<int, Hero>();
-            cache.Set(CacheKey, empty, CacheEntries.Catalog(FailureCacheDuration));
-            return empty;
-        }
+        var response = await openDotaClient.GetHeroesAsync(cancellationToken);
+        return response
+            .Where(hero => !string.IsNullOrWhiteSpace(hero.LocalizedName))
+            .DistinctBy(hero => hero.Id)
+            .ToDictionary(hero => hero.Id, hero => new Hero(hero.Id, hero.LocalizedName!));
     }
+
+    protected override Hero Create(int id, string name) => new(id, name);
+
+    protected override string NameOf(Hero hero) => hero.Name;
 }

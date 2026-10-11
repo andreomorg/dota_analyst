@@ -19,10 +19,10 @@ O dono do projeto está começando em C# — explique as decisões e os conceito
 Back-end em **.NET 10** organizado em **DDD**, um projeto por camada:
 
 - `DotaAnalyst.Domain/` — regras do Dota: entidades e value objects (`Matches/`: `PlayerMatch`, `MatchDetails` (agregado), `MatchPlayer`, `MatchId`, `Benchmark`, `Kda`, `Team`; `Players/AccountId`; `Heroes/Hero`; `Items/Item`) e domain services (`Analysis/PerformanceEvaluator`). Não referencia nenhum outro projeto nem pacote.
-- `DotaAnalyst.Application/` — casos de uso (`Matches/GetRecentMatchesHandler`, `Matches/GetMatchAnalysisHandler`), DTOs de saída (`MatchSummary`, `MatchAnalysis`) e as interfaces do que vem de fora (`Abstractions/`: `IMatchProvider`, `IReplayAnalyzer`, `IHeroCatalog`, `IItemCatalog`). Referencia só o Domain.
-- `DotaAnalyst.Infrastructure/` — implementações das interfaces: OpenDota (`OpenDota/`), cache e, no futuro, EF Core/PostgreSQL. Referencia Application. O `IMemoryCache` tem `SizeLimit`: toda entrada usa `Caching/CacheEntries` (catálogos com prioridade alta, partidas normal); "partida não encontrada" fica em cache por 1 minuto, com prioridade baixa (expulsa primeiro).
+- `DotaAnalyst.Application/` — casos de uso (`Matches/GetRecentMatchesHandler`, `Matches/GetMatchAnalysisHandler`), DTOs de saída (`MatchSummary`, `MatchAnalysis`) e as interfaces do que vem de fora (`Abstractions/`: `IMatchProvider`, `IReplayAnalyzer`, `IHeroCatalog`, `IItemCatalog`, `IMatchRepository`, `IPlayerSearchRepository`; exceções `DataSourceUnavailableException` (OpenDota) e `StorageUnavailableException` (banco)). Referencia só o Domain.
+- `DotaAnalyst.Infrastructure/` — implementações das interfaces: OpenDota (`OpenDota/`), cache, catálogos em camadas (`Catalogs/LayeredCatalog`: memória → banco → OpenDota) e PostgreSQL com EF Core (`Persistence/`: `AppDbContext`, repositórios, `Migrations/`). Referencia Application. O `IMemoryCache` tem `SizeLimit`: toda entrada usa `Caching/CacheEntries` (catálogos com prioridade alta, partidas normal); "partida não encontrada" fica em cache por 1 minuto, com prioridade baixa (expulsa primeiro).
 - `DotaAnalyst.Server/` — a camada de API: controllers por versão (`Controllers/V1/`), `Program.cs` e OpenAPI (`/openapi/v1.json` em Development). Referencia Application e Infrastructure; não tem regra de negócio.
-- `DotaAnalyst.Tests/` — testes xUnit, com uma pasta por camada (`dotnet test`).
+- `DotaAnalyst.Tests/` — testes xUnit, com uma pasta por camada (`dotnet test`). Os do banco (`Infrastructure/Persistence/`) usam PostgreSQL real via Testcontainers (`PostgresFixture`, coleção `Postgres`): precisam do Docker rodando.
 - `dotaanalyst.client/` — front-end **React 19 + Vite**, em JavaScript (`.jsx`). Chamadas à API ficam em `src/api/`.
 - `DotaAnalyst.slnx` — solução do Visual Studio 2026 que junta tudo.
 
@@ -32,14 +32,28 @@ Back-end em **.NET 10** organizado em **DDD**, um projeto por camada:
 - Regra de negócio fica no Domain (ex.: vitória = time do jogador igual ao time vencedor), nunca em controller, Infrastructure ou React.
 - Formatos externos (JSON do OpenDota, tabelas do banco) ficam na Infrastructure e são convertidos para o domínio lá dentro (ex.: `OpenDotaMappings`).
 - Cada camada registra seus serviços num `DependencyInjection.cs` próprio (`AddApplication()`, `AddInfrastructure(...)`), chamado pelo `Program.cs`.
+- Tabelas guardam "records" da Infrastructure (`MatchRecord`, `PlayerSearchRecord`, `CatalogEntryRecord`), nunca entidades do Domain; o mapeamento EF fica em `IEntityTypeConfiguration` ao lado de cada record. Nomes no banco em `snake_case`.
 - Controllers só validam a entrada, chamam um caso de uso e traduzem o resultado para HTTP.
 
 ## Como rodar
 
+- **Banco local:** `docker compose up -d db` e a connection string no user-secrets do Server (`ConnectionStrings:Database`, já configurado nesta máquina). As migrations rodam sozinhas na subida da API. Para ver o banco: pgAdmin (instalado), `localhost:5432`, banco/usuário `dotaanalyst`, senha do `.env`.
 - Pelo Visual Studio: F5 sobe a API e o Vite juntos.
 - Pela linha de comando: `dotnet run --project DotaAnalyst.Server` (o SPA proxy inicia o Vite) ou, separadamente, `npm run dev` em `dotaanalyst.client/`.
 - API em `https://localhost:7208`; Vite em `https://localhost:59438`.
-- Pelo Docker: `docker compose up --build` na raiz → `http://localhost:8080` (build de produção, só HTTP; porta configurável por `API_PORT` no `.env`, veja `.env.example`). `docker compose down` para parar.
+- Pelo Docker: `docker compose up --build` na raiz → `http://localhost:8080` (build de produção, só HTTP; API + PostgreSQL). Precisa de um `.env` com `POSTGRES_PASSWORD` (veja `.env.example`); porta por `API_PORT`. `docker compose down` para parar (`-v` apaga os dados do banco).
+
+## Banco (PostgreSQL + EF Core)
+
+- **O banco é uma camada a mais, nunca ponto único de falha:** erro de banco vira `StorageUnavailableException`, que os casos de uso registram como aviso e seguem pelo OpenDota. O `StorageGuard` (singleton) traduz os erros e funciona como *circuit breaker*: depois de uma falha de **conexão** o banco é pulado por 30 s (erro respondido pelo próprio PostgreSQL, como chave duplicada, ou dado ilegível não abre o disjuntor).
+- **Sem connection string a API sobe mesmo assim**, só com o OpenDota (`NoDatabase` no lugar dos repositórios, aviso no log). Com o banco fora na subida, a API leva ~30 s para abrir a porta (timeouts) e depois funciona normalmente.
+- **Repositórios usam `IDbContextFactory`** (um `DbContext` curto por operação), porque o caso de uso de análise consulta partida, heróis e itens em paralelo e um `DbContext` não aceita operações simultâneas.
+- **O que guarda:** `matches` (partida com resultado conhecido, agregado inteiro em `jsonb` no formato `StoredMatchDetails`), `player_searches` (account ID pesquisado com sucesso, sem dados do visitante), `catalog_entries` (heróis/itens) e `data_protection_keys`.
+- **Partidas:** salva toda partida com resultado conhecido. Parseada salva é definitiva (nunca volta ao OpenDota; só outra parseada a substitui, o que recupera uma linha ilegível); não parseada salva é usada por 15 min (`UnparsedRefreshInterval`), depois o OpenDota é consultado de novo, e continua sendo usada se o OpenDota cair. `saved_at` vem do `TimeProvider` da aplicação (o mesmo relógio que mede a idade).
+- **Catálogos:** memória → banco (cópia com menos de 24 h) → OpenDota (salva no banco) → cópia antiga do banco se o OpenDota falhar ou responder lista vazia → vazio. Uma carga por vez (`CatalogLoadLocks`).
+- **Gravações concorrentes** usam upsert atômico (`INSERT ... ON CONFLICT`) via `ExecuteSqlAsync` com interpolação (vira parâmetro, sem SQL injection). `timestamptz` só aceita UTC: use `ToUniversalTime()`.
+- **Migration nova** ao mudar record/configuração: `dotnet ef migrations add <Nome> --project DotaAnalyst.Infrastructure --startup-project DotaAnalyst.Infrastructure --output-dir Persistence/Migrations` (o `DesignTimeDbContextFactory` dispensa connection string). O teste `Model_HasNoChangesMissingAMigration` falha se faltar migration. Migrations aplicadas pelo `DatabaseMigrator` (hosted service): primeira tentativa antes da API abrir a porta e antes do Data Protection ler a tabela de chaves (por isso é registrado antes do `AddDataProtection`); se falhar, tenta de novo a cada 30 s em segundo plano. `Database:MigrateOnStartup=false` desliga.
+- **Connection string** `ConnectionStrings:Database`, sempre segredo. Use `Timeout=5` para falhar rápido com o banco fora. Produção: Neon (`SSL Mode=Require`), cadastrada no painel do Render.
 
 ## Produção (Render)
 
@@ -65,7 +79,7 @@ Back-end em **.NET 10** organizado em **DDD**, um projeto por camada:
 - **Limite de requisições:** todo controller (`MapControllers().RequireRateLimiting(...)`) tem limite por IP, janela fixa, configurado em `RateLimiting` no `appsettings.json` (padrão 60/minuto) — `DotaAnalyst.Server/RateLimiting/`. `/api/health` fica fora. Excedeu → 429 com `Retry-After`.
 - **Forwarded headers:** `ForwardedHeaders:Enabled` (desligado por padrão e no `docker compose` local) só deve ser ligado atrás do proxy da hospedagem (variável `ForwardedHeaders__Enabled=true`, já no `render.yaml`). Ligado sem proxy, qualquer um falsifica o IP pelo `X-Forwarded-For` e burla o limite. `ForwardedHeaders:ForwardedForHeaderName` diz de qual cabeçalho vem o IP do cliente (padrão `X-Forwarded-For`) e `ForwardedHeaders:ForwardLimit` (padrão 1) quantos proxies são confiáveis: **depende da hospedagem**. No **Render** usamos `CF-Connecting-IP` (verificado em 11/10/2026: o caminho é Cloudflare → balanceador do Render → proxy local, o `X-Forwarded-For` tem vários saltos internos e mantém o que o cliente manda; o Cloudflare sobrescreve o `CF-Connecting-IP` com o IP real). Ao trocar de hospedagem, ligar `Diagnostics__LogForwardedHeaders=true` temporariamente para ver os cabeçalhos reais e desligar depois (registra IPs).
 - O limite conta IPv6 pela rede /64 (um usuário costuma controlar uma /64 inteira) e IPv4-mapeado como IPv4 (`ApiRateLimiting.ClientKey`).
-- **Testes de integração** da API ficam em `DotaAnalyst.Tests/Server/` com `ApiFactory` (OpenDota trocado por fakes; nenhum teste acessa a internet). Endpoint novo ganha teste lá.
+- **Testes de integração** da API ficam em `DotaAnalyst.Tests/Server/` com `ApiFactory` (OpenDota e repositórios trocados por fakes, connection string vazia de propósito para não usar a do user-secrets; nenhum teste acessa a internet — só o Testcontainers baixa a imagem do PostgreSQL na primeira vez). Endpoint novo ganha teste lá.
 - O Vite só repassa para a API as rotas listadas em `server.proxy` no `dotaanalyst.client/vite.config.js`, e a única regra é `'^/api'`. Toda rota deve começar com `/api`; senão o React não a alcança em desenvolvimento.
 
 ## Regras de negócio

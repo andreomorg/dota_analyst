@@ -21,6 +21,9 @@ builder.Services.AddInfrastructure(builder.Configuration);
 
 var app = builder.Build();
 
+// Unexpected exceptions become a 500 ProblemDetails (with AddProblemDetails) instead of an empty body.
+app.UseExceptionHandler();
+
 app.UseDefaultFiles();
 app.MapStaticAssets();
 

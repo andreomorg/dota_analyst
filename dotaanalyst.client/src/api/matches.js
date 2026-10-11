@@ -43,7 +43,11 @@ export function fetchMatchAnalysis(accountId, matchId, signal) {
     return getJson(
         `/api/v1/players/${encodeURIComponent(accountId)}/matches/${encodeURIComponent(matchId)}`,
         signal,
-        { ...ERROR_MESSAGES, 404: 'Partida não encontrada.' },
+        {
+            ...ERROR_MESSAGES,
+            400: 'ID inválido. Confira o account ID salvo (ou SteamID64) e o número da partida.',
+            404: 'Partida não encontrada.',
+        },
         'Erro inesperado ao buscar a análise da partida.',
     );
 }

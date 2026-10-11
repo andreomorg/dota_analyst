@@ -29,7 +29,8 @@ function MatchHeader({ analysis }) {
                 <span className={result.className}>{result.label}</span>
             </h1>
 
-            <p className="match-score" aria-label={`Placar: Radiant ${analysis.radiantScore}, Dire ${analysis.direScore}`}>
+            <p className="match-score">
+                <span className="visually-hidden">Placar: </span>
                 <span className="team-name">Radiant</span>
                 {' '}
                 <strong>{formatNumber(analysis.radiantScore)}</strong>

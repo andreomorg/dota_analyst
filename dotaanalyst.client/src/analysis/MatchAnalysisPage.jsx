@@ -6,8 +6,10 @@ import MatchHeader from './MatchHeader';
 import PerformanceSummary from './PerformanceSummary';
 import TeamTable from './TeamTable';
 
+const MAX_MATCH_ID = 9223372036854775807n; // long.MaxValue on the API
+
 function isValidMatchId(value) {
-    return /^\d{1,19}$/.test(value) && Number(value) > 0;
+    return /^\d{1,19}$/.test(value) && BigInt(value) > 0n && BigInt(value) <= MAX_MATCH_ID;
 }
 
 function BackLink() {

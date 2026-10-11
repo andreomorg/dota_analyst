@@ -54,8 +54,9 @@ public class OpenDotaClient(HttpClient httpClient)
     {
         try
         {
-            using var response = await httpClient.GetAsync(
-                path, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+            // Default completion option (whole body buffered) on purpose: that way HttpClient.Timeout
+            // also covers downloading the body, not only waiting for the headers.
+            using var response = await httpClient.GetAsync(path, cancellationToken);
 
             if (notFoundAsNull && response.StatusCode == HttpStatusCode.NotFound)
             {

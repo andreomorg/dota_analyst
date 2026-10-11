@@ -37,14 +37,14 @@ public class GetMatchAnalysisHandler(
 
         IReadOnlyList<MatchPlayerSummary> TeamOf(Team team) => match.Players
             .Where(player => player.Team == team)
-            .Select(player => ToSummary(player, player == currentPlayer, names))
+            .Select(player => ToSummary(player, ReferenceEquals(player, currentPlayer), names))
             .ToList();
 
         return new MatchAnalysis(
             MatchId: match.MatchId.Value,
             DurationSeconds: (int)match.Duration.TotalSeconds,
             StartTime: match.StartTime,
-            RadiantWon: match.WinningTeam is null ? null : match.WinningTeam == Team.Radiant,
+            RadiantWon: MatchResult.Won(Team.Radiant, match.WinningTeam),
             RadiantScore: match.RadiantScore,
             DireScore: match.DireScore,
             IsParsed: match.IsParsed,

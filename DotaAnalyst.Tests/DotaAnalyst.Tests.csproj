@@ -19,6 +19,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Real JSON responses used as test fixtures, copied next to the test DLL. -->
+    <None Include="Infrastructure\Fixtures\*.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\DotaAnalyst.Domain\DotaAnalyst.Domain.csproj" />
     <ProjectReference Include="..\DotaAnalyst.Application\DotaAnalyst.Application.csproj" />
     <ProjectReference Include="..\DotaAnalyst.Infrastructure\DotaAnalyst.Infrastructure.csproj" />

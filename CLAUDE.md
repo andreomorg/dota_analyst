@@ -35,4 +35,7 @@ O Vite só repassa para a API as rotas listadas em `server.proxy` no `dotaanalys
 
 1. **Agora:** buscar dados de partidas na API pública do OpenDota (https://docs.opendota.com) a partir do C#, usando `HttpClient` registrado via `AddHttpClient`, e exibir no React.
 2. Manter a análise atrás de uma interface (ex.: `IReplayAnalyzer`), com a primeira implementação usando o OpenDota.
+   - **Containers:** tudo roda em Docker, orquestrado por um `docker-compose.yml` na raiz (API com o React embutido, PostgreSQL e, no futuro, o serviço Go). `docker compose up` deve bastar para subir o projeto inteiro.
+   - **Banco:** PostgreSQL com EF Core (Npgsql), como serviço do compose; connection string em user-secrets, nunca no `appsettings.json`.
+   - **Autenticação:** login com Steam (OpenID) e cookie de autenticação `HttpOnly`. Não há senha própria; o SteamID64 do login é convertido no account ID do Dota (`steamId64 - 76561197960265728`).
 3. **Futuro:** um serviço separado em Go usando o parser `manta` para ler os `.dem` diretamente. A API em C# continua sendo a única porta de entrada do React e chama o serviço Go (HTTP/JSON primeiro, fila depois se o parsing ficar lento).

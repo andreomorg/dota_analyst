@@ -1,6 +1,6 @@
 @DotaAnalyst.Server_HostAddress = http://localhost:5030
 
-GET {{DotaAnalyst.Server_HostAddress}}/api/players/87278757/matches
+GET {{DotaAnalyst.Server_HostAddress}}/api/v1/players/87278757/matches
 Accept: application/json
 
 ###

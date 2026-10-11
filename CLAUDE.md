@@ -12,6 +12,7 @@ O dono do projeto está começando em C# — explique as decisões e os conceito
 
 - Remoto: https://github.com/andreomorg/dota_analyst (branch `main`).
 - O `git` não está no PATH; o executável que funciona é o do Visual Studio: `C:\Program Files\Microsoft Visual Studio\18\Community\Common7\IDE\CommonExtensions\Microsoft\TeamFoundation\Team Explorer\Git\cmd\git.exe`.
+- **Tags de versão:** versionamento semântico `vMAJOR.MINOR.PATCH` (ex.: `v1.0.0`), com tag anotada (`git tag -a v1.1.0 -m "..."`) enviada com `git push origin <tag>`. O MAJOR acompanha a versão da API na URL (`/api/v1` → `v1.x.y`; uma `v2.0.0` só existe junto com `Controllers/V2/`). MINOR = funcionalidade nova compatível (ex.: endpoint novo); PATCH = correção. Tag ao fechar uma sprint ou correção, nunca sem pedido do dono do projeto.
 
 ## Estrutura
 
@@ -20,7 +21,7 @@ Back-end em **.NET 10** organizado em **DDD**, um projeto por camada:
 - `DotaAnalyst.Domain/` — regras do Dota: entidades e value objects (`PlayerMatch`, `Kda`, `AccountId`, `Team`, `Hero`). Não referencia nenhum outro projeto nem pacote.
 - `DotaAnalyst.Application/` — casos de uso (ex.: `Matches/GetRecentMatchesHandler`), DTOs de saída (`MatchSummary`) e as interfaces do que vem de fora (`Abstractions/`: `IMatchProvider`, `IHeroCatalog`). Referencia só o Domain.
 - `DotaAnalyst.Infrastructure/` — implementações das interfaces: OpenDota (`OpenDota/`), cache e, no futuro, EF Core/PostgreSQL. Referencia Application.
-- `DotaAnalyst.Server/` — a camada de API: controllers (`Controllers/`), `Program.cs` e OpenAPI (`/openapi/v1.json` em Development). Referencia Application e Infrastructure; não tem regra de negócio.
+- `DotaAnalyst.Server/` — a camada de API: controllers por versão (`Controllers/V1/`), `Program.cs` e OpenAPI (`/openapi/v1.json` em Development). Referencia Application e Infrastructure; não tem regra de negócio.
 - `DotaAnalyst.Tests/` — testes xUnit, com uma pasta por camada (`dotnet test`).
 - `dotaanalyst.client/` — front-end **React 19 + Vite**, em JavaScript (`.jsx`). Chamadas à API ficam em `src/api/`.
 - `DotaAnalyst.slnx` — solução do Visual Studio 2026 que junta tudo.
@@ -51,7 +52,9 @@ Back-end em **.NET 10** organizado em **DDD**, um projeto por camada:
 
 ## Ao adicionar endpoints
 
-O Vite só repassa para a API as rotas listadas em `server.proxy` no `dotaanalyst.client/vite.config.js`, e a única regra é `'^/api'`. Toda rota de controller deve começar com `/api` (ex.: `[Route("api/players")]`); senão o React não a alcança em desenvolvimento.
+- **Versionamento:** a API é versionada pela URL. Controllers da versão 1 ficam em `DotaAnalyst.Server/Controllers/V1/` (namespace `DotaAnalyst.Server.Controllers.V1`) com rota `api/v1/...` (ex.: `[Route("api/v1/players")]`). Mudança que quebra o contrato (remover/renomear campo, mudar significado ou código HTTP) não entra na v1: cria `Controllers/V2/` com rota `api/v2/...` e a v1 continua funcionando. Acrescentar endpoint ou campo novo não quebra o contrato e fica na versão atual.
+- Endpoints técnicos ficam fora do versionamento: `/api/health`.
+- O Vite só repassa para a API as rotas listadas em `server.proxy` no `dotaanalyst.client/vite.config.js`, e a única regra é `'^/api'`. Toda rota deve começar com `/api`; senão o React não a alcança em desenvolvimento.
 
 ## Regras de negócio
 

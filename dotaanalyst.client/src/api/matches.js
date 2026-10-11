@@ -8,7 +8,7 @@ const UNEXPECTED_ERROR = 'Erro inesperado ao buscar as partidas.';
 export async function fetchRecentMatches(id, signal) {
     let response;
     try {
-        response = await fetch(`/api/players/${encodeURIComponent(id)}/matches`, { signal });
+        response = await fetch(`/api/v1/players/${encodeURIComponent(id)}/matches`, { signal });
     } catch (error) {
         if (signal?.aborted) {
             throw error;

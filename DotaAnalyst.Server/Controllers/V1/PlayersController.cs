@@ -3,10 +3,10 @@ using DotaAnalyst.Application.Matches;
 using DotaAnalyst.Domain.Players;
 using Microsoft.AspNetCore.Mvc;
 
-namespace DotaAnalyst.Server.Controllers;
+namespace DotaAnalyst.Server.Controllers.V1;
 
 [ApiController]
-[Route("api/players")]
+[Route("api/v1/players")]
 public class PlayersController(
     GetRecentMatchesHandler getRecentMatches,
     ILogger<PlayersController> logger) : ControllerBase

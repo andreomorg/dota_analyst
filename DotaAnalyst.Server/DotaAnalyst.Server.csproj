@@ -20,6 +20,8 @@
     <ProjectReference Include="..\dotaanalyst.client\dotaanalyst.client.esproj">
       <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
     </ProjectReference>
+    <ProjectReference Include="..\DotaAnalyst.Application\DotaAnalyst.Application.csproj" />
+    <ProjectReference Include="..\DotaAnalyst.Infrastructure\DotaAnalyst.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

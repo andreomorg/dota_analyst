@@ -15,11 +15,23 @@ O dono do projeto está começando em C# — explique as decisões e os conceito
 
 ## Estrutura
 
-- `DotaAnalyst.Server/` — API ASP.NET Core em **.NET 10**, com controllers (`Controllers/`) e OpenAPI (`/openapi/v1.json` em Development).
-- `dotaanalyst.client/` — front-end **React 19 + Vite**, em JavaScript (`.jsx`).
-- `DotaAnalyst.slnx` — solução do Visual Studio 2026 que junta os dois.
+Back-end em **.NET 10** organizado em **DDD**, um projeto por camada:
 
-Os arquivos `WeatherForecast*` são exemplo do template, não código do projeto.
+- `DotaAnalyst.Domain/` — regras do Dota: entidades e value objects (`PlayerMatch`, `Kda`, `AccountId`, `Team`, `Hero`). Não referencia nenhum outro projeto nem pacote.
+- `DotaAnalyst.Application/` — casos de uso (ex.: `Matches/GetRecentMatchesHandler`), DTOs de saída (`MatchSummary`) e as interfaces do que vem de fora (`Abstractions/`: `IMatchProvider`, `IHeroCatalog`). Referencia só o Domain.
+- `DotaAnalyst.Infrastructure/` — implementações das interfaces: OpenDota (`OpenDota/`), cache e, no futuro, EF Core/PostgreSQL. Referencia Application.
+- `DotaAnalyst.Server/` — a camada de API: controllers (`Controllers/`), `Program.cs` e OpenAPI (`/openapi/v1.json` em Development). Referencia Application e Infrastructure; não tem regra de negócio.
+- `DotaAnalyst.Tests/` — testes xUnit, com uma pasta por camada (`dotnet test`).
+- `dotaanalyst.client/` — front-end **React 19 + Vite**, em JavaScript (`.jsx`). Chamadas à API ficam em `src/api/`.
+- `DotaAnalyst.slnx` — solução do Visual Studio 2026 que junta tudo.
+
+## Regras do DDD
+
+- Dependências só apontam para dentro: `Server → Application → Domain` e `Infrastructure → Application`. O Domain nunca conhece OpenDota, HTTP, banco ou ASP.NET.
+- Regra de negócio fica no Domain (ex.: vitória = time do jogador igual ao time vencedor), nunca em controller, Infrastructure ou React.
+- Formatos externos (JSON do OpenDota, tabelas do banco) ficam na Infrastructure e são convertidos para o domínio lá dentro (ex.: `OpenDotaMappings`).
+- Cada camada registra seus serviços num `DependencyInjection.cs` próprio (`AddApplication()`, `AddInfrastructure(...)`), chamado pelo `Program.cs`.
+- Controllers só validam a entrada, chamam um caso de uso e traduzem o resultado para HTTP.
 
 ## Como rodar
 
@@ -29,14 +41,16 @@ Os arquivos `WeatherForecast*` são exemplo do template, não código do projeto
 
 ## Ao adicionar endpoints
 
-O Vite só repassa para a API as rotas listadas em `server.proxy` no `dotaanalyst.client/vite.config.js` (hoje só `^/weatherforecast`). Todo controller novo precisa de uma entrada ali — prefira prefixar as rotas com `/api` e usar uma única regra `'^/api'`.
+O Vite só repassa para a API as rotas listadas em `server.proxy` no `dotaanalyst.client/vite.config.js`, e a única regra é `'^/api'`. Toda rota de controller deve começar com `/api` (ex.: `[Route("api/players")]`); senão o React não a alcança em desenvolvimento.
 
 ## Regras de negócio
 
 - **Identidade do usuário:** o login é só pela Steam (OpenID); não existe senha própria. O SteamID64 do login é convertido no account ID do Dota: `accountId = steamId64 - 76561197960265728`.
 - **Sessão:** cookie de autenticação `HttpOnly`.
 - **Porta de entrada única:** o React fala apenas com a API em C#. Serviços externos (OpenDota, futuro serviço Go) são chamados pela API, nunca direto pelo front-end.
-- **Fonte dos dados:** partidas e análises vêm da API pública do OpenDota (https://docs.opendota.com), atrás de uma interface (ex.: `IReplayAnalyzer`) para poder trocar a implementação.
+- **Fonte dos dados:** partidas e análises vêm da API pública do OpenDota (https://docs.opendota.com), sempre atrás de interfaces da Application (`IMatchProvider`, `IHeroCatalog` e, para análise de replay, `IReplayAnalyzer`) para poder trocar a implementação.
+- **Regra de vitória:** `player_slot` de 0 a 127 é Radiant e de 128 a 255 é Dire; o jogador venceu se o time dele é o vencedor. Sem resultado conhecido, a vitória fica indefinida (`null`), nunca "derrota".
+- **Account ID:** aceita o account ID do Dota (32 bits, maior que zero) ou o SteamID64, que é convertido.
 - **Segredos:** nunca no `appsettings.json` nem no Git — user-secrets ao rodar localmente e variável de ambiente (via `.env` fora do Git) no Docker.
 - **Execução:** `docker compose up` na raiz deve subir o projeto inteiro (API com o React embutido, PostgreSQL e, no futuro, o serviço Go).
 

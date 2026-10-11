@@ -82,11 +82,12 @@ if (app.Environment.IsDevelopment())
     app.UseHttpsRedirection();
 }
 
+// Before authentication, so the Steam callback (answered inside UseAuthentication) is rate limited too.
+app.UseRateLimiter();
+
 // Reads the session cookie and handles Steam's answer at /api/auth/steam/callback. After the forwarded
 // headers, so it sees the real scheme (HTTPS) and host when building the address Steam sends the user back to.
 app.UseAuthentication();
-
-app.UseRateLimiter();
 
 app.UseAuthorization();
 

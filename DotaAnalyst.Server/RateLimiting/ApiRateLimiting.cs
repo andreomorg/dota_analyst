@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading.RateLimiting;
+using DotaAnalyst.Server.Authentication;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Options;
 
@@ -34,19 +35,15 @@ public static class ApiRateLimiting
 
         services.AddRateLimiter(limiter =>
         {
-            limiter.AddPolicy(PolicyName, httpContext =>
-            {
-                var options = httpContext.RequestServices.GetRequiredService<IOptions<RateLimitingOptions>>().Value;
-                return RateLimitPartition.GetFixedWindowLimiter(
-                    partitionKey: ClientKey(httpContext.Connection.RemoteIpAddress),
-                    factory: _ => new FixedWindowRateLimiterOptions
-                    {
-                        PermitLimit = options.PermitLimit,
-                        Window = options.Window,
-                        // Reject right away instead of making the client wait in a queue.
-                        QueueLimit = 0,
-                    });
-            });
+            limiter.AddPolicy(PolicyName, PerClientIp);
+
+            // Steam's login callback is not a controller (the authentication middleware answers it), so the
+            // policy above doesn't reach it; each hit makes the server call Steam, so it is limited too.
+            // Its own partition key: logging in doesn't spend the user's API requests.
+            limiter.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
+                httpContext.Request.Path.Equals(SteamAuthentication.CallbackPath, StringComparison.OrdinalIgnoreCase)
+                    ? PerClientIp(httpContext, keyPrefix: "steam-callback:")
+                    : RateLimitPartition.GetNoLimiter("unlimited"));
 
             limiter.OnRejected = async (context, cancellationToken) =>
             {
@@ -72,6 +69,22 @@ public static class ApiRateLimiting
         });
 
         return services;
+    }
+
+    private static RateLimitPartition<string> PerClientIp(HttpContext httpContext) => PerClientIp(httpContext, keyPrefix: "");
+
+    private static RateLimitPartition<string> PerClientIp(HttpContext httpContext, string keyPrefix)
+    {
+        var options = httpContext.RequestServices.GetRequiredService<IOptions<RateLimitingOptions>>().Value;
+        return RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: keyPrefix + ClientKey(httpContext.Connection.RemoteIpAddress),
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = options.PermitLimit,
+                Window = options.Window,
+                // Reject right away instead of making the client wait in a queue.
+                QueueLimit = 0,
+            });
     }
 
     // The key each client is counted by. An IPv6 user usually controls a whole /64 network, so counting

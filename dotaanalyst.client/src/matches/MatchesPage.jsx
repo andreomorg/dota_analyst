@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { toAccountId } from '../accountId';
 import { readSavedAccountId, saveAccountId } from '../accountStorage';
 import { fetchRecentMatches } from '../api/matches';
 import { useCurrentUser } from '../auth/useCurrentUser';
@@ -86,7 +87,9 @@ function MatchesPage() {
         state = result?.key === search.key ? result : { status: 'loading' };
     }
 
-    const viewingSomeoneElse = ownAccountId !== null && typedSearch !== null && typedSearch.accountId !== ownAccountId;
+    // Compared as account IDs, so typing your own SteamID64 still counts as "my matches".
+    const viewingSomeoneElse =
+        ownAccountId !== null && typedSearch !== null && toAccountId(typedSearch.accountId) !== ownAccountId;
 
     return (
         <main className="matches-page">

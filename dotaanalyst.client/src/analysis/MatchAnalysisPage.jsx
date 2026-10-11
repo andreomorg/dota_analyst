@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useLocation, useParams } from 'react-router';
+import { Link, useParams, useSearchParams } from 'react-router';
 import { readSavedAccountId } from '../accountStorage';
 import { fetchMatchAnalysis } from '../api/matches';
 import { useCurrentUser } from '../auth/useCurrentUser';
@@ -23,16 +23,16 @@ function BackLink() {
 
 function MatchAnalysisPage() {
     const { matchId } = useParams();
-    const location = useLocation();
+    const [searchParams] = useSearchParams();
     const { status: sessionStatus, user } = useCurrentUser();
     const [savedAccountId] = useState(readSavedAccountId);
 
-    // Whose point of view: the player whose list the user clicked (sent by MatchesTable),
+    // Whose point of view: the player whose list the user clicked (?player=, set by MatchesTable),
     // else the logged-in user, else the ID saved in this browser. null = session still loading,
     // so no request goes out with the wrong ID.
-    const linkedAccountId = location.state?.accountId;
+    const linkedAccountId = searchParams.get('player')?.trim();
     let accountId;
-    if (typeof linkedAccountId === 'string' && linkedAccountId !== '') {
+    if (linkedAccountId) {
         accountId = linkedAccountId;
     } else if (sessionStatus === 'loading') {
         accountId = null;
@@ -112,12 +112,12 @@ function MatchAnalysisPage() {
                 </>
             )}
 
-            {state.status === 'success' && <AnalysisContent analysis={state.analysis} />}
+            {state.status === 'success' && <AnalysisContent analysis={state.analysis} accountId={accountId} />}
         </main>
     );
 }
 
-function AnalysisContent({ analysis }) {
+function AnalysisContent({ analysis, accountId }) {
     const { performance } = analysis;
     // null stays null for both teams: an unknown winner highlights nobody.
     const radiantWon = analysis.radiantWon ?? null;
@@ -137,8 +137,8 @@ function AnalysisContent({ analysis }) {
                 ? <PerformanceSummary performance={performance} />
                 : (
                     <p className="notice">
-                        Você não aparece nesta partida, por isso não há análise do seu desempenho.
-                        Confira se o account ID salvo na lista de partidas está correto.
+                        O jogador {accountId} não aparece nesta partida, por isso não há análise de desempenho.
+                        Abra a partida pela lista de partidas desse jogador.
                     </p>
                 )}
 

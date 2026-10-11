@@ -10,5 +10,6 @@ public class SteamOptions
 
     public Uri BaseUrl { get; init; } = new("https://api.steampowered.com/");
 
-    public TimeSpan Timeout { get; init; } = TimeSpan.FromSeconds(10);
+    // Short: the React page waits for /api/v1/me (which shows this profile) before loading anything else.
+    public TimeSpan Timeout { get; init; } = TimeSpan.FromSeconds(5);
 }

@@ -1,5 +1,9 @@
 using System.Net;
+using System.Security.Cryptography;
 using System.Text.Json;
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
 using DotaAnalyst.Domain.Players;
 using DotaAnalyst.Server.Authentication;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -44,6 +48,8 @@ public class AuthApiTests
         var sessionCookie = Assert.Single(afterLogin.Headers.GetValues("Set-Cookie"), c => c.StartsWith(SteamAuthentication.CookieName));
         Assert.Contains("httponly", sessionCookie, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("samesite=lax", sessionCookie, StringComparison.OrdinalIgnoreCase);
+        // Persistent: survives closing the browser (a cookie without expires dies with the browser session).
+        Assert.Contains("expires=", sessionCookie, StringComparison.OrdinalIgnoreCase);
 
         var me = await client.GetAsync("/api/v1/me");
         Assert.Equal(HttpStatusCode.OK, me.StatusCode);
@@ -97,6 +103,21 @@ public class AuthApiTests
     }
 
     [Fact]
+    public async Task Login_KeysUnavailable_GoesToLoginFailedInsteadOf500()
+    {
+        // Like the database (where the keys live) being down: encrypting the login state fails.
+        using var factory = new ApiFactory();
+        using var brokenKeys = factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+            services.AddSingleton<IDataProtectionProvider>(new FailingDataProtectionProvider())));
+        var client = brokenKeys.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+
+        var response = await client.GetAsync("/api/v1/auth/login?returnUrl=/");
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.Equal(SteamAuthentication.LoginFailedPath, response.Headers.Location!.OriginalString);
+    }
+
+    [Fact]
     public async Task Me_WithoutSession_Returns401Problem()
     {
         using var factory = new ApiFactory();
@@ -141,6 +162,15 @@ public class AuthApiTests
         var response = await factory.CreateClient().PostAsync("/api/v1/auth/logout", content: null);
 
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+    }
+
+    private sealed class FailingDataProtectionProvider : IDataProtectionProvider, IDataProtector
+    {
+        public IDataProtector CreateProtector(string purpose) => this;
+
+        public byte[] Protect(byte[] plaintext) => throw new CryptographicException("The key ring is unavailable.");
+
+        public byte[] Unprotect(byte[] protectedData) => throw new CryptographicException("The key ring is unavailable.");
     }
 
     // A "browser": keeps cookies, and doesn't follow redirects so each step can be checked.

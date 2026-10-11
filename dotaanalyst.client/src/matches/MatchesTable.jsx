@@ -30,8 +30,9 @@ function MatchesTable({ matches, accountId }) {
                             <tr key={match.matchId}>
                                 <td>
                                     {/* A real link: reachable with Tab, opens with Enter, works with "open in new tab". */}
-                                    {/* The state tells the analysis page whose matches these are (may not be the logged-in user's). */}
-                                    <Link to={`/matches/${match.matchId}`} state={{ accountId }}>
+                                    {/* ?player= tells the analysis page whose matches these are (may not be the logged-in */}
+                                    {/* user's). In the URL, not in router state, so it survives a new tab or a shared link. */}
+                                    <Link to={`/matches/${match.matchId}?player=${encodeURIComponent(accountId)}`}>
                                         {match.heroName}
                                         <span className="visually-hidden"> — ver análise da partida</span>
                                     </Link>

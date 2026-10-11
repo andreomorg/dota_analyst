@@ -45,7 +45,10 @@ public sealed class DatabaseMigrator(
         var dbContextFactory = services.GetService<IDbContextFactory<AppDbContext>>();
         if (dbContextFactory is null)
         {
-            logger.LogWarning("No database configured (ConnectionStrings:Database): running on OpenDota only");
+            // Without the database the login keys aren't kept either: every restart logs everyone out.
+            logger.LogWarning(
+                "No database configured (ConnectionStrings:Database): running on OpenDota only, " +
+                "and login sessions won't survive a restart");
             return true;
         }
 

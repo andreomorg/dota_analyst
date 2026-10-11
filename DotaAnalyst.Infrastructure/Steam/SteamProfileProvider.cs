@@ -15,6 +15,9 @@ public class SteamProfileProvider(HttpClient httpClient, IOptions<SteamOptions> 
 {
     // Names and avatars change rarely; an hour keeps us far from the Steam Web API limits.
     private static readonly TimeSpan CacheDuration = TimeSpan.FromHours(1);
+    // After a failure (Steam down, invalid key), wait before asking again, so every page load isn't slowed
+    // down by the timeout: meanwhile the profile is just missing.
+    private static readonly TimeSpan FailureCacheDuration = TimeSpan.FromMinutes(1);
 
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -28,7 +31,17 @@ public class SteamProfileProvider(HttpClient httpClient, IOptions<SteamOptions> 
 
         var steamId64 = accountId.SteamId64.ToString();
         var key = Uri.EscapeDataString(options.Value.ApiKey ?? "");
-        var response = await GetJsonAsync($"ISteamUser/GetPlayerSummaries/v2/?key={key}&steamids={steamId64}", cancellationToken);
+        SteamPlayerSummariesResponse? response;
+        try
+        {
+            response = await GetJsonAsync($"ISteamUser/GetPlayerSummaries/v2/?key={key}&steamids={steamId64}", cancellationToken);
+        }
+        catch (DataSourceUnavailableException)
+        {
+            // Remembered as "no profile" for a minute; this first caller still gets the error (and logs it).
+            cache.Set(cacheKey, new CachedProfile(null), CacheEntries.NotFound(FailureCacheDuration));
+            throw;
+        }
 
         var profile = ToProfile(response?.Response?.Players?.FirstOrDefault(player => player.Steamid == steamId64));
         cache.Set(cacheKey, new CachedProfile(profile), CacheEntries.Profile(CacheDuration));

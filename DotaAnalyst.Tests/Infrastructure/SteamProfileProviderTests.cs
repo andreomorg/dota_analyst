@@ -65,6 +65,19 @@ public class SteamProfileProviderTests
         Assert.DoesNotContain("secret-key", exception.ToString());
     }
 
+    [Fact]
+    public async Task GetProfile_AfterAFailure_DoesNotAskSteamAgainForAWhile()
+    {
+        var steam = new StubSteam(HttpStatusCode.InternalServerError, "");
+        var provider = CreateProvider(steam);
+
+        await Assert.ThrowsAsync<DataSourceUnavailableException>(() => provider.GetProfileAsync(Me, CancellationToken.None));
+        // The next page load doesn't wait for Steam's timeout again: no profile, right away.
+        Assert.Null(await provider.GetProfileAsync(Me, CancellationToken.None));
+
+        Assert.Equal(1, steam.Calls);
+    }
+
     [Theory]
     [InlineData("http://avatars.steamstatic.com/a.jpg")] // not https
     [InlineData("javascript:alert(1)")]

@@ -21,6 +21,22 @@ public class RateLimitingTests
     }
 
     [Fact]
+    public async Task SteamLoginCallback_IsRateLimited()
+    {
+        // The callback isn't a controller (the authentication middleware answers it) but makes the server call Steam.
+        using var factory = CreateFactory(permitLimit: 2);
+        var client = factory.CreateClient(new Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+
+        await client.GetAsync("/api/auth/steam/callback");
+        await client.GetAsync("/api/auth/steam/callback");
+        var rejected = await client.GetAsync("/api/auth/steam/callback");
+
+        PlayersApiTests.AssertProblem(rejected, HttpStatusCode.TooManyRequests);
+        // Its own counter: logging in doesn't use up the user's API requests.
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync(MatchesUrl)).StatusCode);
+    }
+
+    [Fact]
     public async Task HealthCheck_IsNotRateLimited()
     {
         using var factory = CreateFactory(permitLimit: 1);

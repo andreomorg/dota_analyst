@@ -32,7 +32,13 @@ public static class DependencyInjection
     private static void AddSteamProfiles(IServiceCollection services, IConfiguration configuration)
     {
         var section = configuration.GetSection(SteamOptions.SectionName);
-        services.AddOptions<SteamOptions>().Bind(section);
+        services.AddOptions<SteamOptions>()
+            .Bind(section)
+            .Validate(
+                options => options.BaseUrl is { IsAbsoluteUri: true } && options.BaseUrl.AbsolutePath.EndsWith('/'),
+                "Steam:BaseUrl must be an absolute URL ending with '/'.")
+            .Validate(options => options.Timeout > TimeSpan.Zero, "Steam:Timeout must be positive.")
+            .ValidateOnStart();
 
         // Names and avatars are optional: without a Steam Web API key the site just doesn't show them.
         if (string.IsNullOrWhiteSpace(section.GetValue<string>(nameof(SteamOptions.ApiKey))))

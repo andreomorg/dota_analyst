@@ -46,8 +46,15 @@ jobs:
 
       # Fails when any NuGet package (direct or indirect) has a known vulnerability, so we hear about it
       # here instead of only through a Visual Studio warning. Package lines in the report start with ">".
+      # pipefail: if "dotnet list" itself fails, the step fails too (otherwise tee's success would hide it
+      # and the check would silently pass).
+      # "dotnet list" has no -p option; MSBuild reads environment variables as properties instead.
       - name: Vulnerable packages
+        shell: bash
+        env:
+          ExcludeSpaClient: "true"
         run: |
+          set -o pipefail
           dotnet list DotaAnalyst.Tests package --vulnerable --include-transitive | tee vulnerable.txt
           if grep -q '^ *>' vulnerable.txt; then exit 1; fi
 

@@ -1,0 +1,28 @@
+# Patterns without **/ only match at the root of the build context.
+
+# Build outputs and dependencies (rebuilt inside the image)
+**/bin/
+**/obj/
+**/node_modules/
+**/dist/
+
+# Local tooling and git
+.git/
+**/.vs/
+**/.vscode/
+**/.idea/
+**/*.user
+**/*.suo
+
+# Local planning and secrets
+work/
+**/.env
+**/.env.*
+!.env.example
+**/*.local
+**/appsettings.*.local.json
+
+# Docker files themselves
+Dockerfile
+docker-compose.yml
+.dockerignore

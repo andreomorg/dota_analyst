@@ -17,7 +17,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\dotaanalyst.client\dotaanalyst.client.esproj">
+    <!-- The Docker build passes -p:ExcludeSpaClient=true: React is built in its own Node stage,
+         and the .NET SDK stage has neither Node/npm nor the client folder. -->
+    <ProjectReference Include="..\dotaanalyst.client\dotaanalyst.client.esproj" Condition="'$(ExcludeSpaClient)' != 'true'">
       <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
     </ProjectReference>
     <ProjectReference Include="..\DotaAnalyst.Application\DotaAnalyst.Application.csproj" />

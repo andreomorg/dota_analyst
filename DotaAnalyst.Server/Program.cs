@@ -9,6 +9,7 @@ builder.Services.AddControllers();
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 builder.Services.AddProblemDetails();
+builder.Services.AddHealthChecks();
 
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
@@ -22,13 +23,17 @@ app.MapStaticAssets();
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
-}
 
-app.UseHttpsRedirection();
+    // Only in development: in the container the API listens on plain HTTP (port 8080)
+    // and HTTPS is the job of a reverse proxy in front of it.
+    app.UseHttpsRedirection();
+}
 
 app.UseAuthorization();
 
 app.MapControllers();
+// Liveness only: does not call OpenDota, so the status reflects our own process, not OpenDota's.
+app.MapHealthChecks("/api/health");
 
 // Unknown /api routes return 404 instead of falling through to the React page below.
 app.MapFallback("/api/{**rest}", () => Results.Problem(statusCode: StatusCodes.Status404NotFound));

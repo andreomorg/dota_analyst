@@ -1,0 +1,18 @@
+# Runs the whole project: docker compose up --build
+# Optional settings come from a .env file next to this one (see .env.example).
+
+services:
+  api:
+    build: .
+    image: dotaanalyst-api
+    ports:
+      - "${API_PORT:-8080}:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:8080/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped

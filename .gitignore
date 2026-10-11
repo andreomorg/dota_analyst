@@ -16,3 +16,4 @@ work/
 
 # Segredos locais
 appsettings.*.local.json
+.env

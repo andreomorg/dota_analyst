@@ -38,6 +38,16 @@ Back-end em **.NET 10** organizado em **DDD**, um projeto por camada:
 - Pelo Visual Studio: F5 sobe a API e o Vite juntos.
 - Pela linha de comando: `dotnet run --project DotaAnalyst.Server` (o SPA proxy inicia o Vite) ou, separadamente, `npm run dev` em `dotaanalyst.client/`.
 - API em `https://localhost:7208`; Vite em `https://localhost:59438`.
+- Pelo Docker: `docker compose up --build` na raiz → `http://localhost:8080` (build de produção, só HTTP; porta configurável por `API_PORT` no `.env`, veja `.env.example`). `docker compose down` para parar.
+
+## Docker
+
+- `Dockerfile` multi-stage: estágio Node compila o React; estágio SDK copia o `dist/` para `DotaAnalyst.Server/wwwroot/` **antes** do `dotnet publish` (o `MapStaticAssets` só serve arquivos que existem no publish); estágio final só com o runtime do ASP.NET, usuário não-root, porta 8080.
+- O build do container passa `-p:ExcludeSpaClient=true`, que desliga a referência ao `.esproj` no `DotaAnalyst.Server.csproj` (o React já é compilado no estágio Node; o estágio do SDK não tem Node nem a pasta do client). Nenhum outro projeto deve referenciar o `.esproj` — o Visual Studio às vezes adiciona essa referência sozinho; se aparecer, remova.
+- Ao criar um projeto .NET novo que o Server use, adicione o `COPY` do `.csproj` e da pasta no `Dockerfile`.
+- O `vite.config.js` só gera/lê o certificado HTTPS no `npm run dev`; o `npm run build` não pode depender do `dotnet`.
+- `/api/health` é só liveness (não chama o OpenDota) e é usado pelo health check do compose. O compose **não** reinicia container `unhealthy` (o `restart` só age quando o processo morre); o status serve para `depends_on: condition: service_healthy`.
+- Serviços novos (PostgreSQL, serviço Go) entram no `docker-compose.yml`; segredos vêm do `.env` (fora do Git e do `.dockerignore`), nunca escritos no YAML. O `.env` só alimenta a interpolação `${VAR}` do YAML — para chegar no container, cada variável precisa estar em `environment:`.
 
 ## Ao adicionar endpoints
 

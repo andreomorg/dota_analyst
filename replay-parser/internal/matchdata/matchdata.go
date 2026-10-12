@@ -435,7 +435,7 @@ type Vision struct {
 	// Wards is every observer and sentry ward placed, in the order they were placed.
 	Wards List[Ward] `json:"wards"`
 	// Smokes is every Smoke of Deceit used.
-	Smokes List[PlayerEvent] `json:"smokes"`
+	Smokes List[Smoke] `json:"smokes"`
 	// Scans is every scan used.
 	Scans List[TeamEvent] `json:"scans"`
 	// Glyphs is every Glyph of Fortification used.
@@ -463,18 +463,27 @@ type Ward struct {
 	Y int `json:"y"`
 	// PlacedAt is when it was placed.
 	PlacedAt Seconds `json:"placedAt"`
-	// RemovedAt is when it was gone (expired or destroyed); null when it still existed when the replay ended.
+	// RemovedAt is when it was gone (expired or destroyed); null when it still existed when the match ended.
 	RemovedAt *Seconds `json:"removedAt"`
-	// DestroyedBy is the player who destroyed it; null when it expired or a non-player unit killed it.
+	// Destroyed is true when a unit killed it; false when it expired (or still existed when the match ended).
+	Destroyed bool `json:"destroyed"`
+	// DestroyedBy is the player who destroyed it (a summon or illusion counts for its owner); null when it expired or
+	// a non-player unit (creep, tower) killed it.
 	DestroyedBy *int `json:"destroyedBy"`
+	// DestroyedByTeam is the team of the unit that killed it (the ward's own team for a deny); null when it was not
+	// destroyed or a neutral killed it.
+	DestroyedByTeam *Team `json:"destroyedByTeam"`
 }
 
-// PlayerEvent is something a player did at a moment (e.g. used a Smoke).
-type PlayerEvent struct {
-	// T is when it happened.
+// Smoke is a Smoke of Deceit used.
+type Smoke struct {
+	// T is when it was used.
 	T Seconds `json:"t"`
-	// Player is the player index 0-9.
+	// Player is the player index 0-9 who used it.
 	Player int `json:"player"`
+	// X and Y are where the player's hero was at that moment; null when the replay does not say.
+	X *int `json:"x"`
+	Y *int `json:"y"`
 }
 
 // TeamEvent is something a team did at a moment (scan, glyph).

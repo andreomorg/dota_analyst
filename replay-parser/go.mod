@@ -1,6 +1,6 @@
 module github.com/andreomorg/dota_analyst/replay-parser
 
-go 1.27.0
+go 1.27.2
 
 require (
 	github.com/dotabuff/manta v1.5.1

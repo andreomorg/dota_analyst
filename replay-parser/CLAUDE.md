@@ -56,7 +56,7 @@ O dono do projeto está aprendendo Go (e C#): explique as decisões e os conceit
 
 ## Como rodar
 
-- Go 1.27 instalado (`C:\Program Files\Go\bin`); ferramentas em `%USERPROFILE%\go\bin` (`gopls`, `dlv`, `staticcheck`). Editor: VS Code + extensão Go (o Visual Studio não abre Go; este projeto não entra no `.slnx`).
+- Go 1.27 instalado (`C:\Program Files\Go\bin`). O `go.mod` exige **1.27.2** (correções de segurança da biblioteca padrão, achadas pelo `govulncheck` em 12/10/2026): o comando `go` baixa esse toolchain sozinho. Versão do Go = `go` do `go.mod` + imagem `golang:` do `Dockerfile`, sempre juntas; o CI roda `govulncheck` e falha quando sai um patch de segurança. ferramentas em `%USERPROFILE%\go\bin` (`gopls`, `dlv`, `staticcheck`). Editor: VS Code + extensão Go (o Visual Studio não abre Go; este projeto não entra no `.slnx`).
 - `go run ./cmd/replay-parser` (porta 8081, variável `PORT`); `go test ./...`.
 - Inspecionar um replay: `go run ./cmd/inspect -replay ../work/replays/9034320024.dem.bz2 -tick 18000 -keys "<regexp>"` (30 ticks por segundo); `-laning` imprime o resumo aos 10:00 e `-full` mede o parse inteiro. Nomes das propriedades e medidas: `../work/sprint-09-replay-parser/card-01-spike.md`.
 - **Replays `.dem.bz2` da Valve vêm em zstd** (`28 B5 2F FD`): o descompactador é escolhido pelos primeiros bytes (zstd, bzip2 ou `.dem` puro), nunca pela extensão.

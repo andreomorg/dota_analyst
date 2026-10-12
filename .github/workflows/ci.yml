@@ -77,6 +77,38 @@ jobs:
       - run: npm run lint
       - run: npm run build
 
+  go:
+    name: Go replay parser
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: replay-parser
+    steps:
+      - uses: actions/checkout@v7
+
+      # The Go version comes from go.mod ("go 1.27.2"), the same one the Dockerfile builds with.
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: replay-parser/go.mod
+          cache-dependency-path: replay-parser/go.sum
+
+      # gofmt -l lists badly formatted files and still exits 0, so an empty list is checked by hand.
+      - name: Format
+        run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
+
+      - run: go vet ./...
+
+      - name: Staticcheck
+        run: go run honnef.co/go/tools/cmd/staticcheck@v0.8.1 ./...
+
+      # The real-replay tests skip themselves: the replay is not in the repository.
+      - run: go test ./...
+
+      # Like "Vulnerable packages" in the .NET job, but only for code we actually call (standard library
+      # included: a Go patch release with security fixes means bumping "go" in go.mod and the Dockerfile).
+      - name: Vulnerabilities
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+
   docker:
     name: Docker image build
     runs-on: ubuntu-latest
@@ -94,3 +126,12 @@ jobs:
           push: false
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      # The Go replay parser image (docker-compose.yml builds it from ./replay-parser). Its own cache scope,
+      # so the two images don't overwrite each other's layers.
+      - uses: docker/build-push-action@v7
+        with:
+          context: replay-parser
+          push: false
+          cache-from: type=gha,scope=replay-parser
+          cache-to: type=gha,mode=max,scope=replay-parser

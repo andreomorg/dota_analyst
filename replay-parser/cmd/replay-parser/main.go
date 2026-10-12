@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/andreomorg/dota_analyst/replay-parser/internal/httpapi"
+	"github.com/andreomorg/dota_analyst/replay-parser/internal/replay"
 	"github.com/andreomorg/dota_analyst/replay-parser/internal/valve"
 )
 
@@ -103,9 +104,7 @@ func run(c config, logger *slog.Logger) error {
 		logger.Warn("REPLAY_PARSER_API_KEY is empty: POST /v1/laning accepts requests without a token (local use only)")
 	}
 
-	// TODO(card 02 merge): replace with replay.Analyzer{}
-	analyzer := unimplementedAnalyzer{}
-	handler := httpapi.NewHandler(valve.NewDownloader(c.limits), analyzer, c.api, logger)
+	handler := httpapi.NewHandler(valve.NewDownloader(c.limits), replay.Analyzer{}, c.api, logger)
 
 	server := &http.Server{
 		Addr:              ":" + c.port,

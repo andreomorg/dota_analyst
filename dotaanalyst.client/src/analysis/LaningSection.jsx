@@ -8,11 +8,13 @@ const LANE_LABELS = {
     roaming: 'Roaming',
 };
 
-// Jungle and roaming have no lane opponent, so the API sends no outcome for them.
+// The API sends no outcome for jungle, roaming or a lane no enemy hero stayed in.
 const NO_LANE_TEXT = {
     jungle: 'Você ficou na selva no começo da partida, então não há disputa de rota para comparar.',
     roaming: 'Você rodou pelo mapa (roaming) no começo da partida, então não há disputa de rota para comparar.',
 };
+const UNCONTESTED_LANE_TEXT = 'Nenhum herói inimigo ficou na sua rota, então não há disputa de rota para comparar.';
+const LANES = ['top', 'middle', 'bottom'];
 
 // The text always says the result; the color only reinforces it.
 const OUTCOMES = {
@@ -59,11 +61,11 @@ function GroupHeader({ title }) {
     );
 }
 
-function LaningTable({ laning, time, isContestedLane }) {
+function LaningTable({ laning, time, isLane }) {
     const allies = laning.allies ?? [];
     const opponents = laning.opponents ?? [];
     // In the jungle or roaming there is usually only the player: no sides to label.
-    const showOpponents = opponents.length > 0 || isContestedLane;
+    const showOpponents = opponents.length > 0 || isLane;
 
     return (
         <div className="table-scroll">
@@ -105,7 +107,8 @@ function LaningTable({ laning, time, isContestedLane }) {
 function LaningSummary({ laning }) {
     const time = formatDuration(laning.endsAtSeconds);
     const outcome = OUTCOMES[laning.outcome];
-    const noLaneText = NO_LANE_TEXT[laning.lane];
+    const isLane = LANES.includes(laning.lane);
+    const noLaneText = NO_LANE_TEXT[laning.lane] ?? (isLane ? UNCONTESTED_LANE_TEXT : undefined);
     const hasDifference = outcome && laning.netWorthDifference !== null && laning.netWorthDifference !== undefined;
 
     return (
@@ -139,7 +142,7 @@ function LaningSummary({ laning }) {
             )}
             {!outcome && noLaneText && <p className="laning-note">{noLaneText}</p>}
 
-            <LaningTable laning={laning} time={time} isContestedLane={Boolean(outcome)} />
+            <LaningTable laning={laning} time={time} isLane={isLane} />
         </section>
     );
 }

@@ -1,6 +1,6 @@
 # replay-parser (serviço Go)
 
-Serviço HTTP interno que recebe a URL de um replay do Dota 2 (CDN da Valve), lê com o [`manta`](https://github.com/dotabuff/manta) e devolve a **fase de rotas** (até 10:00) em JSON. Só a API em C# o chama; o React nunca fala com ele. Vale também o `CLAUDE.md` da raiz (convenções, Git, tags).
+Serviço HTTP interno que recebe a URL de um replay do Dota 2 (CDN da Valve), lê com o [`manta`](https://github.com/dotabuff/manta) e devolve a **fase de rotas** (até 10:00) em JSON. Só a API em C# o chama; o React nunca fala com ele. **Em produção** ele roda na máquina do dono do projeto (docker compose) e a API no Render o alcança por um túnel **ngrok** (container no mesmo compose, perfil `tunnel`); por isso o token é obrigatório. Vale também o `CLAUDE.md` da raiz (convenções, Git, tags).
 
 O dono do projeto está aprendendo Go (e C#): explique as decisões e os conceitos novos do Go em português, de forma didática.
 
@@ -20,7 +20,7 @@ O dono do projeto está aprendendo Go (e C#): explique as decisões e os conceit
 | Pasta | Papel | Equivale no C# a |
 |-------|-------|-------------------|
 | `cmd/replay-parser/` | `main.go`: configuração (variáveis de ambiente), monta as peças, encerra com SIGTERM | `Program.cs` |
-| `cmd/inspect/` | Ferramenta de desenvolvimento: imprime propriedades das entidades de um replay | — |
+| `cmd/inspect/` | Ferramenta de desenvolvimento: imprime propriedades das entidades de um replay; `-laning` (resumo aos 10:00) e `-full` (mede o parse inteiro) | — |
 | `internal/laning/` | Regra: `Lane`, `PlayerLaning`, ponto do mapa → rota, agregação das amostras, valores aos 10:00 | Domain |
 | `internal/replay/` | Adaptador do `manta`: lê o replay e entrega amostras ao `laning` | Infrastructure |
 | `internal/valve/` | Baixa o `.dem.bz2` (só `*.valve.net`), limites de tamanho/tempo, descompacta em streaming | Infrastructure |
@@ -43,17 +43,20 @@ O dono do projeto está aprendendo Go (e C#): explique as decisões e os conceit
 }
 ```
 - `lane`: `top` | `middle` | `bottom` | `jungle` | `roaming` (posição do herói entre 1:00 e 10:00). `steamId` como texto (64 bits). Valores aos 10:00 do relógio do jogo (ou no fim, se a partida acabar antes).
-- Erros: 400 URL inválida/fora de `*.valve.net`; 404 replay não existe mais na Valve; 422 replay ilegível; 502 falha ao baixar. `GET /health` → 200.
+- Erros: 400 URL inválida/fora de `*.valve.net`; 401 sem token/token errado; 404 replay não existe mais na Valve; 422 replay ilegível; 502 falha ao baixar; 503 ocupado (`Retry-After`). `GET /health` → 200 (sem token).
+- **Token:** `Authorization: Bearer <REPLAY_PARSER_API_KEY>`, comparado com `crypto/subtle`; nunca no log. Variável vazia → sem autenticação (só `go run` local; o compose exige a variável).
 
 ## Segurança
 
 - **SSRF:** só `http(s)://*.valve.net/570/<arquivo>.dem.bz2`; redirecionamento para outro host é recusado.
+- **A URL do ngrok é pública:** token obrigatório no compose, só `*.valve.net`, limite de parses simultâneos (`MAX_CONCURRENT_PARSES`, padrão 1 → 503).
 - Limites: download (ex.: 200 MB), descompactado (ex.: 1 GB), tempo total (ex.: 3 min). `context.Context` em toda operação demorada (a API desistiu → download e parse param).
-- Imagem final mínima, usuário não-root, sem porta publicada no compose.
+- Imagem final mínima, usuário não-root, sem porta publicada no compose (a API e o ngrok o alcançam pela rede do compose). Health check pelo próprio binário (`replay-parser -healthcheck`), já que a imagem não tem shell.
 
 ## Como rodar
 
 - Go 1.27 instalado (`C:\Program Files\Go\bin`); ferramentas em `%USERPROFILE%\go\bin` (`gopls`, `dlv`, `staticcheck`). Editor: VS Code + extensão Go (o Visual Studio não abre Go; este projeto não entra no `.slnx`).
 - `go run ./cmd/replay-parser` (porta 8081, variável `PORT`); `go test ./...`.
-- Inspecionar um replay: `go run ./cmd/inspect -replay ../work/replays/9034320024.dem.bz2 -tick 18000 -keys "<regexp>"` (30 ticks por segundo).
+- Inspecionar um replay: `go run ./cmd/inspect -replay ../work/replays/9034320024.dem.bz2 -tick 18000 -keys "<regexp>"` (30 ticks por segundo); `-laning` imprime o resumo aos 10:00 e `-full` mede o parse inteiro. Nomes das propriedades e medidas: `../work/sprint-09-replay-parser/card-01-spike.md`.
+- **Replays `.dem.bz2` da Valve vêm em zstd** (`28 B5 2F FD`): o descompactador é escolhido pelos primeiros bytes (zstd, bzip2 ou `.dem` puro), nunca pela extensão.
 - Replays de teste ficam em `../work/replays/` (fora do Git).

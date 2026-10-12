@@ -7,19 +7,15 @@
 package main
 
 import (
-	"bufio"
-	"bytes"
-	"compress/bzip2"
 	"flag"
 	"fmt"
-	"io"
 	"log"
 	"os"
 	"regexp"
 	"sort"
 
+	"github.com/andreomorg/dota_analyst/replay-parser/internal/valve"
 	"github.com/dotabuff/manta"
-	"github.com/klauspost/compress/zstd"
 )
 
 func main() {
@@ -37,7 +33,7 @@ func main() {
 	}
 	defer file.Close()
 
-	replay, err := decompress(bufio.NewReader(file))
+	replay, err := valve.Decompress(file)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -90,25 +86,4 @@ func main() {
 		log.Fatal(err)
 	}
 	fmt.Printf("stopped at net tick %d\n", parser.NetTick)
-}
-
-// decompress picks the decoder by the file's magic bytes, not its name: Valve serves zstd replays named .dem.bz2.
-// Close releases the zstd decoder's goroutines; stopping the parser early does not.
-func decompress(r *bufio.Reader) (io.ReadCloser, error) {
-	magic, err := r.Peek(4)
-	if err != nil {
-		return nil, err
-	}
-	switch {
-	case bytes.Equal(magic, []byte{0x28, 0xB5, 0x2F, 0xFD}):
-		decoder, err := zstd.NewReader(r, zstd.WithDecoderConcurrency(1))
-		if err != nil {
-			return nil, err
-		}
-		return decoder.IOReadCloser(), nil
-	case bytes.HasPrefix(magic, []byte("BZh")):
-		return io.NopCloser(bzip2.NewReader(r)), nil
-	default:
-		return io.NopCloser(r), nil // plain .dem
-	}
 }

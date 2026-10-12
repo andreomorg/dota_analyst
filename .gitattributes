@@ -1,0 +1,4 @@
+# gofmt only accepts LF: keep Go sources LF in the working tree even with core.autocrlf=true (Windows).
+*.go text eol=lf
+go.mod text eol=lf
+go.sum text eol=lf

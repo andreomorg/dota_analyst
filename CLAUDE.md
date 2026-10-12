@@ -11,7 +11,7 @@ O dono do projeto está começando em C# — explique as decisões e os conceito
 ## Git
 
 - Remoto: https://github.com/andreomorg/dota_analyst (branch `main`).
-- O `git` não está no PATH; o executável que funciona é o do Visual Studio: `C:\Program Files\Microsoft Visual Studio\18\Community\Common7\IDE\CommonExtensions\Microsoft\TeamFoundation\Team Explorer\Git\cmd\git.exe`.
+- O `git` é o do Visual Studio: `C:\Program Files\Microsoft Visual Studio\18\Community\Common7\IDE\CommonExtensions\Microsoft\TeamFoundation\Team Explorer\Git\cmd\git.exe`. A pasta dele está no PATH do usuário desde 11/10/2026 (programas abertos antes disso precisam ser reiniciados para enxergá-lo); se `git` não for encontrado, use o caminho completo.
 - **Tags de versão:** versionamento semântico `vMAJOR.MINOR.PATCH` (ex.: `v1.0.0`), com tag anotada (`git tag -a v1.1.0 -m "..."`) enviada com `git push origin <tag>`. O MAJOR acompanha a versão da API na URL (`/api/v1` → `v1.x.y`; uma `v2.0.0` só existe junto com `Controllers/V2/`). MINOR = funcionalidade nova compatível (ex.: endpoint novo); PATCH = correção. Tag ao fechar uma sprint ou correção, nunca sem pedido do dono do projeto. Enviar uma tag `v*` dispara o `.github/workflows/release.yml`: roda os mesmos testes do CI e, se passarem, publica a imagem `ghcr.io/andreomorg/dota_analyst:<versão>` (sem o `v`, ex.: `1.2.0`) e `:latest`.
 
 ## Estrutura

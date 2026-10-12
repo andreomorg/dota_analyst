@@ -27,3 +27,6 @@ replay-parser/inspect
 appsettings.*.local.json
 .env
 .neon
+
+# Git worktrees created by Claude Code agents
+.claude/worktrees/

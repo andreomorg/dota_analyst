@@ -491,6 +491,8 @@ func (m *measured) printSizes(outDir string) {
 	sort.Slice(pairList, func(i, j int) bool { return pairList[i].Damage > pairList[j].Damage })
 	add("damage aggregated attacker->target->inflictor", pairList)
 	add("damage per minute per hero [dealt,taken]", perMinute)
+	add("damage aggregated, other units grouped by kind", aggregateByKind(m.damage))
+	add("heals aggregated, other units grouped by kind", aggregateByKind(m.heals))
 
 	type eventJSON struct {
 		T         float64 `json:"t"`
@@ -528,6 +530,7 @@ func (m *measured) printSizes(outDir string) {
 		abilityCounts[a.Attacker][a.Inflictor]++
 	}
 	add("ability uses aggregated per hero", abilityCounts)
+	add("ability + item uses as [t, name] tuples per hero", usesPerHero(m, append(append([]combatEvent{}, m.abilities...), m.itemUses...)))
 	add("ability upgrades", m.ups)
 	add("stuns on heroes (modifier add with stun_duration)", events(m.stuns, attacker, false))
 	add("buildings/roshan/couriers/ward kills", events(m.buildings, attacker, false))
@@ -589,6 +592,55 @@ func (m *measured) printSizes(outDir string) {
 			}
 		}
 	}
+}
+
+// unitKind groups the units that are not heroes, so an aggregate keeps one row per hero and kind instead of one per
+// creep name.
+func unitKind(name string, hero, illusion bool) string {
+	switch {
+	case hero && illusion:
+		return "illusion"
+	case hero:
+		return name
+	case strings.HasPrefix(name, "npc_dota_creep"):
+		return "lane creeps"
+	case strings.HasPrefix(name, "npc_dota_neutral"):
+		return "neutrals"
+	case strings.Contains(name, "tower") || strings.Contains(name, "rax") || strings.Contains(name, "fort") || strings.Contains(name, "filler") || strings.Contains(name, "watch_tower"):
+		return "buildings"
+	case strings.Contains(name, "roshan"):
+		return "roshan"
+	case strings.Contains(name, "miniboss"):
+		return "tormentor"
+	default:
+		return "other units"
+	}
+}
+
+func aggregateByKind(events []combatEvent) []map[string]any {
+	type key struct{ source, target, inflictor string }
+	totals := map[key]*[2]int{}
+	for _, e := range events {
+		k := key{unitKind(e.Attacker, e.AttackerHero, e.AttackerIllusion), unitKind(e.Target, e.TargetHero, e.TargetIllusion), e.Inflictor}
+		if totals[k] == nil {
+			totals[k] = &[2]int{}
+		}
+		totals[k][0] += e.Value
+		totals[k][1]++
+	}
+	rows := make([]map[string]any, 0, len(totals))
+	for k, v := range totals {
+		rows = append(rows, map[string]any{"source": k.source, "target": k.target, "inflictor": k.inflictor, "amount": v[0], "count": v[1]})
+	}
+	return rows
+}
+
+func usesPerHero(m *measured, events []combatEvent) map[string][][2]any {
+	uses := map[string][][2]any{}
+	for _, e := range events {
+		uses[e.Attacker] = append(uses[e.Attacker], [2]any{m.clock(e.when), e.Inflictor})
+	}
+	return uses
 }
 
 func mapValues[K comparable, V any](m map[K]V) []V {

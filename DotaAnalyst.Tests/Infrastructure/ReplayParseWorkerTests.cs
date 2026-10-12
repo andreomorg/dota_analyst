@@ -110,6 +110,49 @@ public sealed class ReplayParseWorkerTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Worker_ParserBusy_SavesNothing_DoesNotPauseParsing_AndCanBeQueuedAgain()
+    {
+        // The parser is up (it answered "busy"): other matches go on, and the next visit queues this one again.
+        var match = ReplayBuilder.MatchIdOf(1);
+        parser.Fail[match] = new ReplayParserBusyException("Busy.");
+
+        Queue.TryEnqueue(match, ReplayUrl);
+        await WaitUntilNotQueuedAsync(match);
+
+        Assert.Empty(results.Saved);
+        Assert.False(services.GetRequiredService<ReplayParserCircuitBreaker>().IsOpen);
+        Assert.Equal(ReplayEnqueueResult.Enqueued, Queue.TryEnqueue(match, ReplayUrl));
+    }
+
+    [Fact]
+    public async Task Worker_DownloadFailed_IsSavedAsFailed_WithoutPausingParsing()
+    {
+        // What the client turns the parser's 502 (Valve's download failed) into.
+        var match = ReplayBuilder.MatchIdOf(1);
+        parser.Fail[match] = new ReplayUnreadableException("Valve's download failed.");
+
+        Queue.TryEnqueue(match, ReplayUrl);
+        await WaitUntilNotQueuedAsync(match);
+
+        Assert.Equal(SavedReplayState.Failed, results.Saved[match].State);
+        Assert.False(services.GetRequiredService<ReplayParserCircuitBreaker>().IsOpen);
+    }
+
+    [Fact]
+    public async Task Worker_ParsedButNotSaved_IsNotParsedAgainRightAway()
+    {
+        // The page polls every few seconds: without a saved result it would queue the same replay again and again.
+        var match = ReplayBuilder.MatchIdOf(1);
+        results.Fail = true;
+
+        Queue.TryEnqueue(match, ReplayUrl);
+        await WaitUntilNotQueuedAsync(match);
+
+        Assert.Equal(ReplayEnqueueResult.Unavailable, Queue.TryEnqueue(match, ReplayUrl));
+        Assert.Single(parser.Calls);
+    }
+
+    [Fact]
     public async Task Worker_ExpiredReplay_IsSavedAsExpired()
     {
         var match = ReplayBuilder.MatchIdOf(1);
@@ -156,11 +199,19 @@ public sealed class ReplayParseWorkerTests : IAsyncLifetime
     {
         public ConcurrentDictionary<MatchId, SavedReplayAnalysis> Saved { get; } = new();
 
+        // Saving fails (a database error that doesn't stop the app).
+        public bool Fail { get; set; }
+
         public Task<SavedReplayAnalysis?> FindAsync(MatchId matchId, CancellationToken cancellationToken) =>
             Task.FromResult(Saved.GetValueOrDefault(matchId));
 
         public Task SaveAsync(SavedReplayAnalysis result, CancellationToken cancellationToken)
         {
+            if (Fail)
+            {
+                throw new StorageUnavailableException("Could not save.");
+            }
+
             Saved[result.MatchId] = result;
             return Task.CompletedTask;
         }

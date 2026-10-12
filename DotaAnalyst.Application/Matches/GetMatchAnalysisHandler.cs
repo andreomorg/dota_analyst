@@ -26,7 +26,8 @@ public class GetMatchAnalysisHandler(
     // How long a saved unparsed match is used before OpenDota is asked again (its replay may get parsed).
     public static readonly TimeSpan UnparsedRefreshInterval = TimeSpan.FromMinutes(15);
 
-    // How long a replay we could not read is shown as failed before it is queued again.
+    // How long a replay we could not read (or download, or that was missing too soon after the match to call it
+    // expired) is shown as failed before it is queued again.
     public static readonly TimeSpan FailedReplayRetryInterval = TimeSpan.FromHours(1);
 
     /// <returns>The analysis, or null when the match does not exist.</returns>
@@ -99,13 +100,19 @@ public class GetMatchAnalysisHandler(
             return (ReplayStatus.Unavailable, null);
         }
 
-        switch (saved)
+        // "Expired" saved too soon after the match ended may only mean Valve hadn't uploaded the replay yet
+        // (ReplayAvailability): it is treated as a failure, tried again after FailedReplayRetryInterval.
+        var state = saved is { State: SavedReplayState.Expired } && !ReplayAvailability.IsExpired(match, saved.SavedAt)
+            ? SavedReplayState.Failed
+            : saved?.State;
+
+        switch (state)
         {
-            case { State: SavedReplayState.Ready, Analysis: { } analysis }:
+            case SavedReplayState.Ready when saved!.Analysis is { } analysis:
                 return (ReplayStatus.Ready, currentPlayer is null ? null : ToLaningPhase(analysis, currentPlayer, names));
-            case { State: SavedReplayState.Expired }:
+            case SavedReplayState.Expired:
                 return (ReplayStatus.Expired, null);
-            case { State: SavedReplayState.Failed } when timeProvider.GetUtcNow() - saved.SavedAt < FailedReplayRetryInterval:
+            case SavedReplayState.Failed when timeProvider.GetUtcNow() - saved!.SavedAt < FailedReplayRetryInterval:
                 return (ReplayStatus.Failed, null);
         }
 

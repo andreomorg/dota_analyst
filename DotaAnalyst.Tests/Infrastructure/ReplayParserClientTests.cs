@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using DotaAnalyst.Application.Abstractions;
@@ -77,17 +78,18 @@ public class ReplayParserClientTests
     [Theory]
     [InlineData(HttpStatusCode.UnprocessableEntity)] // the replay can't be read
     [InlineData(HttpStatusCode.BadRequest)] // the parser refused our request (our bug)
-    public async Task Parse_Problem422Or400_IsAnUnreadableReplay(HttpStatusCode status)
+    [InlineData(HttpStatusCode.BadGateway)] // could not download from Valve this time: the parser itself is fine
+    public async Task Parse_Problem422Or400Or502_IsAnUnreadableReplay(HttpStatusCode status)
     {
-        var client = CreateClient(new FakeParser(Problem(status)));
+        var parser = new FakeParser(Problem(status));
 
-        await Assert.ThrowsAsync<ReplayUnreadableException>(() => client.ParseAsync(Match, ReplayUrl, CancellationToken.None));
+        await Assert.ThrowsAsync<ReplayUnreadableException>(
+            () => CreateClient(parser).ParseAsync(Match, ReplayUrl, CancellationToken.None));
+        Assert.Single(parser.Requests);
     }
 
     [Theory]
     [InlineData(HttpStatusCode.Unauthorized)] // wrong key: configuration, not the replay
-    [InlineData(HttpStatusCode.BadGateway)] // could not download from Valve
-    [InlineData(HttpStatusCode.ServiceUnavailable)] // busy
     [InlineData(HttpStatusCode.InternalServerError)]
     public async Task Parse_OtherProblems_MeanTheParserIsUnavailable(HttpStatusCode status)
     {
@@ -96,6 +98,80 @@ public class ReplayParserClientTests
         var exception = await Assert.ThrowsAsync<ReplayParserUnavailableException>(
             () => client.ParseAsync(Match, ReplayUrl, CancellationToken.None));
         Assert.DoesNotContain(ApiKey, exception.ToString());
+    }
+
+    // ----- Busy (problem+json 503 with Retry-After) -----
+
+    [Fact]
+    public async Task Parse_Busy_WaitsRetryAfterAndTriesAgain()
+    {
+        var parser = new FakeParser(Busy(TimeSpan.FromSeconds(7)), Json(HttpStatusCode.OK, LaningJson, "application/json"));
+        var clock = new InstantClock();
+
+        var analysis = await CreateClient(parser, clock: clock).ParseAsync(Match, ReplayUrl, CancellationToken.None);
+
+        Assert.Equal(600, analysis.EndsAtSeconds);
+        Assert.Equal([TimeSpan.FromSeconds(7)], clock.Waits);
+        // A new request each time (an HttpRequestMessage can't be sent twice), with the same content.
+        Assert.Equal(2, parser.Requests.Count);
+        Assert.All(parser.Requests, request => Assert.Equal($"Bearer {ApiKey}", request.Authorization));
+        Assert.Equal(parser.Requests[0].Body, parser.Requests[1].Body);
+    }
+
+    [Fact]
+    public async Task Parse_StillBusyAfterAllAttempts_IsBusy_NotUnavailable()
+    {
+        var parser = new FakeParser(
+            Busy(TimeSpan.FromMinutes(2)), // capped
+            Busy(retryAfter: null), // no Retry-After: the default wait
+            Busy(TimeSpan.FromSeconds(1)));
+        var clock = new InstantClock();
+
+        await Assert.ThrowsAsync<ReplayParserBusyException>(
+            () => CreateClient(parser, clock: clock).ParseAsync(Match, ReplayUrl, CancellationToken.None));
+
+        Assert.Equal(ReplayParserClient.MaxAttempts, parser.Requests.Count);
+        // No wait after the last attempt.
+        Assert.Equal([ReplayParserClient.MaxBusyWait, ReplayParserClient.DefaultBusyWait], clock.Waits);
+        Assert.Equal(TimeSpan.FromSeconds(30), ReplayParserClient.MaxBusyWait);
+    }
+
+    [Fact]
+    public async Task Parse_BusyWithRetryAfterDate_WaitsUntilThatDate()
+    {
+        var clock = new InstantClock();
+        var busy = Problem(HttpStatusCode.ServiceUnavailable);
+        busy.Headers.RetryAfter = new RetryConditionHeaderValue(clock.Now.AddSeconds(12));
+        var parser = new FakeParser(busy, Json(HttpStatusCode.OK, LaningJson, "application/json"));
+
+        await CreateClient(parser, clock: clock).ParseAsync(Match, ReplayUrl, CancellationToken.None);
+
+        Assert.Equal([TimeSpan.FromSeconds(12)], clock.Waits);
+    }
+
+    [Fact]
+    public async Task Parse_503NotFromTheParser_IsUnavailable_WithoutRetrying()
+    {
+        // ngrok (or a proxy) saying 503 says nothing about our parser being busy.
+        var response = Json(HttpStatusCode.ServiceUnavailable, "<html>Service unavailable</html>", "text/html");
+        response.Headers.RetryAfter = new RetryConditionHeaderValue(TimeSpan.FromSeconds(1));
+        var parser = new FakeParser(response);
+
+        await Assert.ThrowsAsync<ReplayParserUnavailableException>(
+            () => CreateClient(parser).ParseAsync(Match, ReplayUrl, CancellationToken.None));
+        Assert.Single(parser.Requests);
+    }
+
+    [Fact]
+    public async Task Parse_CancelledWhileWaitingForABusyParser_StopsWaiting()
+    {
+        var parser = new FakeParser(Busy(TimeSpan.FromSeconds(10)));
+        using var cancellation = new CancellationTokenSource();
+        var clock = new InstantClock { Fire = false, OnWait = cancellation.Cancel };
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => CreateClient(parser, clock: clock).ParseAsync(Match, ReplayUrl, cancellation.Token));
+        Assert.Single(parser.Requests);
     }
 
     [Fact]
@@ -189,10 +265,13 @@ public class ReplayParserClientTests
         await Assert.ThrowsAsync<ReplayUnreadableException>(() => client.ParseAsync(Match, ReplayUrl, CancellationToken.None));
     }
 
-    private static ReplayParserClient CreateClient(FakeParser parser, string apiKey = ApiKey, TimeSpan? timeout = null) =>
+    private static ReplayParserClient CreateClient(
+        FakeParser parser, string apiKey = ApiKey, TimeSpan? timeout = null, TimeProvider? clock = null) =>
         new(
             new HttpClient(parser) { BaseAddress = new Uri("https://parser.example/"), Timeout = timeout ?? TimeSpan.FromSeconds(10) },
             Options.Create(new ReplayParserOptions { BaseUrl = new Uri("https://parser.example/"), ApiKey = apiKey }),
+            // By default a "busy" answer would really wait: tests that expect one pass an InstantClock.
+            clock ?? TimeProvider.System,
             NullLogger<ReplayParserClient>.Instance);
 
     private static HttpResponseMessage Json(HttpStatusCode status, string body, string contentType) =>
@@ -201,13 +280,58 @@ public class ReplayParserClientTests
     private static HttpResponseMessage Problem(HttpStatusCode status) =>
         Json(status, $$"""{"title": "error", "status": {{(int)status}}, "detail": "details"}""", "application/problem+json");
 
+    private static HttpResponseMessage Busy(TimeSpan? retryAfter)
+    {
+        var response = Problem(HttpStatusCode.ServiceUnavailable);
+        if (retryAfter is { } delta)
+        {
+            response.Headers.RetryAfter = new RetryConditionHeaderValue(delta);
+        }
+
+        return response;
+    }
+
+    // A clock whose waits (Task.Delay through it) end at once and are remembered. Fire = false: they never end.
+    private sealed class InstantClock : TimeProvider
+    {
+        public DateTimeOffset Now { get; } = new(2026, 10, 11, 12, 0, 0, TimeSpan.Zero);
+
+        public bool Fire { get; init; } = true;
+
+        // Called when a wait starts.
+        public Action? OnWait { get; init; }
+
+        public List<TimeSpan> Waits { get; } = [];
+
+        public override DateTimeOffset GetUtcNow() => Now;
+
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
+        {
+            lock (Waits)
+            {
+                Waits.Add(dueTime);
+            }
+
+            var timer = base.CreateTimer(callback, state, Fire ? TimeSpan.Zero : Timeout.InfiniteTimeSpan, period);
+            OnWait?.Invoke();
+            return timer;
+        }
+    }
+
     internal sealed record SentRequest(HttpMethod Method, string Uri, string? Authorization, string? NgrokSkipBrowserWarning, string Body);
 
     // Answers every request with the given function, and remembers what was sent.
     private sealed class FakeParser(Func<CancellationToken, Task<HttpResponseMessage>> answer) : HttpMessageHandler
     {
-        public FakeParser(HttpResponseMessage response) : this(_ => Task.FromResult(response))
+        // Answers the requests with these responses, in order (one each).
+        public FakeParser(params HttpResponseMessage[] responses) : this(Answers(responses))
         {
+        }
+
+        private static Func<CancellationToken, Task<HttpResponseMessage>> Answers(HttpResponseMessage[] responses)
+        {
+            var queue = new Queue<HttpResponseMessage>(responses);
+            return _ => Task.FromResult(queue.Dequeue());
         }
 
         public List<SentRequest> Requests { get; } = [];

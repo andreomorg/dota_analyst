@@ -51,15 +51,8 @@ public static class OpenDotaMappings
             // OpenDota only fills "version" after parsing the replay.
             IsParsed: match.Version is not null,
             Players: (match.Players ?? []).Select(ToMatchPlayer).ToList(),
-            ReplayUrl: ToReplayUrl(match.ReplayUrl));
+            ReplayUrl: ReplayUrls.Parse(match.ReplayUrl));
     }
-
-    // Only an absolute http(s) address is kept: anything else could not be downloaded anyway, and the address
-    // is handed to the replay parser.
-    public static Uri? ToReplayUrl(string? replayUrl) =>
-        Uri.TryCreate(replayUrl, UriKind.Absolute, out var uri) && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps)
-            ? uri
-            : null;
 
     // Valve's placeholder account ID for players with an anonymous profile.
     private const long AnonymousAccountId = uint.MaxValue;

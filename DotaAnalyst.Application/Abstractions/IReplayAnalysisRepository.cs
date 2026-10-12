@@ -9,7 +9,8 @@ public enum SavedReplayState
     Ready,
     // The parser could not read the replay: tried again after GetMatchAnalysisHandler.FailedReplayRetryInterval.
     Failed,
-    // Valve no longer has the replay. Final.
+    // Valve no longer has the replay. Final, except when it was saved less than ReplayAvailability.UploadWindow
+    // after the match ended: then it may only not have been uploaded yet, and it counts as Failed.
     Expired,
 }
 

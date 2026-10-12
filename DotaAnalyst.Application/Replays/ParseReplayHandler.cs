@@ -9,11 +9,13 @@ public enum ParseReplayResult
 {
     // Parsed; saved as ready.
     Ready,
-    // The replay could not be read; saved as failed (tried again later).
+    // The replay could not be downloaded or read; saved as failed (tried again later).
     Failed,
-    // Valve no longer has the replay; saved as expired (never tried again).
+    // Valve doesn't have the replay; saved as expired (see SavedReplayState.Expired).
     Expired,
-    // The parser could not be used; nothing saved. The match can be queued again later.
+    // The parser stayed busy with other replays; nothing saved. The match can be queued again on the next visit.
+    ParserBusy,
+    // The parser could not be used; nothing saved. Parsing should pause for a while (the worker's circuit breaker).
     ParserUnavailable,
 }
 
@@ -42,9 +44,14 @@ public class ParseReplayHandler(
         catch (ReplayUnreadableException ex)
         {
             logger.LogWarning(
-                ex, "Could not read the replay of match {MatchId}; it is tried again after {RetryInterval}",
+                ex, "Could not parse the replay of match {MatchId}; it is tried again after {RetryInterval}",
                 matchId, GetMatchAnalysisHandler.FailedReplayRetryInterval);
             result = SavedReplayAnalysis.Failed(matchId, timeProvider.GetUtcNow());
+        }
+        catch (ReplayParserBusyException ex)
+        {
+            logger.LogInformation(ex, "The replay parser is busy; match {MatchId} was not parsed this time", matchId);
+            return ParseReplayResult.ParserBusy;
         }
         catch (ReplayParserUnavailableException ex)
         {

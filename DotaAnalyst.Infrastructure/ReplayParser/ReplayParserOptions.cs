@@ -1,7 +1,7 @@
 namespace DotaAnalyst.Infrastructure.ReplayParser;
 
 // "ReplayParser" section of the configuration: where the Go replay parser (replay-parser/) answers.
-// Without BaseUrl replay parsing is off, like Steam profiles without a key. ApiKey is a secret (user-secrets
+// Without a valid BaseUrl replay parsing is off (warning in the log), like Steam profiles without a key. ApiKey is a secret (user-secrets
 // locally, ReplayParser__ApiKey in Docker and on Render) and must be the parser's REPLAY_PARSER_API_KEY.
 public class ReplayParserOptions
 {

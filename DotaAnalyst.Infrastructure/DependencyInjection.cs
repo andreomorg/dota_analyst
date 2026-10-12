@@ -74,18 +74,23 @@ public static class DependencyInjection
                 var options = serviceProvider.GetRequiredService<IOptions<ReplayParserOptions>>().Value;
                 client.BaseAddress = options.BaseUrl;
                 client.Timeout = options.Timeout;
-                // The answer is a few KB; anything much bigger is not our parser.
-                client.MaxResponseContentBufferSize = 1024 * 1024;
+                // The whole match is ~330 KB for 30 min; the parser itself refuses answers over 4 MB.
+                client.MaxResponseContentBufferSize = 4 * 1024 * 1024;
             })
             // A redirect is not something our parser does: it is answered as "unavailable" instead of followed.
-            .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false })
+            // gzip: the parser compresses when asked (~330 KB → ~80 KB), which matters through the ngrok tunnel.
+            .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+            {
+                AllowAutoRedirect = false,
+                AutomaticDecompression = System.Net.DecompressionMethods.GZip,
+            })
             // The default HttpClient logs could write the request headers, and the API key travels in one.
             .RemoveAllLoggers();
 
         AddReplayParseQueue(services);
     }
 
-    // Absolute http(s), ending with '/': without it "v1/laning" would replace the last segment of the path.
+    // Absolute http(s), ending with '/': without it "v1/match" would replace the last segment of the path.
     private static bool IsValidParserAddress(string baseUrl) =>
         Uri.TryCreate(baseUrl, UriKind.Absolute, out var url)
         && (url.Scheme == Uri.UriSchemeHttp || url.Scheme == Uri.UriSchemeHttps)
@@ -197,6 +202,8 @@ public static class DependencyInjection
         services.AddScoped<ICatalogStore, CatalogStore>();
         // Also when replay parsing is off: results saved while it was on are still shown.
         services.AddScoped<IReplayAnalysisRepository, ReplayAnalysisRepository>();
+        // Replay parsing only runs with a database (see AddReplayParsing), so only this one is needed.
+        services.AddScoped<IReplayDocumentArchive, ReplayDocumentArchive>();
 
         // Keys that encrypt cookies (the future Steam login). Kept in the database, so a deploy or a restart of
         // the container doesn't throw them away and log everyone out. The fixed application name keeps the keys

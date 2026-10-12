@@ -19,6 +19,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
     public DbSet<ReplayAnalysisRecord> ReplayAnalyses => Set<ReplayAnalysisRecord>();
 
+    public DbSet<ReplayDocumentRecord> ReplayDocuments => Set<ReplayDocumentRecord>();
+
     // ASP.NET Core Data Protection keys (they encrypt the future login cookie), so they survive restarts.
     public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
 

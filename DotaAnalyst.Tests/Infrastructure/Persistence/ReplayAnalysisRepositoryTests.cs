@@ -41,6 +41,20 @@ public class ReplayAnalysisRepositoryTests(PostgresFixture postgres) : IAsyncLif
     }
 
     [Fact]
+    public async Task SaveThenFind_ReadyWithTimeline_KeepsTheTimeline()
+    {
+        var analysis = ReplayBuilder.Analysis(
+            MatchIdValue, ReplayBuilder.Hero(31, Team.Radiant, Lane.Bottom), ReplayBuilder.Hero(28, Team.Dire, Lane.Top));
+        var repository = CreateRepository();
+
+        await repository.SaveAsync(SavedReplayAnalysis.Ready(analysis, SavedAt), CancellationToken.None);
+        var found = await repository.FindAsync(Match, CancellationToken.None);
+
+        Assert.NotNull(found?.Analysis?.Timeline);
+        Assert.Equivalent(analysis.Timeline, found.Analysis.Timeline, strict: true);
+    }
+
+    [Fact]
     public async Task SaveThenFind_FailedAndExpired_HaveNoAnalysis()
     {
         var repository = CreateRepository();

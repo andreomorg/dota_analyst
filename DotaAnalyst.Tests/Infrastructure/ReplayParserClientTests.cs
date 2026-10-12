@@ -22,45 +22,94 @@ public class ReplayParserClientTests
     private static readonly MatchId Match = ReplayBuilder.MatchIdOf(MatchIdValue);
     private static readonly Uri ReplayUrl = new("http://replay202.valve.net/570/9034320024_96247495.dem.bz2");
 
-    private const string LaningJson = """
+    // A /v1/match document (only the parts the API reads, plus one it ignores) for a 11:30 match: 12 points per
+    // series (minutes 0..10, then the end); the values at minute 10 are the laning numbers.
+    private static string MatchJson(string? laning = null, int schemaVersion = 1) => $$"""
         {
-          "laningEndsAtSeconds": 600,
+          "schemaVersion": {{schemaVersion}},
+          "match": { "matchId": "9034320024", "durationSeconds": 690.4 },
           "players": [
-            { "heroId": 31, "steamId": "76561198059783443", "isRadiant": true, "lane": "bottom",
-              "lastHits": 12, "denies": 3, "netWorth": 2900, "xp": 3100, "deaths": 1 },
-            { "heroId": 28, "steamId": "76561198000000000", "isRadiant": false, "lane": "jungle",
-              "lastHits": 40, "denies": 0, "netWorth": 3500, "xp": 2800, "deaths": 0 }
-          ]
+            { "player": 0, "heroId": 31, "team": "radiant", "name": "me" },
+            { "player": 5, "heroId": 28, "team": "dire" }
+          ],
+          "timelines": { "perMinute": [
+            { "player": 0, "netWorth": [600,700,800,900,1000,1200,1400,1600,1800,2000,2900,3000],
+              "xp": [0,100,200,300,400,500,600,700,800,900,3100,3300], "lastHits": [0,1,2,3,4,5,6,7,8,9,12,13],
+              "denies": [0,0,0,0,1,1,1,2,2,2,3,3], "deaths": [0,0,0,0,0,0,1,1,1,1,1,1] },
+            { "player": 5, "netWorth": [600,800,1000,1200,1400,1600,1800,2000,2200,2400,3500,3600],
+              "xp": [0,150,300,450,600,750,900,1050,1200,1350,2800,2900], "lastHits": [0,3,6,9,12,15,18,21,24,27,40,41],
+              "denies": [0,0,0,0,0,0,0,0,0,0,0,0], "deaths": [0,0,0,0,0,0,0,0,0,0,0,0] }
+          ] },
+          "laning": {{laning ?? """{ "endsAtSeconds": 600, "lanes": [ { "player": 0, "lane": "bottom" }, { "player": 5, "lane": "jungle" } ] }"""}},
+          "kills": []
         }
         """;
 
     [Fact]
     public async Task Parse_SendsTheContractRequest_AndMapsTheAnswer()
     {
-        var parser = new FakeParser(Json(HttpStatusCode.OK, LaningJson, "application/json"));
+        var parser = new FakeParser(Json(HttpStatusCode.OK, MatchJson(), "application/json"));
+        var archive = new FakeArchive();
 
-        var analysis = await CreateClient(parser).ParseAsync(Match, ReplayUrl, CancellationToken.None);
+        var analysis = await CreateClient(parser, archive: archive).ParseAsync(Match, ReplayUrl, CancellationToken.None);
 
-        // Request: POST /v1/laning with the token, ngrok's header and the replay address.
+        // Request: POST /v1/match with the token, ngrok's header and the replay address.
         var request = Assert.Single(parser.Requests);
         Assert.Equal(HttpMethod.Post, request.Method);
-        Assert.Equal("https://parser.example/v1/laning", request.Uri);
+        Assert.Equal("https://parser.example/v1/match", request.Uri);
         Assert.Equal($"Bearer {ApiKey}", request.Authorization);
         Assert.Equal("1", request.NgrokSkipBrowserWarning);
         Assert.Equal(ReplayUrl.AbsoluteUri, JsonDocument.Parse(request.Body).RootElement.GetProperty("replayUrl").GetString());
 
-        // Answer -> domain.
+        // Answer -> domain: the laning numbers are the minute-10 point.
         Assert.Equal(Match, analysis.MatchId);
         Assert.Equal(600, analysis.EndsAtSeconds);
         Assert.Equal(new LaningStats(31, Team.Radiant, Lane.Bottom, 12, 3, 2900, 3100, 1), analysis.FindHero(31));
         Assert.Equal(new LaningStats(28, Team.Dire, Lane.Jungle, 40, 0, 3500, 2800, 0), analysis.FindHero(28));
+
+        // The timeline: a point per minute, the last one at the end of the match.
+        var timeline = analysis.Timeline;
+        Assert.NotNull(timeline);
+        Assert.Equal([0, 60, 120, 180, 240, 300, 360, 420, 480, 540, 600, 690], timeline.Seconds);
+        Assert.Equal(3000, timeline.FindHero(31)!.NetWorth[^1]);
+        Assert.Equal(2900, timeline.FindHero(28)!.Experience[^1]);
+
+        // The whole document is kept as it came.
+        var kept = Assert.Single(archive.Kept);
+        Assert.Equal((MatchIdValue, 1), (kept.MatchId, kept.SchemaVersion));
+        Assert.Contains("\"kills\": []", kept.Document);
+    }
+
+    [Fact]
+    public async Task Parse_MatchEndedBeforeTenMinutes_UsesTheLastPoint()
+    {
+        var laning = """{ "endsAtSeconds": 400, "lanes": [ { "player": 0, "lane": "bottom" }, { "player": 5, "lane": "top" } ] }""";
+        var short3Points = MatchJson(laning)
+            .Replace("[600,700,800,900,1000,1200,1400,1600,1800,2000,2900,3000]", "[600,700,750]")
+            .Replace("[0,100,200,300,400,500,600,700,800,900,3100,3300]", "[0,100,150]")
+            .Replace("[0,1,2,3,4,5,6,7,8,9,12,13]", "[0,1,2]")
+            .Replace("[0,0,0,0,1,1,1,2,2,2,3,3]", "[0,0,0]")
+            .Replace("[0,0,0,0,0,0,1,1,1,1,1,1]", "[0,0,1]")
+            .Replace("[600,800,1000,1200,1400,1600,1800,2000,2200,2400,3500,3600]", "[600,800,900]")
+            .Replace("[0,150,300,450,600,750,900,1050,1200,1350,2800,2900]", "[0,150,200]")
+            .Replace("[0,3,6,9,12,15,18,21,24,27,40,41]", "[0,3,4]")
+            .Replace("[0,0,0,0,0,0,0,0,0,0,0,0]", "[0,0,0]")
+            .Replace("690.4", "100.2");
+
+        var analysis = await CreateClient(new FakeParser(Json(HttpStatusCode.OK, short3Points, "application/json")))
+            .ParseAsync(Match, ReplayUrl, CancellationToken.None);
+
+        Assert.Equal(400, analysis.EndsAtSeconds);
+        Assert.Equal(750, analysis.FindHero(31)!.NetWorth);
+        // The end (100 s) comes after the last minute point (60 s).
+        Assert.Equal([0, 60, 100], analysis.Timeline!.Seconds);
     }
 
     [Fact]
     public async Task Parse_WithoutApiKey_SendsNoAuthorization()
     {
         // The parser accepts that only when run locally without a key (go run).
-        var parser = new FakeParser(Json(HttpStatusCode.OK, LaningJson, "application/json"));
+        var parser = new FakeParser(Json(HttpStatusCode.OK, MatchJson(), "application/json"));
 
         await CreateClient(parser, apiKey: "").ParseAsync(Match, ReplayUrl, CancellationToken.None);
 
@@ -105,7 +154,7 @@ public class ReplayParserClientTests
     [Fact]
     public async Task Parse_Busy_WaitsRetryAfterAndTriesAgain()
     {
-        var parser = new FakeParser(Busy(TimeSpan.FromSeconds(7)), Json(HttpStatusCode.OK, LaningJson, "application/json"));
+        var parser = new FakeParser(Busy(TimeSpan.FromSeconds(7)), Json(HttpStatusCode.OK, MatchJson(), "application/json"));
         var clock = new InstantClock();
 
         var analysis = await CreateClient(parser, clock: clock).ParseAsync(Match, ReplayUrl, CancellationToken.None);
@@ -142,7 +191,7 @@ public class ReplayParserClientTests
         var clock = new InstantClock();
         var busy = Problem(HttpStatusCode.ServiceUnavailable);
         busy.Headers.RetryAfter = new RetryConditionHeaderValue(clock.Now.AddSeconds(12));
-        var parser = new FakeParser(busy, Json(HttpStatusCode.OK, LaningJson, "application/json"));
+        var parser = new FakeParser(busy, Json(HttpStatusCode.OK, MatchJson(), "application/json"));
 
         await CreateClient(parser, clock: clock).ParseAsync(Match, ReplayUrl, CancellationToken.None);
 
@@ -224,7 +273,7 @@ public class ReplayParserClientTests
         var parser = new FakeParser(async cancellationToken =>
         {
             await Task.Delay(Timeout.Infinite, cancellationToken);
-            return Json(HttpStatusCode.OK, LaningJson, "application/json");
+            return Json(HttpStatusCode.OK, MatchJson(), "application/json");
         });
         var client = CreateClient(parser, timeout: TimeSpan.FromMilliseconds(100));
 
@@ -238,7 +287,7 @@ public class ReplayParserClientTests
         var parser = new FakeParser(async cancellationToken =>
         {
             await Task.Delay(Timeout.Infinite, cancellationToken);
-            return Json(HttpStatusCode.OK, LaningJson, "application/json");
+            return Json(HttpStatusCode.OK, MatchJson(), "application/json");
         });
         using var cancellation = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
 
@@ -249,30 +298,64 @@ public class ReplayParserClientTests
     [Theory]
     [InlineData("not json")]
     [InlineData("null")]
-    [InlineData("""{"players": []}""")] // no laningEndsAtSeconds
-    [InlineData("""{"laningEndsAtSeconds": 600}""")] // no players
-    [InlineData("""{"laningEndsAtSeconds": 700, "players": []}""")] // the laning phase ends at 10:00
-    [InlineData("""{"laningEndsAtSeconds": 600, "players": [null]}""")]
-    [InlineData("""{"laningEndsAtSeconds": 600, "players": [{"heroId": 31, "isRadiant": true, "lane": "bottom", "lastHits": -1, "denies": 0, "netWorth": 0, "xp": 0, "deaths": 0}]}""")]
-    [InlineData("""{"laningEndsAtSeconds": 600, "players": [{"heroId": 31, "isRadiant": true, "lane": "sideways", "lastHits": 1, "denies": 0, "netWorth": 0, "xp": 0, "deaths": 0}]}""")]
-    [InlineData("""{"laningEndsAtSeconds": 600, "players": [{"heroId": 31, "lane": "bottom", "lastHits": 1, "denies": 0, "netWorth": 0, "xp": 0, "deaths": 0}]}""")] // no isRadiant
-    [InlineData("""{"laningEndsAtSeconds": 600, "players": [{"heroId": 31, "isRadiant": true, "lane": "bottom", "lastHits": 1, "denies": 0, "netWorth": 0, "deaths": 0}]}""")] // no xp
-    [InlineData("""{"laningEndsAtSeconds": 600, "players": [{"heroId": 31, "isRadiant": true, "lane": "top", "lastHits": 1, "denies": 0, "netWorth": 0, "xp": 0, "deaths": 0}, {"heroId": 31, "isRadiant": false, "lane": "top", "lastHits": 1, "denies": 0, "netWorth": 0, "xp": 0, "deaths": 0}]}""")] // same hero twice
-    public async Task Parse_MalformedOrInvalidAnswer_IsAnUnreadableReplay(string body)
+    [InlineData("""{"players": []}""")] // nothing else
+    public async Task Parse_MalformedAnswer_IsAnUnreadableReplay(string body)
     {
-        var client = CreateClient(new FakeParser(Json(HttpStatusCode.OK, body, "application/json")));
+        var archive = new FakeArchive();
+        var client = CreateClient(new FakeParser(Json(HttpStatusCode.OK, body, "application/json")), archive: archive);
 
         await Assert.ThrowsAsync<ReplayUnreadableException>(() => client.ParseAsync(Match, ReplayUrl, CancellationToken.None));
+        Assert.Empty(archive.Kept);
+    }
+
+    // Each case breaks one thing in an otherwise valid document.
+    public static TheoryData<string, string> InvalidDocuments() => new()
+    {
+        { "schemaVersion 0", MatchJson(schemaVersion: 0) },
+        { "no duration", MatchJson().Replace("\"durationSeconds\": 690.4", "\"durationSecondz\": 690.4") },
+        { "no laning", MatchJson().Replace("\"laning\":", "\"laningz\":") },
+        { "laning past 10:00", MatchJson("""{ "endsAtSeconds": 700, "lanes": [ { "player": 0, "lane": "bottom" }, { "player": 5, "lane": "jungle" } ] }""") },
+        { "unknown lane", MatchJson().Replace("\"jungle\"", "\"sideways\"") },
+        { "lane missing for a player", MatchJson("""{ "endsAtSeconds": 600, "lanes": [ { "player": 0, "lane": "bottom" } ] }""") },
+        { "unknown team", MatchJson().Replace("\"dire\"", "\"neutral\"") },
+        { "negative net worth", MatchJson().Replace("[600,700,", "[-600,700,") },
+        { "points differ between players", MatchJson().Replace("2400,3500,3600]", "2400,3500]") },
+        { "no xp", MatchJson().Replace("\"xp\": [0,100,", "\"xq\": [0,100,") },
+        { "same hero twice", MatchJson().Replace("\"heroId\": 28", "\"heroId\": 31") },
+    };
+
+    [Theory]
+    [MemberData(nameof(InvalidDocuments))]
+    public async Task Parse_InvalidDocument_IsAnUnreadableReplay_AndIsNotKept(string _, string body)
+    {
+        var archive = new FakeArchive();
+        var client = CreateClient(new FakeParser(Json(HttpStatusCode.OK, body, "application/json")), archive: archive);
+
+        await Assert.ThrowsAsync<ReplayUnreadableException>(() => client.ParseAsync(Match, ReplayUrl, CancellationToken.None));
+        Assert.Empty(archive.Kept);
     }
 
     private static ReplayParserClient CreateClient(
-        FakeParser parser, string apiKey = ApiKey, TimeSpan? timeout = null, TimeProvider? clock = null) =>
+        FakeParser parser, string apiKey = ApiKey, TimeSpan? timeout = null, TimeProvider? clock = null,
+        FakeArchive? archive = null) =>
         new(
             new HttpClient(parser) { BaseAddress = new Uri("https://parser.example/"), Timeout = timeout ?? TimeSpan.FromSeconds(10) },
             Options.Create(new ReplayParserOptions { BaseUrl = new Uri("https://parser.example/"), ApiKey = apiKey }),
             // By default a "busy" answer would really wait: tests that expect one pass an InstantClock.
             clock ?? TimeProvider.System,
+            archive ?? new FakeArchive(),
             NullLogger<ReplayParserClient>.Instance);
+
+    private sealed class FakeArchive : IReplayDocumentArchive
+    {
+        public List<(long MatchId, int SchemaVersion, string Document)> Kept { get; } = [];
+
+        public Task KeepAsync(MatchId matchId, int schemaVersion, string document, CancellationToken cancellationToken)
+        {
+            Kept.Add((matchId.Value, schemaVersion, document));
+            return Task.CompletedTask;
+        }
+    }
 
     private static HttpResponseMessage Json(HttpStatusCode status, string body, string contentType) =>
         new(status) { Content = new StringContent(body, Encoding.UTF8, contentType) };

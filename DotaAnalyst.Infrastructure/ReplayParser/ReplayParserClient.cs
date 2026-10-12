@@ -21,10 +21,14 @@ namespace DotaAnalyst.Infrastructure.ReplayParser;
 // The parser only parses a few replays at a time and is shared with the owner's local API, so "busy" (503 with
 // Retry-After) is normal: the client waits as told (at most MaxBusyWait) and tries again, up to MaxAttempts
 // requests, before giving up with ReplayParserBusyException.
+//
+// It asks for the whole match (POST /v1/match): the laning phase and the timeline come out of it, and the document is
+// kept as it came (IReplayDocumentArchive) for the analyses still to come, so a replay is parsed once.
 public class ReplayParserClient(
     HttpClient httpClient,
     IOptions<ReplayParserOptions> options,
     TimeProvider timeProvider,
+    IReplayDocumentArchive archive,
     ILogger<ReplayParserClient> logger) : IReplayParser
 {
     // Requests per replay while the parser answers "busy" (the first one included).
@@ -36,7 +40,7 @@ public class ReplayParserClient(
     // Wait when a "busy" answer has no (usable) Retry-After.
     public static readonly TimeSpan DefaultBusyWait = TimeSpan.FromSeconds(5);
 
-    private const string LaningPath = "v1/laning";
+    private const string MatchPath = "v1/match";
     private const string ProblemJson = "application/problem+json";
     private const string NgrokErrorHeader = "ngrok-error-code";
 
@@ -78,9 +82,9 @@ public class ReplayParserClient(
     // A new HttpRequestMessage each time: one can't be sent twice.
     private async Task<HttpResponseMessage> SendAsync(Uri replayUrl, CancellationToken cancellationToken)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Post, LaningPath)
+        using var request = new HttpRequestMessage(HttpMethod.Post, MatchPath)
         {
-            Content = JsonContent.Create(new ReplayParserLaningRequest(replayUrl.AbsoluteUri), options: JsonOptions),
+            Content = JsonContent.Create(new ReplayParserRequest(replayUrl.AbsoluteUri), options: JsonOptions),
         };
         if (!string.IsNullOrEmpty(options.Value.ApiKey))
         {
@@ -122,7 +126,7 @@ public class ReplayParserClient(
             : wait;
     }
 
-    private static async Task<ReplayAnalysis> ReadAnalysisAsync(
+    private async Task<ReplayAnalysis> ReadAnalysisAsync(
         HttpResponseMessage response, MatchId matchId, CancellationToken cancellationToken)
     {
         // Something that is not our parser may answer 200 too (e.g. ngrok's warning page): that is not a reading
@@ -135,9 +139,15 @@ public class ReplayParserClient(
 
         try
         {
-            var body = await response.Content.ReadFromJsonAsync<ReplayParserLaningResponse>(JsonOptions, cancellationToken)
+            var document = await response.Content.ReadAsStringAsync(cancellationToken);
+            var body = JsonSerializer.Deserialize<ReplayParserMatchResponse>(document, JsonOptions)
                 ?? throw new InvalidDataException("The answer is empty.");
-            return body.ToReplayAnalysis(matchId);
+            var analysis = body.ToReplayAnalysis(matchId);
+
+            // Only a document that made a valid analysis is kept. Keeping it never fails the parse (the archive
+            // logs and swallows its own errors).
+            await archive.KeepAsync(matchId, body.SchemaVersion!.Value, document, cancellationToken);
+            return analysis;
         }
         catch (Exception ex) when (ex is JsonException or InvalidDataException or NotSupportedException)
         {

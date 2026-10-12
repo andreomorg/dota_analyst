@@ -127,6 +127,31 @@ namespace DotaAnalyst.Infrastructure.Persistence.Migrations
                     b.ToTable("replay_analyses", (string)null);
                 });
 
+            modelBuilder.Entity("DotaAnalyst.Infrastructure.Persistence.Replays.ReplayDocumentRecord", b =>
+                {
+                    b.Property<long>("MatchId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("match_id");
+
+                    b.Property<string>("Document")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("document");
+
+                    b.Property<DateTimeOffset>("SavedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("saved_at");
+
+                    b.Property<int>("SchemaVersion")
+                        .HasColumnType("integer")
+                        .HasColumnName("schema_version");
+
+                    b.HasKey("MatchId")
+                        .HasName("pk_replay_documents");
+
+                    b.ToTable("replay_documents", (string)null);
+                });
+
             modelBuilder.Entity("Microsoft.AspNetCore.DataProtection.EntityFrameworkCore.DataProtectionKey", b =>
                 {
                     b.Property<int>("Id")

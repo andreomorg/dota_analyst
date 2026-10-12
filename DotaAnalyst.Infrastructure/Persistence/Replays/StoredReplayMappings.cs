@@ -13,7 +13,13 @@ internal sealed record StoredReplayAnalysis(
     int Version,
     long MatchId,
     int EndsAtSeconds,
-    IReadOnlyList<StoredLaningStats> Players);
+    IReadOnlyList<StoredLaningStats> Players,
+    // Added in sprint 11 without a new Version: rows saved before have none (null) and still read.
+    StoredTimeline? Timeline = null);
+
+internal sealed record StoredTimeline(IReadOnlyList<int> Seconds, IReadOnlyList<StoredHeroTimeline> Heroes);
+
+internal sealed record StoredHeroTimeline(int HeroId, Team Team, IReadOnlyList<int> NetWorth, IReadOnlyList<int> Experience);
 
 internal sealed record StoredLaningStats(
     int HeroId,
@@ -95,7 +101,15 @@ internal static class StoredReplayMappings
                         ? throw new InvalidDataException("A saved replay analysis has an empty player.")
                         : new LaningStats(player.HeroId, player.Team, player.Lane, player.LastHits, player.Denies,
                             player.NetWorth, player.Experience, player.Deaths))
-                    .ToList());
+                    .ToList(),
+                stored.Timeline is { } timeline
+                    ? new MatchTimeline(
+                        timeline.Seconds ?? throw new InvalidDataException("A saved timeline has no seconds."),
+                        (timeline.Heroes ?? []).Select(hero => hero is null
+                                ? throw new InvalidDataException("A saved timeline has an empty hero.")
+                                : new HeroTimeline(hero.HeroId, hero.Team, hero.NetWorth ?? [], hero.Experience ?? []))
+                            .ToList())
+                    : null);
         }
         catch (ArgumentException ex)
         {
@@ -113,5 +127,12 @@ internal static class StoredReplayMappings
                 .Select(player => new StoredLaningStats(
                     player.HeroId, player.Team, player.Lane, player.LastHits, player.Denies,
                     player.NetWorth, player.Experience, player.Deaths))
-                .ToList());
+                .ToList(),
+            Timeline: analysis.Timeline is { } timeline
+                ? new StoredTimeline(
+                    timeline.Seconds,
+                    timeline.Heroes
+                        .Select(hero => new StoredHeroTimeline(hero.HeroId, hero.Team, hero.NetWorth, hero.Experience))
+                        .ToList())
+                : null);
 }

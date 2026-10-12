@@ -6,6 +6,7 @@ import LaningSection from './LaningSection';
 import MatchHeader from './MatchHeader';
 import PerformanceSummary from './PerformanceSummary';
 import TeamTable from './TeamTable';
+import TimelineSection from './TimelineSection';
 import { useMatchAnalysis } from './useMatchAnalysis';
 
 const MAX_MATCH_ID = 9223372036854775807n; // long.MaxValue on the API
@@ -126,6 +127,8 @@ function AnalysisContent({ analysis, accountId, replayPollingStopped }) {
                 laning={analysis.laning}
                 pollingStopped={replayPollingStopped}
             />
+
+            {analysis.replayStatus === 'ready' && <TimelineSection timeline={analysis.timeline} />}
 
             <div className="teams">
                 <TeamTable name="Radiant" players={analysis.radiant} won={radiantWon} />

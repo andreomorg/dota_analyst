@@ -287,20 +287,31 @@ type Kill struct {
 	// Victim is the player whose hero died.
 	Victim int `json:"victim"`
 	// Killer is the player who got the kill (an illusion or summon counts for its owner); null when it was not a
-	// player (creeps, towers, Roshan, neutrals) or a suicide the replay does not attribute.
+	// player (creeps, towers, Roshan, neutrals) or a suicide the replay does not attribute. It is who dealt the killing
+	// blow: the scoreboard (Player.Final.Kills) also credits a death to creeps or towers with a single assisting enemy
+	// hero as that hero's kill, and does not count kills of allies or deaths with Reincarnated.
 	Killer *int `json:"killer"`
 	// KillerUnit is the combat log name of what dealt the killing blow (npc_dota_hero_undying,
 	// npc_dota_badguys_tower1_mid, npc_dota_creep_goodguys_melee).
 	KillerUnit string `json:"killerUnit"`
 	// Inflictor is the ability or item of the killing blow; null for a right-click.
 	Inflictor *string `json:"inflictor"`
-	// Assists is the players credited with an assist.
+	// Assists is the players the combat log credits with an assist (the killer left out). It is a subset of the
+	// scoreboard's assists, which credit more heroes (e.g. 11 here vs 17 there for one player).
 	Assists List[int] `json:"assists"`
 	// X and Y are where the victim died.
 	X int `json:"x"`
 	Y int `json:"y"`
 	// Reincarnated is true when the hero came back (Aegis, Wraith King): the scoreboard does not count it as a death.
 	Reincarnated bool `json:"reincarnated"`
+	// FirstBlood is true for the kill the game announced as first blood.
+	FirstBlood bool `json:"firstBlood"`
+	// Multikill is the killer's multi-kill the game announced with this kill (2 = double kill ... 5 = rampage); 0 when
+	// there was none.
+	Multikill int `json:"multikill"`
+	// Streak is the killer's kill streak the game announced with this kill (3 = killing spree ... 10 = beyond
+	// godlike, and on); 0 below 3.
+	Streak int `json:"streak"`
 }
 
 // Buyback is a player buying back.
@@ -309,6 +320,9 @@ type Buyback struct {
 	T Seconds `json:"t"`
 	// Player is the player index 0-9.
 	Player int `json:"player"`
+	// Cost is the gold paid (the rise of the player's gold spent on buybacks in the next seconds); null when the
+	// replay does not show it.
+	Cost *int `json:"cost"`
 }
 
 // UnitKind says who dealt or took damage/healing when it is not a player's hero.
@@ -350,21 +364,41 @@ type CombatRow struct {
 	TargetKind UnitKind `json:"targetKind"`
 	// Inflictor is the ability or item; null for right-clicks.
 	Inflictor *string `json:"inflictor"`
+	// DamageType is physical, magical or pure; null for healing rows and for damage without a type (HP removal).
+	DamageType *DamageType `json:"damageType"`
 	// Amount is the total damage (after reductions) or healing.
 	Amount int `json:"amount"`
 	// Hits is how many combat log entries were added up.
 	Hits int `json:"hits"`
 }
 
-// PlayerCombatMinutes is one player's hero-vs-hero damage per minute. Index i is minute i of the game clock (damage
-// from i:00 to i:59); all lists have the same length.
+// DamageType is the game's damage type.
+type DamageType string
+
+const (
+	Physical DamageType = "physical"
+	Magical  DamageType = "magical"
+	Pure     DamageType = "pure"
+)
+
+// PlayerCombatMinutes is one player's damage and healing per minute. Index i is minute i of the game clock (from i:00
+// to i:59; anything before the horn counts in minute 0); all lists have the same length, one per started minute of
+// the match.
 type PlayerCombatMinutes struct {
 	// Player is the player index 0-9.
 	Player int `json:"player"`
-	// DamageToHeroes is the damage the player dealt to enemy heroes in each minute.
+	// DamageToHeroes is the damage the player (hero, illusions and summons) dealt to enemy heroes in each minute
+	// (illusions of heroes taking damage are left out).
 	DamageToHeroes List[int] `json:"damageToHeroes"`
-	// DamageFromHeroes is the damage the player's hero took from enemy heroes in each minute.
+	// DamageFromHeroes is the damage the player's hero took from enemy heroes (and their illusions and summons) in
+	// each minute.
 	DamageFromHeroes List[int] `json:"damageFromHeroes"`
+	// DamageTaken is all the damage the player's hero took in each minute, from anything (heroes, creeps, towers,
+	// neutrals, Roshan).
+	DamageTaken List[int] `json:"damageTaken"`
+	// Healing is the healing the player (hero, illusions and summons) did to other heroes in each minute (its own hero
+	// left out, like Final.Healing); self-healing is in the healing rows.
+	Healing List[int] `json:"healing"`
 }
 
 // ----- items and abilities (card 05) -----

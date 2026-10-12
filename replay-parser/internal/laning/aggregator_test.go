@@ -24,7 +24,10 @@ func TestAggregatorLane(t *testing.T) {
 		{"most of the time in the middle", map[Zone]int{ZoneMiddle: 300, ZoneJungle: 100, ZoneTop: 100}, Middle},
 		{"exactly half in a lane", map[Zone]int{ZoneTop: 270, ZoneJungle: 135, ZoneMiddle: 135}, Top},
 		{"jungle most of the time", map[Zone]int{ZoneJungle: 400, ZoneBottom: 140}, Jungle},
-		{"split between lanes", map[Zone]int{ZoneTop: 200, ZoneMiddle: 180, ZoneBottom: 160}, Roaming},
+		// Like the mid heroes measured against OpenDota: 43% in the lane, a lot in the river/jungle and side lanes.
+		{"a lane with much time away from it", map[Zone]int{ZoneMiddle: 232, ZoneJungle: 150, ZoneTop: 100, ZoneBottom: 58}, Middle},
+		{"most frequent lane at exactly MinLaneShare", map[Zone]int{ZoneTop: 189, ZoneMiddle: 180, ZoneBottom: 171}, Top},
+		{"spread out below MinLaneShare", map[Zone]int{ZoneTop: 150, ZoneMiddle: 130, ZoneBottom: 130, ZoneJungle: 130}, Roaming},
 		{"half and half", map[Zone]int{ZoneTop: 100, ZoneBottom: 100}, Roaming},
 		{"the base is not counted", map[Zone]int{ZoneBase: 400, ZoneMiddle: 100, ZoneJungle: 40}, Middle},
 		{"only in the base", map[Zone]int{ZoneBase: 540}, Roaming},

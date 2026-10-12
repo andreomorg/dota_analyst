@@ -27,8 +27,17 @@ func (a *Aggregator) AddSample(second, slot int, x, y float64) {
 	zones[ZoneOf(x, y)]++
 }
 
-// Lane is the zone where the player in slot spent at least half of the counted seconds (the base is not counted):
-// one of the three lanes or the jungle. Without such a zone, or without any counted second, it is Roaming.
+// MinLaneShare is the smallest share of the counted seconds the most frequent zone needs to be the player's lane.
+// Measured on 12/10/2026 against OpenDota's lanes for 80 players of 8 parsed matches: in every case where a 50%
+// rule said "roaming" but OpenDota named a lane, our most frequent zone was that lane (with 39–49% of the time:
+// heroes in a lane still spend a lot of it in the river and jungle), and OpenDota's own roamers had 44–54%, so no
+// threshold separates them. The most frequent zone matched 72 of 80 against 67 with 50%; below 35% (four zones would
+// give 25% each by chance) the player really had no lane.
+const MinLaneShare = 0.35
+
+// Lane is the zone where the player in slot spent the most counted seconds (the base is not counted), if it holds at
+// least MinLaneShare of them: one of the three lanes or the jungle. Otherwise (a tie for first, too spread out, or no
+// counted second) it is Roaming.
 func (a *Aggregator) Lane(slot int) Lane {
 	zones := a.seconds[slot] // reading a nil map is fine
 	counted, best, bestSeconds, tie := 0, Roaming, 0, false
@@ -46,8 +55,8 @@ func (a *Aggregator) Lane(slot int) Lane {
 			tie = true
 		}
 	}
-	// An exact 50/50 split is a tie: no zone wins.
-	if counted == 0 || tie || bestSeconds*2 < counted {
+	// A tie for first (e.g. 50/50) means no zone wins.
+	if counted == 0 || tie || float64(bestSeconds) < MinLaneShare*float64(counted) {
 		return Roaming
 	}
 	return best

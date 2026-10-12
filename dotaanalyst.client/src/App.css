@@ -375,6 +375,71 @@ a:focus-visible {
     color: var(--loss);
 }
 
+/* ---------- Laning phase (from the replay) ---------- */
+
+.laning-summary {
+    margin-bottom: 32px;
+}
+
+.laning-intro {
+    margin-bottom: 16px;
+}
+
+.laning-facts {
+    margin-bottom: 8px;
+}
+
+.laning-note {
+    margin: 0 auto 16px;
+    max-width: 640px;
+    font-size: 15px;
+}
+
+.result-even {
+    color: var(--text-h);
+    font-weight: 600;
+}
+
+/* Discreet line for a replay that couldn't be analyzed (expired, failed, unavailable). */
+.replay-status-note {
+    margin: 0 auto 24px;
+    max-width: 640px;
+    font-size: 15px;
+}
+
+.laning-table {
+    margin: 0 auto;
+    border-collapse: collapse;
+    font-size: 16px;
+}
+
+.laning-table th,
+.laning-table td {
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--border);
+    text-align: right;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+.laning-table th:first-child,
+.laning-table td[colspan] {
+    text-align: left;
+}
+
+.laning-table thead th,
+.laning-table tbody th {
+    color: var(--text-h);
+    font-weight: 500;
+}
+
+.laning-table .laning-group th {
+    padding-top: 12px;
+    color: var(--text);
+    font-size: 14px;
+    font-weight: 400;
+}
+
 .teams {
     display: grid;
     gap: 32px;
@@ -491,7 +556,9 @@ a:focus-visible {
     }
 
     .team-table th,
-    .team-table td {
+    .team-table td,
+    .laning-table th,
+    .laning-table td {
         padding: 6px 8px;
     }
 }

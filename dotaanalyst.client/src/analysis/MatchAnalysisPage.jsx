@@ -1,11 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router';
 import { readSavedAccountId } from '../accountStorage';
-import { fetchMatchAnalysis } from '../api/matches';
 import { useCurrentUser } from '../auth/useCurrentUser';
+import LaningSection from './LaningSection';
 import MatchHeader from './MatchHeader';
 import PerformanceSummary from './PerformanceSummary';
 import TeamTable from './TeamTable';
+import { useMatchAnalysis } from './useMatchAnalysis';
 
 const MAX_MATCH_ID = 9223372036854775807n; // long.MaxValue on the API
 
@@ -41,33 +42,7 @@ function MatchAnalysisPage() {
     }
 
     const canFetch = accountId !== null && accountId !== '' && isValidMatchId(matchId);
-    const requestKey = `${accountId}/${matchId}`;
-
-    // The result remembers which request produced it. If the URL changes (another match),
-    // the key no longer matches and the page shows "loading" without a synchronous setState.
-    const [result, setResult] = useState(null);
-
-    useEffect(() => {
-        if (!canFetch) {
-            return;
-        }
-
-        const controller = new AbortController();
-        fetchMatchAnalysis(accountId, matchId, controller.signal)
-            .then(analysis => {
-                if (!controller.signal.aborted) {
-                    setResult({ key: requestKey, status: 'success', analysis });
-                }
-            })
-            .catch(error => {
-                if (!controller.signal.aborted) {
-                    setResult({ key: requestKey, status: 'error', message: error.message });
-                }
-            });
-
-        // Cancels the request if the user leaves the page (or opens another match) before it finishes.
-        return () => controller.abort();
-    }, [accountId, matchId, canFetch, requestKey]);
+    const state = useMatchAnalysis(accountId, matchId, canFetch);
 
     if (accountId === '') {
         return (
@@ -92,8 +67,6 @@ function MatchAnalysisPage() {
         );
     }
 
-    const state = result?.key === requestKey ? result : { status: 'loading' };
-
     return (
         <main className="page analysis-page">
             <BackLink />
@@ -112,12 +85,18 @@ function MatchAnalysisPage() {
                 </>
             )}
 
-            {state.status === 'success' && <AnalysisContent analysis={state.analysis} accountId={accountId} />}
+            {state.status === 'success' && (
+                <AnalysisContent
+                    analysis={state.analysis}
+                    accountId={accountId}
+                    replayPollingStopped={state.replayPollingStopped}
+                />
+            )}
         </main>
     );
 }
 
-function AnalysisContent({ analysis, accountId }) {
+function AnalysisContent({ analysis, accountId, replayPollingStopped }) {
     const { performance } = analysis;
     // null stays null for both teams: an unknown winner highlights nobody.
     const radiantWon = analysis.radiantWon ?? null;
@@ -141,6 +120,12 @@ function AnalysisContent({ analysis, accountId }) {
                         Abra a partida pela lista de partidas desse jogador.
                     </p>
                 )}
+
+            <LaningSection
+                replayStatus={analysis.replayStatus}
+                laning={analysis.laning}
+                pollingStopped={replayPollingStopped}
+            />
 
             <div className="teams">
                 <TeamTable name="Radiant" players={analysis.radiant} won={radiantWon} />

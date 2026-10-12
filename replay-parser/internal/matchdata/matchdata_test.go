@@ -48,14 +48,18 @@ func TestSectionsJSON(t *testing.T) {
 			Player{Player: 0, SteamID: "76561198059783443", Name: "x", Team: Dire, TeamSlot: 4, HeroID: 31,
 				HeroName: "npc_dota_hero_lich", PickOrder: &player},
 			`{"player":0,"steamId":"76561198059783443","name":"x","team":"dire","teamSlot":4,"heroId":31,` +
-				`"heroName":"npc_dota_hero_lich","rankTier":null,"pickOrder":0,"randomed":false,"final":{"level":0,` +
+				`"heroName":"npc_dota_hero_lich","rankTier":null,"pickOrder":0,"randomed":false,"role":null,` +
+				`"facet":null,"final":{"level":0,` +
 				`"kills":0,"deaths":0,"assists":0,"lastHits":0,"denies":0,"missedLastHits":0,"netWorth":0,` +
 				`"goldEarned":0,"xp":0,"heroDamage":0,"towerDamage":0,"healing":0,"stunSeconds":0,` +
 				`"teamFightParticipation":0,"campsStacked":0,"runePickups":0,"observersPlaced":0,"sentriesPlaced":0,` +
 				`"wardsDestroyed":0,"smokesUsed":0,"towerKills":0,"roshanKills":0,"courierKills":0,` +
 				`"goldBySource":{"creeps":0,"heroes":0,"buildings":0,"neutrals":0,"roshan":0,"bountyRunes":0,` +
-				`"passive":0,"shared":0,"wards":0,"couriers":0,"summons":0},` +
-				`"goldSpent":{"items":0,"consumables":0,"support":0,"buybacks":0},"goldLostToDeath":0}}`},
+				`"passive":0,"shared":0,"wards":0,"couriers":0,"summons":0,"denies":0,"abilities":0,"comeback":0,` +
+				`"other":0},"goldSpent":{"items":0,"consumables":0,"support":0,"buybacks":0},"goldLostToDeath":0,` +
+				`"gold":0,"firstBlood":false,"creepsStacked":0,"bountyRunes":0,"powerRunes":0,"waterRunes":0,` +
+				`"wardsPurchased":0,"tormentorKills":0,"outpostsCaptured":0,"watchersTaken":0,` +
+				`"lotusesTaken":0,"wisdomShrinesTaken":0,"neutralTokensFound":0,"commandsIssued":0}}`},
 		{"per-minute columns, nil lists are []",
 			PlayerMinutes{Player: 3, Gold: List[int]{0, 290}},
 			`{"player":3,"gold":[0,290],"xp":[],"netWorth":[],"lastHits":[],"denies":[],"level":[],"kills":[],` +

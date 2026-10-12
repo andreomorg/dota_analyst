@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router';
 import { readSavedAccountId } from '../accountStorage';
 import { useCurrentUser } from '../auth/useCurrentUser';
+import DeathMap from './DeathMap';
 import LaningSection from './LaningSection';
 import MatchHeader from './MatchHeader';
 import PerformanceSummary from './PerformanceSummary';
@@ -129,6 +130,8 @@ function AnalysisContent({ analysis, accountId, replayPollingStopped }) {
             />
 
             {analysis.replayStatus === 'ready' && <TimelineSection timeline={analysis.timeline} />}
+
+            {analysis.replayStatus === 'ready' && <DeathMap deaths={analysis.deaths} />}
 
             <div className="teams">
                 <TeamTable name="Radiant" players={analysis.radiant} won={radiantWon} />

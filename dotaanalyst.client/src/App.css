@@ -13,6 +13,11 @@
     --series-5: #e87ba4;
     --chart-grid: #ecebe8;
     --chart-zero: #9b9a96;
+    /* Schematic map (DeathMap): neutral ground, lanes and bases; the river a pale step of the blue ramp. */
+    --map-ground: #f3f2ee;
+    --map-base: #e4e2dc;
+    --map-lane: #d3d1ca;
+    --map-river: #cde2fb;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -29,6 +34,10 @@
         --series-5: #d55181;
         --chart-grid: #2b2c33;
         --chart-zero: #6b6c73;
+        --map-ground: #1e1f26;
+        --map-base: #2a2b33;
+        --map-lane: #3a3b45;
+        --map-river: #183a5c;
     }
 }
 
@@ -757,4 +766,89 @@ a:focus-visible {
 .timeline-table summary {
     cursor: pointer;
     color: var(--text);
+}
+
+/* ----- Death map (DeathMap) ----- */
+.death-map {
+    margin: 1.5rem 0;
+}
+
+.death-map-frame {
+    position: relative;
+    /* Square, as wide as the column allows but never huge on a desktop. */
+    width: min(100%, 460px);
+    margin: 0.5rem auto;
+    contain: inline-size;
+}
+
+.death-map-frame svg {
+    display: block;
+    width: 100%;
+    height: auto;
+}
+
+.map-ground { fill: var(--map-ground); }
+.map-base { fill: var(--map-base); }
+.map-river { fill: none; stroke: var(--map-river); stroke-width: 900; stroke-linecap: round; stroke-linejoin: round; }
+.map-lane { fill: none; stroke: var(--map-lane); stroke-width: 380; stroke-linecap: round; stroke-linejoin: round; }
+
+.map-label {
+    font-size: 520px;
+    fill: var(--text);
+}
+
+.death-hit {
+    fill: transparent;
+}
+
+.death-dot {
+    fill: var(--series);
+    stroke: var(--bg);
+    stroke-width: 90;
+}
+
+.death-marker {
+    cursor: pointer;
+}
+
+.death-marker.is-reincarnated .death-dot {
+    fill: var(--bg);
+    stroke: var(--series);
+    stroke-width: 120;
+    stroke-dasharray: 160 110;
+}
+
+.death-marker.is-selected .death-dot {
+    stroke: var(--text-h);
+    stroke-width: 140;
+}
+
+.death-number {
+    font-size: 500px;
+    font-weight: 700;
+    fill: #fff;
+    pointer-events: none;
+}
+
+.death-marker.is-reincarnated .death-number {
+    fill: var(--text-h);
+}
+
+.legend-swatch.reincarnated {
+    background: transparent;
+    border: 2px dashed var(--text);
+    box-sizing: border-box;
+}
+
+.death-tooltip {
+    top: 0.5rem;
+    left: 0.5rem;
+}
+
+.death-legend {
+    justify-content: center;
+}
+
+.death-table {
+    margin: 0.5rem auto 0;
 }

@@ -71,11 +71,11 @@ func TestSectionsJSON(t *testing.T) {
 			Kill{T: 115.66, Victim: 3, Killer: &killer, KillerUnit: "npc_dota_hero_undying", Inflictor: &inflictor,
 				Assists: List[int]{6}, X: -1830, Y: 1500},
 			`{"t":115.7,"victim":3,"killer":5,"killerUnit":"npc_dota_hero_undying","inflictor":"undying_decay",` +
-				`"assists":[6],"x":-1830,"y":1500,"reincarnated":false}`},
+				`"assists":[6],"x":-1830,"y":1500,"reincarnated":false,"firstBlood":false,"multikill":0,"streak":0}`},
 		{"kill by a tower, no assists",
 			Kill{T: -0.04, Victim: 3, KillerUnit: "npc_dota_goodguys_tower1_mid"},
 			`{"t":0,"victim":3,"killer":null,"killerUnit":"npc_dota_goodguys_tower1_mid","inflictor":null,` +
-				`"assists":[],"x":0,"y":0,"reincarnated":false}`},
+				`"assists":[],"x":0,"y":0,"reincarnated":false,"firstBlood":false,"multikill":0,"streak":0}`},
 		{"purchases as [t, name], negative before the horn",
 			PlayerItems{Player: 0, Items: List[TimedName]{{-89.94, "item_tango"}, {34.1, "item_circlet"}}},
 			`{"player":0,"items":[[-89.9,"item_tango"],[34.1,"item_circlet"]]}`},
@@ -89,7 +89,7 @@ func TestSectionsJSON(t *testing.T) {
 		{"damage row",
 			CombatRow{SourcePlayer: &player, SourceKind: KindHero, TargetKind: KindLaneCreeps, Amount: 30210, Hits: 410},
 			`{"sourcePlayer":0,"sourceKind":"hero","targetPlayer":null,"targetKind":"laneCreeps","inflictor":null,` +
-				`"amount":30210,"hits":410}`},
+				`"damageType":null,"amount":30210,"hits":410}`},
 		{"ward",
 			Ward{Type: Observer, Player: &player, Team: team, X: -307, Y: -976, PlacedAt: -30.3, RemovedAt: &removed},
 			`{"type":"observer","player":0,"team":"radiant","x":-307,"y":-976,"placedAt":-30.3,"removedAt":336.5,` +

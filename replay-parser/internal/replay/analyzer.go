@@ -62,6 +62,7 @@ type parse struct {
 	entities map[string]int32 // class name -> entity index of the singletons (game rules, player resource, team data)
 
 	positions  laning.Aggregator
+	pause      pauseTracker
 	clockRan   bool // the game clock has run at least once (the horn sounded)
 	lastSecond int  // last whole second of the game clock already sampled
 	done       bool // 10:00 reached: the numbers in last are final
@@ -121,19 +122,55 @@ func (p *parse) result() (laning.Result, error) {
 
 const ticksPerSecond = 30
 
-// gameClock returns the seconds since the horn (0:00), pauses left out. It is not running before the horn or while
-// the game is paused: the paused ticks are probably only added to m_nTotalPausedTicks when the pause ends.
+// gameClock returns the seconds since the horn (0:00), pauses left out. It is not running before the horn, while the
+// game is paused, or right after a pause until the pause is counted in m_nTotalPausedTicks (see pauseTracker).
 func (p *parse) gameClock(rules *manta.Entity) (float64, bool) {
 	gameStart, ok := number(rules, "m_pGameRules.m_flGameStartTime")
 	if !ok || gameStart <= 0 {
 		return 0, false
 	}
-	if paused, _ := rules.GetBool("m_pGameRules.m_bGamePaused"); paused {
+	paused, _ := rules.GetBool("m_pGameRules.m_bGamePaused")
+	pausedTicks, _ := number(rules, "m_pGameRules.m_nTotalPausedTicks")
+	if !p.pause.running(paused, pausedTicks) {
 		return 0, false
 	}
-	pausedTicks, _ := number(rules, "m_pGameRules.m_nTotalPausedTicks")
 	clock := float64(p.parser.NetTick)/ticksPerSecond - gameStart - pausedTicks/ticksPerSecond
 	return clock, clock >= 0
+}
+
+// maxPauseSettleTicks is how long, after a pause, the clock waits for m_nTotalPausedTicks to count the pause.
+const maxPauseSettleTicks = ticksPerSecond
+
+// pauseTracker decides whether the game clock can be computed on a tick, given m_bGamePaused and
+// m_nTotalPausedTicks. No paused replay has been checked yet, so it does not rely on when the server updates the
+// counter (during the pause, or when it ends): it only refuses a snapshot that would put the clock in the wrong place.
+// The dangerous one is m_bGamePaused already cleared while m_nTotalPausedTicks does not count the pause yet (a tick
+// later): the clock would jump forward by the whole pause (a 5-minute pause at 8:00 would read as 13:00 and cut the
+// laning phase at 8:00's numbers). So after a pause the clock stays stopped until the counter has changed since the
+// pause began. If it does not change within maxPauseSettleTicks (an unexpected replay format), the clock runs again
+// anyway, as it did before this guard.
+type pauseTracker struct {
+	paused       bool    // inside a pause, or waiting for the counter after one
+	ticksAtPause float64 // m_nTotalPausedTicks when the pause began
+	waited       int     // ticks waited for the counter after the pause flag cleared
+}
+
+// running reports whether the clock can be read on this tick.
+func (t *pauseTracker) running(paused bool, totalPausedTicks float64) bool {
+	if paused {
+		if !t.paused {
+			*t = pauseTracker{paused: true, ticksAtPause: totalPausedTicks}
+		}
+		return false
+	}
+	if t.paused {
+		if totalPausedTicks == t.ticksAtPause && t.waited < maxPauseSettleTicks {
+			t.waited++
+			return false
+		}
+		t.paused = false
+	}
+	return true
 }
 
 // samplePositions records where each living hero is at this second of the game clock.
@@ -187,6 +224,7 @@ func (p *parse) readPlayers(resource *manta.Entity, second int) {
 func (p *parse) players(resource *manta.Entity) ([]laning.PlayerAtEnd, error) {
 	teamData := map[int]*manta.Entity{teamRadiant: p.find("CDOTA_DataRadiant"), teamDire: p.find("CDOTA_DataDire")}
 	players := make([]laning.PlayerAtEnd, 0, playerCount)
+	entries := teamDataEntries{}
 	for slot := range maxPlayerSlots {
 		player := fmt.Sprintf("m_vecPlayerData.%04d.", slot)
 		playerTeam := fmt.Sprintf("m_vecPlayerTeamData.%04d.", slot)
@@ -218,6 +256,9 @@ func (p *parse) players(resource *manta.Entity) ([]laning.PlayerAtEnd, error) {
 		if !ok {
 			return nil, fmt.Errorf("slot %d: player not found in the team data (steam ID %d, team slot %d)", slot, steamID, teamSlot)
 		}
+		if err := entries.claim(team, index, slot); err != nil {
+			return nil, err
+		}
 		prefix := fmt.Sprintf("m_vecDataTeam.%04d.", index)
 		stats := fields{entity: data}
 		numbers := laning.PlayerLaning{
@@ -241,14 +282,30 @@ func (p *parse) players(resource *manta.Entity) ([]laning.PlayerAtEnd, error) {
 	return players, nil
 }
 
+// teamDataEntries remembers which player slot took each team data entry, keyed by team and entry index.
+type teamDataEntries map[[2]int]int
+
+// claim gives the entry to the player in slot, or fails when another player already has it: two players with the
+// same numbers means the link between them and the team data is wrong.
+func (e teamDataEntries) claim(team, index, slot int) error {
+	key := [2]int{team, index}
+	if other, taken := e[key]; taken {
+		return fmt.Errorf("slots %d and %d: both resolve to entry %d of the team data of team %d", other, slot, index, team)
+	}
+	e[key] = slot
+	return nil
+}
+
 // uint64Reader is the part of *manta.Entity that teamDataIndex needs (tests hand it a fake).
 type uint64Reader interface {
 	GetUint64(name string) (uint64, bool)
 }
 
 // teamDataIndex finds the player's entry (m_vecDataTeam.000N) in CDOTA_DataRadiant/Dire. The steam ID is the reliable
-// link (the entries' m_nPlayerID do not follow the player slots); bots and players without a Steam account all have
-// steam ID 0, so for them the player's place in the team (m_iTeamSlot) is used.
+// link (the entries' m_nPlayerID do not follow the player slots). Only bots and players without a Steam account
+// (steam ID 0, so the steam ID cannot tell them apart) fall back to the player's place in the team (m_iTeamSlot). A
+// real steam ID missing from the team data is not found: guessing by the team slot could hand this player another
+// player's numbers.
 func teamDataIndex(data uint64Reader, steamID uint64, teamSlot int) (int, bool) {
 	const playersPerTeam = 5
 	if steamID != 0 {
@@ -257,6 +314,7 @@ func teamDataIndex(data uint64Reader, steamID uint64, teamSlot int) (int, bool) 
 				return i, true
 			}
 		}
+		return 0, false
 	}
 	if teamSlot < 0 || teamSlot >= playersPerTeam {
 		return 0, false

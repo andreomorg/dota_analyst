@@ -17,6 +17,13 @@ export function formatNumber(value) {
     return numberFormatter.format(value);
 }
 
+// Always shows the sign, except on zero: 1250 -> "+1.250", -300 -> "-300", 0 -> "0".
+const signedNumberFormatter = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 2, signDisplay: 'exceptZero' });
+
+export function formatSignedNumber(value) {
+    return signedNumberFormatter.format(value);
+}
+
 // 0..1 -> whole percentage number (0.514 -> 51).
 export function toPercent(fraction) {
     return Math.round(fraction * 100);

@@ -34,6 +34,8 @@ type Match struct {
 	Players List[Player] `json:"players"`
 	// Timelines is each player's numbers per minute and position every PositionIntervalSeconds.
 	Timelines Timelines `json:"timelines"`
+	// Laning is the lane each player played (the numbers at its end are in Timelines.PerMinute, minute 10).
+	Laning Laning `json:"laning"`
 	// Kills is every hero death, in time order.
 	Kills List[Kill] `json:"kills"`
 	// Buybacks is every buyback, in time order.
@@ -48,6 +50,24 @@ type Match struct {
 	Vision Vision `json:"vision"`
 	// Objectives is buildings, Roshan, Tormentors, couriers, runes and outposts.
 	Objectives Objectives `json:"objectives"`
+}
+
+// Laning is the laning phase, by the same rule as POST /v1/laning (package laning): each player's lane is the zone
+// where their living hero spent the most seconds between 1:00 and 10:00 of the game clock, if it holds at least 35%
+// of them, else "roaming".
+type Laning struct {
+	// EndsAtSeconds is 600, or the end of the match when it ended before 10:00.
+	EndsAtSeconds int `json:"endsAtSeconds"`
+	// Lanes is one entry per player, ordered by player index.
+	Lanes List[PlayerLane] `json:"lanes"`
+}
+
+// PlayerLane is the lane one player played.
+type PlayerLane struct {
+	// Player is the player index (0–9).
+	Player int `json:"player"`
+	// Lane is "top", "middle", "bottom", "jungle" or "roaming".
+	Lane string `json:"lane"`
 }
 
 // New returns an empty document of the current SchemaVersion. Its lists are nil, which List writes as [].

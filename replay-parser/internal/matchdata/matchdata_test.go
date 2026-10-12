@@ -24,6 +24,7 @@ func TestEmptyMatchJSON(t *testing.T) {
 		`"draft":{"announcedBans":[],"picksBans":[]},` +
 		`"players":[],` +
 		`"timelines":{"perMinute":[],"positionIntervalSeconds":0,"positions":[]},` +
+		`"laning":{"endsAtSeconds":0,"lanes":[]},` +
 		`"kills":[],"buybacks":[],` +
 		`"items":{"purchases":[],"uses":[],"final":[]},` +
 		`"abilities":{"upgrades":[],"uses":[]},` +

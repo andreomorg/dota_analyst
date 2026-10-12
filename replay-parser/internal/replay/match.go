@@ -29,6 +29,7 @@ func newCollectors() []Collector {
 	return []Collector{
 		&matchCollector{},   // match, draft (collect_match.go)
 		&playersCollector{}, // players, timelines (collect_players.go, card 03)
+		&laningCollector{},  // laning (collect_laning.go, sprint 11)
 		&combatCollector{},  // kills, buybacks, combat (collect_combat.go, card 04)
 		&itemsCollector{},   // items, abilities (collect_items.go, card 05)
 		&visionCollector{},  // vision, objectives (collect_vision.go, card 06)

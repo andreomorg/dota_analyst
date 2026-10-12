@@ -15,7 +15,15 @@ internal sealed record ReplayParserMatchResponse(
     IReadOnlyList<ReplayParserMatchPlayer?>? Players,
     ReplayParserTimelines? Timelines,
     ReplayParserLaning? Laning,
-    IReadOnlyList<ReplayParserKill?>? Kills);
+    IReadOnlyList<ReplayParserKill?>? Kills,
+    ReplayParserVision? Vision);
+
+internal sealed record ReplayParserVision(IReadOnlyList<ReplayParserWard?>? Wards);
+
+// Times are game-clock seconds with one decimal; player and destroyedBy are player indexes.
+internal sealed record ReplayParserWard(
+    string? Type, int? Player, string? Team, int? X, int? Y, double? PlacedAt, double? RemovedAt, bool? Destroyed,
+    int? DestroyedBy);
 
 // One hero death; killer is a player index (null when no player dealt the blow), killerUnit the combat log name.
 internal sealed record ReplayParserKill(
@@ -117,8 +125,37 @@ internal static class ReplayParserMappings
             .Select(kill => ToDeath(kill ?? throw Empty("kill"), heroOf))
             .ToList();
 
+        var wards = Required(response.Vision?.Wards, "vision.wards")
+            .Select(ward => ToWard(ward ?? throw Empty("ward"), heroOf))
+            .ToList();
+
         return new ReplayAnalysis(
-            matchId, endsAt, laningStats, new MatchTimeline(Seconds(count, duration), heroes), deaths);
+            matchId, endsAt, laningStats, new MatchTimeline(Seconds(count, duration), heroes), deaths, wards);
+    }
+
+    private static WardPlacement ToWard(ReplayParserWard ward, Dictionary<int, int> heroOf)
+    {
+        int? HeroOf(int? index) => index is { } i
+            ? heroOf.TryGetValue(i, out var heroId) ? heroId : throw new InvalidDataException($"Unknown player {i}.")
+            : null;
+
+        var placedAt = (int)Math.Round(ward.PlacedAt ?? throw Missing("ward.placedAt"));
+        return new WardPlacement(
+            kind: ward.Type switch
+            {
+                "observer" => WardKind.Observer,
+                "sentry" => WardKind.Sentry,
+                _ => throw new InvalidDataException($"Unknown ward type '{ward.Type}'."),
+            },
+            team: ToTeam(ward.Team),
+            placedByHeroId: HeroOf(ward.Player),
+            x: ward.X ?? throw Missing("ward.x"),
+            y: ward.Y ?? throw Missing("ward.y"),
+            placedAt: placedAt,
+            // Rounded separately, so a ward gone a fraction of a second after it was placed can't end before it.
+            removedAt: ward.RemovedAt is { } removedAt ? Math.Max(placedAt, (int)Math.Round(removedAt)) : null,
+            destroyed: ward.Destroyed ?? false,
+            destroyedByHeroId: HeroOf(ward.DestroyedBy));
     }
 
     private static HeroDeath ToDeath(ReplayParserKill kill, Dictionary<int, int> heroOf)

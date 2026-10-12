@@ -17,7 +17,13 @@ internal sealed record StoredReplayAnalysis(
     // Added in sprint 11 without a new Version: rows saved before have none (null) and still read.
     StoredTimeline? Timeline = null,
     // Added in sprint 12, the same way.
-    IReadOnlyList<StoredHeroDeath>? Deaths = null);
+    IReadOnlyList<StoredHeroDeath>? Deaths = null,
+    // Added in sprint 13, the same way.
+    IReadOnlyList<StoredWard>? Wards = null);
+
+internal sealed record StoredWard(
+    WardKind Kind, Team Team, int? PlacedByHeroId, int X, int Y, int PlacedAt, int? RemovedAt, bool Destroyed,
+    int? DestroyedByHeroId);
 
 internal sealed record StoredHeroDeath(
     int HeroId, int Seconds, int X, int Y, KillerKind Killer, int? KillerHeroId, bool Reincarnated);
@@ -119,6 +125,11 @@ internal static class StoredReplayMappings
                         ? throw new InvalidDataException("A saved replay analysis has an empty death.")
                         : new HeroDeath(death.HeroId, death.Seconds, death.X, death.Y, death.Killer, death.KillerHeroId,
                             death.Reincarnated))
+                    .ToList(),
+                stored.Wards?.Select(ward => ward is null
+                        ? throw new InvalidDataException("A saved replay analysis has an empty ward.")
+                        : new WardPlacement(ward.Kind, ward.Team, ward.PlacedByHeroId, ward.X, ward.Y, ward.PlacedAt,
+                            ward.RemovedAt, ward.Destroyed, ward.DestroyedByHeroId))
                     .ToList());
         }
         catch (ArgumentException ex)
@@ -148,5 +159,9 @@ internal static class StoredReplayMappings
             Deaths: analysis.Deaths?
                 .Select(death => new StoredHeroDeath(death.HeroId, death.Seconds, death.X, death.Y, death.Killer,
                     death.KillerHeroId, death.Reincarnated))
+                .ToList(),
+            Wards: analysis.Wards?
+                .Select(ward => new StoredWard(ward.Kind, ward.Team, ward.PlacedByHeroId, ward.X, ward.Y, ward.PlacedAt,
+                    ward.RemovedAt, ward.Destroyed, ward.DestroyedByHeroId))
                 .ToList());
 }

@@ -14,7 +14,8 @@ public record ReplayAnalysis
         int endsAtSeconds,
         IReadOnlyList<LaningStats> players,
         MatchTimeline? timeline = null,
-        IReadOnlyList<HeroDeath>? deaths = null)
+        IReadOnlyList<HeroDeath>? deaths = null,
+        IReadOnlyList<WardPlacement>? wards = null)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(matchId.Value, nameof(matchId));
         ArgumentOutOfRangeException.ThrowIfNegative(endsAtSeconds);
@@ -42,7 +43,16 @@ public record ReplayAnalysis
         }
 
         Deaths = deaths?.OrderBy(death => death.Seconds).ToList();
+        if (wards is not null && wards.Any(ward => ward is null))
+        {
+            throw new ArgumentException("A replay analysis can't have an empty ward.", nameof(wards));
+        }
+
+        Wards = wards?.OrderBy(ward => ward.PlacedAt).ToList();
     }
+
+    // Every ward of both teams, in the order they were placed; null for analyses made before wards were read.
+    public IReadOnlyList<WardPlacement>? Wards { get; }
 
     // Null for analyses made before the timeline existed (they only have the laning phase).
     public MatchTimeline? Timeline { get; }
@@ -51,7 +61,7 @@ public record ReplayAnalysis
     public IReadOnlyList<HeroDeath>? Deaths { get; }
 
     // Made before everything the analysis page shows was read from the replay: worth parsing again.
-    public bool IsOutdated => Timeline is null || Deaths is null;
+    public bool IsOutdated => Timeline is null || Deaths is null || Wards is null;
 
     public MatchId MatchId { get; }
 

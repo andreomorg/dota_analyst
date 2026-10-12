@@ -70,7 +70,8 @@ public class GetMatchAnalysisHandler(
             ReplayStatus: replayStatus,
             Laning: replay is null || currentPlayer is null ? null : ToLaningPhase(replay, currentPlayer, names),
             Timeline: replay?.Timeline is { } timeline ? ToTimelineChart(replay, timeline, currentPlayer, names) : null,
-            Deaths: replay?.Deaths is { } deaths && currentPlayer is not null ? ToDeaths(deaths, currentPlayer, names) : null);
+            Deaths: replay?.Deaths is { } deaths && currentPlayer is not null ? ToDeaths(deaths, currentPlayer, names) : null,
+            Wards: replay?.Wards is { } wards ? ToWards(wards, currentPlayer, names) : null);
     }
 
     // Our own reading of the replay (laning phase, timeline, deaths), for every match with a replay: OpenDota's
@@ -146,6 +147,23 @@ public class GetMatchAnalysisHandler(
 
         return (notQueued, null);
     }
+
+    private static IReadOnlyList<MapWard> ToWards(
+        IReadOnlyList<WardPlacement> wards, MatchPlayer? player, NameLookup names) =>
+        wards
+            .Select(ward => new MapWard(
+                Kind: ward.Kind,
+                Team: ward.Team,
+                IsPlayersTeam: player is null ? null : ward.Team == player.Team,
+                PlacedByHeroName: ward.PlacedByHeroId is { } placedBy ? names.Hero(placedBy) : null,
+                X: ward.X,
+                Y: ward.Y,
+                PlacedAt: ward.PlacedAt,
+                RemovedAt: ward.RemovedAt,
+                Destroyed: ward.Destroyed,
+                DestroyedByHeroName: ward.DestroyedByHeroId is { } destroyedBy ? names.Hero(destroyedBy) : null,
+                InLaningPhase: ward.InLaningPhase))
+            .ToList();
 
     // The point-of-view player's deaths, in time order.
     private static IReadOnlyList<PlayerDeath> ToDeaths(

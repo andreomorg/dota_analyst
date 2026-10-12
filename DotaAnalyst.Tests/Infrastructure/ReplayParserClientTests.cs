@@ -41,7 +41,8 @@ public class ReplayParserClientTests
               "denies": [0,0,0,0,0,0,0,0,0,0,0,0], "deaths": [0,0,0,0,0,0,0,0,0,0,0,0] }
           ] },
           "laning": {{laning ?? """{ "endsAtSeconds": 600, "lanes": [ { "player": 0, "lane": "bottom" }, { "player": 5, "lane": "jungle" } ] }"""}},
-          "kills": []
+          "kills": [],
+          "vision": { "wards": [] }
         }
         """;
 
@@ -101,6 +102,30 @@ public class ReplayParserClientTests
                 new HeroDeath(31, 700, 0, 0, KillerKind.Creeps, null, reincarnated: true),
             ],
             analysis.Deaths);
+    }
+
+    [Fact]
+    public async Task Parse_Wards_BecomeWardPlacements()
+    {
+        var wards = """
+            "vision": { "wards": [
+              { "type": "sentry", "player": 5, "team": "dire", "x": 100, "y": 200, "placedAt": 400.2, "removedAt": 461.0,
+                "destroyed": true, "destroyedBy": 0, "destroyedByTeam": "radiant" },
+              { "type": "observer", "player": null, "team": "radiant", "x": -3000, "y": 1500, "placedAt": -60.4, "removedAt": null,
+                "destroyed": false, "destroyedBy": null, "destroyedByTeam": null }
+            ] }
+            """;
+        var body = MatchJson().Replace("\"vision\": { \"wards\": [] }", wards);
+
+        var analysis = await CreateClient(new FakeParser(Json(HttpStatusCode.OK, body, "application/json")))
+            .ParseAsync(Match, ReplayUrl, CancellationToken.None);
+
+        Assert.Equal(
+            [
+                new WardPlacement(WardKind.Observer, Team.Radiant, null, -3000, 1500, -60, null, destroyed: false, null),
+                new WardPlacement(WardKind.Sentry, Team.Dire, 28, 100, 200, 400, 461, destroyed: true, 31),
+            ],
+            analysis.Wards);
     }
 
     [Fact]

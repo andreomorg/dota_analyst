@@ -19,6 +19,7 @@ namespace DotaAnalyst.Application.Matches;
 /// <param name="Laning">The player's laning phase, read from the replay; null unless replayStatus is ready and the player is in the match.</param>
 /// <param name="Timeline">Net worth and experience during the whole match, read from the replay; null unless replayStatus is ready (and for replays read before the timeline existed).</param>
 /// <param name="Deaths">Where and when the player died, read from the replay, in time order; null unless replayStatus is ready and the player is in the match.</param>
+/// <param name="Wards">Every ward of both teams, read from the replay, in the order they were placed; null unless replayStatus is ready.</param>
 public record MatchAnalysis(
     long MatchId,
     int DurationSeconds,
@@ -33,7 +34,8 @@ public record MatchAnalysis(
     ReplayStatus ReplayStatus,
     LaningPhase? Laning,
     MatchTimelineChart? Timeline = null,
-    IReadOnlyList<PlayerDeath>? Deaths = null);
+    IReadOnlyList<PlayerDeath>? Deaths = null,
+    IReadOnlyList<MapWard>? Wards = null);
 
 /// <summary>One of the ten players of the match.</summary>
 /// <param name="AccountId">Dota account ID; null for players with an anonymous profile.</param>
@@ -183,4 +185,29 @@ public record PlayerDeath(
     int? KillerHeroId,
     string? KillerHeroName,
     bool Reincarnated,
+    bool InLaningPhase);
+
+/// <summary>One ward placed in the match, read from the replay.</summary>
+/// <param name="Kind">observer or sentry.</param>
+/// <param name="Team">The team that owns it.</param>
+/// <param name="IsPlayersTeam">True when it belongs to the player's team; null when the player is not in the match.</param>
+/// <param name="PlacedByHeroName">Hero that placed it, or "Unknown hero"; null when the replay does not say.</param>
+/// <param name="X">Map coordinate, as in PlayerDeath.</param>
+/// <param name="Y">Map coordinate, as in PlayerDeath.</param>
+/// <param name="PlacedAt">Game clock when it was placed, in seconds.</param>
+/// <param name="RemovedAt">Game clock when it was gone (expired or destroyed); null when it still existed when the match ended.</param>
+/// <param name="Destroyed">Killed by a unit; false when it expired (or still existed at the end).</param>
+/// <param name="DestroyedByHeroName">Hero that destroyed it; null when it expired or a non-hero unit killed it.</param>
+/// <param name="InLaningPhase">Placed before 10:00 of the game clock.</param>
+public record MapWard(
+    WardKind Kind,
+    Team Team,
+    bool? IsPlayersTeam,
+    string? PlacedByHeroName,
+    int X,
+    int Y,
+    int PlacedAt,
+    int? RemovedAt,
+    bool Destroyed,
+    string? DestroyedByHeroName,
     bool InLaningPhase);

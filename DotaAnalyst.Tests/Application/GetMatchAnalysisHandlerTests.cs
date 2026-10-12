@@ -257,6 +257,32 @@ public class GetMatchAnalysisHandlerTests
     }
 
     [Fact]
+    public async Task Wards_Ready_BothTeamsWithTheirSideAndHeroNames()
+    {
+        var players = new[] { ReplayBuilder.Hero(31, Team.Radiant, Lane.Bottom), ReplayBuilder.Hero(28, Team.Dire, Lane.Bottom) };
+        var replay = new ReplayAnalysis(
+            MatchIdOf(10), ReplayAnalysis.LaningPhaseEndsAtSeconds, players, ReplayBuilder.Timeline(players), deaths: [],
+            wards:
+            [
+                new WardPlacement(WardKind.Sentry, Team.Dire, 28, 100, 200, 700, 760, destroyed: true, 31),
+                new WardPlacement(WardKind.Observer, Team.Radiant, 31, -3000, 1500, -60, null, destroyed: false, null),
+            ]);
+        var handler = CreateHandler(
+            UnparsedMatchWithMe(), new FakeReplayAnalysisRepository(SavedReplayAnalysis.Ready(replay, Now)));
+
+        var wards = (await handler.HandleAsync(MatchIdOf(10), Me, CancellationToken.None))!.Wards;
+
+        Assert.Equal(
+            [
+                new MapWard(WardKind.Observer, Team.Radiant, IsPlayersTeam: true, "Lich", -3000, 1500, -60, null,
+                    Destroyed: false, DestroyedByHeroName: null, InLaningPhase: true),
+                new MapWard(WardKind.Sentry, Team.Dire, IsPlayersTeam: false, GetMatchAnalysisHandler.UnknownHeroName,
+                    100, 200, 700, 760, Destroyed: true, DestroyedByHeroName: "Lich", InLaningPhase: false),
+            ],
+            wards);
+    }
+
+    [Fact]
     public async Task Deaths_SavedWithoutThem_IsParsedAgain()
     {
         var players = new[] { ReplayBuilder.Hero(31, Team.Radiant, Lane.Bottom) };

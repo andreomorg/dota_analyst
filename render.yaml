@@ -41,3 +41,11 @@ services:
       # Optional: without it the site only shows the account ID.
       - key: Steam__ApiKey
         sync: false
+      # Replay parser (Go) running on the project owner's machine, reached through the ngrok tunnel
+      # (docker-compose.yml, service "tunnel"): the ngrok static domain followed by "/". Without it (or with the
+      # owner's machine off) the laning phase just shows as unavailable.
+      - key: ReplayParser__BaseUrl
+        sync: false
+      # Secret: the same value as REPLAY_PARSER_API_KEY in the owner's .env (the parser rejects other tokens).
+      - key: ReplayParser__ApiKey
+        sync: false

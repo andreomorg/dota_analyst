@@ -52,7 +52,7 @@ services:
     restart: unless-stopped
 
   # Go service that reads the laning phase from a replay (replay-parser/). Called only by the API (and, in production,
-  # through the ngrok tunnel planned in sprint 09 card 08), never by the browser.
+  # through the ngrok tunnel below), never by the browser.
   replay-parser:
     build: ./replay-parser
     image: dotaanalyst-replay-parser
@@ -75,6 +75,32 @@ services:
       retries: 3
       start_period: 5s
     # It handles URLs from outside: no writable filesystem, no Linux capabilities, no privilege escalation.
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    restart: unless-stopped
+
+  # ngrok tunnel: gives the parser a public HTTPS address so the API on Render can reach it on this machine
+  # (outbound connection only: no router port is opened). Only starts with the "tunnel" profile:
+  # COMPOSE_PROFILES=tunnel in .env, or "docker compose up -d tunnel" (starts the parser too).
+  tunnel:
+    image: ngrok/ngrok:3.39.11-alpine
+    profiles: [tunnel]
+    # The variables are checked here, not with ${VAR:?} (compose would then demand them even without the profile).
+    # Without NGROK_URL ngrok would pick a random address the API on Render doesn't know, so it refuses to start.
+    # --inspect=false: ngrok's request inspector would keep recent requests, Authorization header included.
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        test -n "$$NGROK_URL" && test -n "$$NGROK_AUTHTOKEN" ||
+        { echo "Set NGROK_URL and NGROK_AUTHTOKEN in the .env file (see .env.example)"; exit 1; };
+        exec ngrok http replay-parser:8081 --url "$$NGROK_URL" --inspect=false --log stdout --log-format json
+    environment:
+      NGROK_URL: "${NGROK_URL:-}"
+      NGROK_AUTHTOKEN: "${NGROK_AUTHTOKEN:-}"
+    depends_on:
+      replay-parser:
+        condition: service_healthy
     read_only: true
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]

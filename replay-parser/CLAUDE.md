@@ -1,6 +1,6 @@
 # replay-parser (serviço Go)
 
-Serviço HTTP interno que recebe a URL de um replay do Dota 2 (CDN da Valve), lê com o [`manta`](https://github.com/dotabuff/manta) e devolve a **fase de rotas** (até 10:00) em JSON. Só a API em C# o chama; o React nunca fala com ele. **Em produção (planejado, card 08 da sprint 09)** ele vai rodar na máquina do dono do projeto (docker compose) e a API no Render o alcançará por um túnel **ngrok** (container no mesmo compose, perfil `tunnel`); por isso o token já é obrigatório no compose. Vale também o `CLAUDE.md` da raiz (convenções, Git, tags).
+Serviço HTTP interno que recebe a URL de um replay do Dota 2 (CDN da Valve), lê com o [`manta`](https://github.com/dotabuff/manta) e devolve a **fase de rotas** (até 10:00) em JSON. Só a API em C# o chama; o React nunca fala com ele. **Em produção** ele roda na máquina do dono do projeto (docker compose) e a API no Render o alcança por um túnel **ngrok** (serviço `tunnel` do mesmo compose, perfil `tunnel`; veja "Replay (serviço Go)" no `CLAUDE.md` da raiz); por isso o token é obrigatório no compose. Vale também o `CLAUDE.md` da raiz (convenções, Git, tags).
 
 O dono do projeto está aprendendo Go (e C#): explique as decisões e os conceitos novos do Go em português, de forma didática.
 

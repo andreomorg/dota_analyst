@@ -57,6 +57,14 @@ O dono do projeto está aprendendo Go (e C#): explique as decisões e os conceit
 - **Serviços:** `Clock` (`Now()`/`At(segundosDoServidor)` guardam `ServerTime`; `Seconds(ServerTime)` converte **só no `Fill`**, porque `m_flGameStartTime` é 0 até a buzina; `GameEnd()`, `PausedSeconds()`), `Players` (`All()`, `Get(i)`, `ByHeroName`, `BySteamID`, `ByHeroEntity`, `Hero(i)`, `Resource(i)`, `TeamData(i)`; os 10 ficam conhecidos ~1:25 antes da buzina; antes disso `ByHeroName` olha os heróis que já existem), `Name(índice)` (CombatLogNames), `EntityName(entidade)` (EntityNames), `Entity(classe)` (entidades únicas: game rules, PlayerResource, DataRadiant/Dire).
 - Erro no `Fill` ou pânico = replay ilegível (422); dado opcional ausente = seção vazia. Pegadinhas do replay: seção "Pegadinhas para os coletores" do `../work/sprint-10-replay-data/card-01-spike.md`.
 
+## O que o `/v1/match` entrega e quão confiável é (conferido em 12/10/2026)
+
+Partida de 28 min: ~2 s, pico ~100 MB, **329 KB (82 KB gzip)** — maiores: `timelines` 135 KB (posições a cada 2 s), `combat` 85 KB, `abilities` 41 KB, `items` 33 KB. Conferência contra o OpenDota (Turbo 9041133074) e contra os contadores do próprio jogo:
+
+- **Iguais:** números finais dos 10 jogadores (K/D/A, nível, LH/DN, patrimônio, dano em heróis/torres, cura); K/D dos kills (com as regras do placar: morte com Aegis não conta; morte para creep/torre com um só inimigo na assistência é kill dele); wards (57/57, horário ≤ 1 s, posição ≤ 64), runas (28/28), torres/barracks (ordem e autor), Roshan; compras (≤ 2 s, inclusive as de antes de −0:59 tiradas das entidades), usos de item, itens finais, quantidade de upgrades; draft de Captains Mode (24/24, partida 9040944381).
+- **Quase:** por minuto, ouro +2 a +8 (lemos um tick depois), XP/LH iguais em ≥ 94%; dano do Undying +3% (zumbis da Tombstone); cura do Tidehunter abaixo do contador do jogo (curas que faltam no combat log); assistências do combat log ⊂ placar.
+- **Não confiável / ausente:** `draft.announcedBans` não é só a fase de bans (inclui heróis indisponíveis e escolhas abandonadas — use o `picks_bans` do OpenDota); TPs comprados (contador do jogo zerado); posição inicial; pegar Cheese/fragmento do Refresher (sem evento); Tormentor e pausas sem replay de teste.
+
 ## Segurança
 
 - **SSRF:** só `http(s)://*.valve.net/570/<arquivo>.dem.bz2`; redirecionamento para outro host é recusado.

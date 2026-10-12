@@ -136,6 +136,11 @@ type Player struct {
 	PickOrder *int `json:"pickOrder"`
 	// Randomed is true when the hero was randomed.
 	Randomed bool `json:"randomed"`
+	// Role is the role-queue position the player played, 1-5 (1 = carry, 5 = hard support); null without role queue
+	// (Turbo, unranked) or when the replay does not say.
+	Role *int `json:"role"`
+	// Facet is the hero facet chosen (Valve's number, from 1); null when the replay has none.
+	Facet *int `json:"facet"`
 	// Final is the player's numbers at the end of the match.
 	Final PlayerFinal `json:"final"`
 }
@@ -196,9 +201,35 @@ type PlayerFinal struct {
 	GoldSpent GoldSpent `json:"goldSpent"`
 	// GoldLostToDeath is the gold lost when dying.
 	GoldLostToDeath int `json:"goldLostToDeath"`
+	// Gold is the gold in hand (reliable + unreliable).
+	Gold int `json:"gold"`
+	// FirstBlood is true when the player got the first kill of the match.
+	FirstBlood bool `json:"firstBlood"`
+	// CreepsStacked is the creeps stacked (CampsStacked counts camps).
+	CreepsStacked int `json:"creepsStacked"`
+	// BountyRunes, PowerRunes and WaterRunes split the runes picked up (RunePickups counts them all as the game does).
+	BountyRunes int `json:"bountyRunes"`
+	PowerRunes  int `json:"powerRunes"`
+	WaterRunes  int `json:"waterRunes"`
+	// WardsPurchased is the observer and sentry wards bought.
+	WardsPurchased int `json:"wardsPurchased"`
+	// TormentorKills is the Tormentors last hit.
+	TormentorKills int `json:"tormentorKills"`
+	// OutpostsCaptured is the outposts captured.
+	OutpostsCaptured int `json:"outpostsCaptured"`
+	// WatchersTaken, LotusesTaken and WisdomShrinesTaken are the Watchers activated, Healing Lotuses picked and
+	// Wisdom Shrines (XP runes) taken.
+	WatchersTaken      int `json:"watchersTaken"`
+	LotusesTaken       int `json:"lotusesTaken"`
+	WisdomShrinesTaken int `json:"wisdomShrinesTaken"`
+	// NeutralTokensFound is the neutral item tokens found (Madstones in the current patch).
+	NeutralTokensFound int `json:"neutralTokensFound"`
+	// CommandsIssued is the orders the player gave (moves, attacks, casts...): divided by the minutes, the APM.
+	CommandsIssued int `json:"commandsIssued"`
 }
 
-// GoldBySource splits the earned gold by where it came from.
+// GoldBySource splits the earned gold by where it came from. Every field but Shared adds up to PlayerFinal.GoldEarned;
+// Shared is part of the others (it says how much of them came from teammates' kills).
 type GoldBySource struct {
 	// Creeps is gold from lane creeps last hit.
 	Creeps int `json:"creeps"`
@@ -222,6 +253,14 @@ type GoldBySource struct {
 	Couriers int `json:"couriers"`
 	// Summons is gold from killing summoned units.
 	Summons int `json:"summons"`
+	// Denies is gold from denying creeps.
+	Denies int `json:"denies"`
+	// Abilities is gold given by abilities (Hand of Midas-like effects, Alchemist's Greevil's Greed...).
+	Abilities int `json:"abilities"`
+	// Comeback is the comeback bonus gold.
+	Comeback int `json:"comeback"`
+	// Other is gold the game does not classify.
+	Other int `json:"other"`
 }
 
 // GoldSpent splits the gold spent.

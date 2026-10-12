@@ -1,6 +1,7 @@
 using DotaAnalyst.Infrastructure.Persistence.Catalogs;
 using DotaAnalyst.Infrastructure.Persistence.Matches;
 using DotaAnalyst.Infrastructure.Persistence.Players;
+using DotaAnalyst.Infrastructure.Persistence.Replays;
 using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
@@ -15,6 +16,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<PlayerSearchRecord> PlayerSearches => Set<PlayerSearchRecord>();
 
     public DbSet<CatalogEntryRecord> CatalogEntries => Set<CatalogEntryRecord>();
+
+    public DbSet<ReplayAnalysisRecord> ReplayAnalyses => Set<ReplayAnalysisRecord>();
 
     // ASP.NET Core Data Protection keys (they encrypt the future login cookie), so they survive restarts.
     public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();

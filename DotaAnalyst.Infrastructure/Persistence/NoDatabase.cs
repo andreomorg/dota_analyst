@@ -26,3 +26,14 @@ public sealed class NoDatabase : IMatchRepository, IPlayerSearchRepository, ICat
         string catalog, IReadOnlyDictionary<int, string> names, DateTimeOffset updatedAt, CancellationToken cancellationToken) =>
         Task.CompletedTask;
 }
+
+// The replay results part of NoDatabase (a class of its own: its FindAsync differs from the matches' only in
+// the return type, which C# can't overload). Without a database replay parsing is off too: a result could
+// never be kept.
+public sealed class NoReplayAnalyses : IReplayAnalysisRepository
+{
+    public Task<SavedReplayAnalysis?> FindAsync(MatchId matchId, CancellationToken cancellationToken) =>
+        Task.FromResult<SavedReplayAnalysis?>(null);
+
+    public Task SaveAsync(SavedReplayAnalysis result, CancellationToken cancellationToken) => Task.CompletedTask;
+}

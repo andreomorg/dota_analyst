@@ -1,11 +1,14 @@
 using DotaAnalyst.Application.Abstractions;
 using DotaAnalyst.Domain.Matches;
 using DotaAnalyst.Domain.Replays;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
 namespace DotaAnalyst.Infrastructure.ReplayParser;
 
-// Replay parsing turned off: nothing is ever queued, parsed or saved, and every analysis of an unparsed match
-// says replayStatus "unavailable". The rest of the site works exactly as before the feature existed.
+// Replay parsing turned off (no ReplayParser:BaseUrl, or no database to keep the results): nothing is ever
+// queued or parsed, and analyses of unparsed matches say replayStatus "unavailable" (results saved earlier are
+// still shown when there is a database). The rest of the site works exactly as before the feature existed.
 
 public sealed class NoReplayParser : IReplayParser
 {
@@ -20,10 +23,14 @@ public sealed class DisabledReplayParseQueue : IReplayParseQueue
     public bool IsQueued(MatchId matchId) => false;
 }
 
-public sealed class NoReplayAnalyses : IReplayAnalysisRepository
+// Says once, when the app starts, that replay parsing is off and why (like DatabaseMigrator does for the database).
+internal sealed class ReplayParsingDisabledNotice(string reason, ILogger<ReplayParsingDisabledNotice> logger) : IHostedService
 {
-    public Task<SavedReplayAnalysis?> FindAsync(MatchId matchId, CancellationToken cancellationToken) =>
-        Task.FromResult<SavedReplayAnalysis?>(null);
+    public Task StartAsync(CancellationToken cancellationToken)
+    {
+        logger.LogWarning("Replay parsing is off: {Reason}", reason);
+        return Task.CompletedTask;
+    }
 
-    public Task SaveAsync(SavedReplayAnalysis result, CancellationToken cancellationToken) => Task.CompletedTask;
+    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 }

@@ -49,6 +49,27 @@ public class MatchRepositoryTests(PostgresFixture postgres) : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Find_RowSavedBeforeTheReplayUrlExisted_IsStillRead()
+    {
+        // Rows saved before "replayUrl" was part of the format don't have the key at all.
+        var match = OpenDotaMatchMappingsTests.LoadFixture().ToMatchDetails();
+        Assert.NotNull(match.ReplayUrl);
+        var repository = new MatchRepository(postgres.DbContextFactory, new StorageGuard(TimeProvider.System));
+        await repository.SaveAsync(match, SavedAt, CancellationToken.None);
+        await using (var db = await postgres.DbContextFactory.CreateDbContextAsync())
+        {
+            // jsonb "-" removes a key.
+            await db.Database.ExecuteSqlRawAsync("UPDATE matches SET details = details - 'replayUrl'");
+        }
+
+        var found = await repository.FindAsync(match.MatchId, CancellationToken.None);
+
+        Assert.NotNull(found);
+        Assert.Null(found.Match.ReplayUrl);
+        Assert.Equivalent(match with { ReplayUrl = null }, found.Match, strict: true);
+    }
+
+    [Fact]
     public async Task Find_UnknownMatch_ReturnsNull()
     {
         var repository = new MatchRepository(postgres.DbContextFactory, new StorageGuard(TimeProvider.System));

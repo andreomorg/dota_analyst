@@ -6,12 +6,14 @@ using DotaAnalyst.Infrastructure.Persistence;
 using DotaAnalyst.Infrastructure.Persistence.Catalogs;
 using DotaAnalyst.Infrastructure.Persistence.Matches;
 using DotaAnalyst.Infrastructure.Persistence.Players;
+using DotaAnalyst.Infrastructure.Persistence.Replays;
 using DotaAnalyst.Infrastructure.ReplayParser;
 using DotaAnalyst.Infrastructure.Steam;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace DotaAnalyst.Infrastructure;
@@ -25,19 +27,66 @@ public static class DependencyInjection
 
         AddOpenDota(services, configuration);
         AddSteamProfiles(services, configuration);
-        AddDatabase(services, configuration);
-        AddReplayParsing(services);
+        var hasDatabase = AddDatabase(services, configuration);
+        AddReplayParsing(services, configuration, hasDatabase);
 
         return services;
     }
 
-    // The Go replay parser is not connected yet: the feature is off and analyses of matches OpenDota didn't
-    // parse say replayStatus "unavailable".
-    private static void AddReplayParsing(IServiceCollection services)
+    // Our own reading of replays (the Go service, replay-parser/), for matches OpenDota didn't parse. Only on
+    // when both its address and the database exist: without the database a result could never be kept, so the
+    // same replay would be parsed on every visit. Off, analyses say replayStatus "unavailable".
+    private static void AddReplayParsing(IServiceCollection services, IConfiguration configuration, bool hasDatabase)
     {
-        services.AddSingleton<IReplayParser, NoReplayParser>();
-        services.AddSingleton<IReplayParseQueue, DisabledReplayParseQueue>();
-        services.AddSingleton<IReplayAnalysisRepository, NoReplayAnalyses>();
+        var section = configuration.GetSection(ReplayParserOptions.SectionName);
+        var offReason =
+            string.IsNullOrWhiteSpace(section[nameof(ReplayParserOptions.BaseUrl)]) ? "ReplayParser:BaseUrl is not set"
+            : !hasDatabase ? "there is no database (ConnectionStrings:Database) to keep the results"
+            : null;
+        if (offReason is not null)
+        {
+            services.AddSingleton<IReplayParser, NoReplayParser>();
+            services.AddSingleton<IReplayParseQueue, DisabledReplayParseQueue>();
+            services.AddHostedService(provider => new ReplayParsingDisabledNotice(
+                offReason, provider.GetRequiredService<ILogger<ReplayParsingDisabledNotice>>()));
+            return;
+        }
+
+        services.AddOptions<ReplayParserOptions>()
+            .Bind(section)
+            .Validate(
+                options => options.BaseUrl is { IsAbsoluteUri: true } url
+                    && (url.Scheme == Uri.UriSchemeHttp || url.Scheme == Uri.UriSchemeHttps)
+                    && url.AbsolutePath.EndsWith('/'),
+                "ReplayParser:BaseUrl must be an absolute http(s) URL ending with '/'.")
+            .Validate(options => options.Timeout > TimeSpan.Zero, "ReplayParser:Timeout must be positive.")
+            .ValidateOnStart();
+
+        services.AddHttpClient<IReplayParser, ReplayParserClient>((serviceProvider, client) =>
+            {
+                var options = serviceProvider.GetRequiredService<IOptions<ReplayParserOptions>>().Value;
+                client.BaseAddress = options.BaseUrl;
+                client.Timeout = options.Timeout;
+                // The answer is a few KB; anything much bigger is not our parser.
+                client.MaxResponseContentBufferSize = 1024 * 1024;
+            })
+            // A redirect is not something our parser does: it is answered as "unavailable" instead of followed.
+            .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false })
+            // The default HttpClient logs could write the request headers, and the API key travels in one.
+            .RemoveAllLoggers();
+
+        AddReplayParseQueue(services);
+    }
+
+    // The queue, its worker and the parser's circuit breaker. Separate so the API tests can turn them on with a
+    // fake parser (they have no database nor a real parser).
+    internal static void AddReplayParseQueue(IServiceCollection services)
+    {
+        // Singletons: one queue and one "parser is down" state for the whole app, shared by requests and the worker.
+        services.AddSingleton<ReplayParserCircuitBreaker>();
+        services.AddSingleton<ReplayParseQueue>();
+        services.AddSingleton<IReplayParseQueue>(provider => provider.GetRequiredService<ReplayParseQueue>());
+        services.AddHostedService<ReplayParseWorker>();
     }
 
     private static void AddSteamProfiles(IServiceCollection services, IConfiguration configuration)
@@ -101,7 +150,8 @@ public static class DependencyInjection
         services.AddSingleton<CatalogLoadLocks>();
     }
 
-    private static void AddDatabase(IServiceCollection services, IConfiguration configuration)
+    // Returns whether there is a database.
+    private static bool AddDatabase(IServiceCollection services, IConfiguration configuration)
     {
         services.AddOptions<DatabaseOptions>().Bind(configuration.GetSection(DatabaseOptions.SectionName));
         // Applies migrations (first attempt before the app starts, retries in the background); also logs a
@@ -118,7 +168,8 @@ public static class DependencyInjection
             services.AddSingleton<IMatchRepository>(provider => provider.GetRequiredService<NoDatabase>());
             services.AddSingleton<IPlayerSearchRepository>(provider => provider.GetRequiredService<NoDatabase>());
             services.AddSingleton<ICatalogStore>(provider => provider.GetRequiredService<NoDatabase>());
-            return;
+            services.AddSingleton<IReplayAnalysisRepository, NoReplayAnalyses>();
+            return false;
         }
 
         // A factory instead of a single DbContext per request: repositories open one short-lived DbContext per
@@ -131,6 +182,8 @@ public static class DependencyInjection
         services.AddScoped<IMatchRepository, MatchRepository>();
         services.AddScoped<IPlayerSearchRepository, PlayerSearchRepository>();
         services.AddScoped<ICatalogStore, CatalogStore>();
+        // Also when replay parsing is off: results saved while it was on are still shown.
+        services.AddScoped<IReplayAnalysisRepository, ReplayAnalysisRepository>();
 
         // Keys that encrypt cookies (the future Steam login). Kept in the database, so a deploy or a restart of
         // the container doesn't throw them away and log everyone out. The fixed application name keeps the keys
@@ -138,5 +191,6 @@ public static class DependencyInjection
         services.AddDataProtection()
             .SetApplicationName("DotaAnalyst")
             .PersistKeysToDbContext<AppDbContext>();
+        return true;
     }
 }

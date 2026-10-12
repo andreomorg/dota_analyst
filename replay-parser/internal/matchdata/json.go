@@ -62,7 +62,7 @@ func (t TimedName) MarshalJSON() ([]byte, error) {
 
 // AbilityLevel is an ability upgrade, written as the tuple [t, "name", level] (e.g. [110, "riki_smoke_screen", 1]).
 type AbilityLevel struct {
-	// T is when the point was spent (game clock; precise to the second, since levels are read once per second).
+	// T is when the point was spent (game clock; negative for the point spent before the horn).
 	T Seconds
 	// Name is the internal ability name (talents are special_bonus_*).
 	Name string

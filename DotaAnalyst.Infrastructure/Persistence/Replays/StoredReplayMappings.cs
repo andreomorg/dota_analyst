@@ -15,7 +15,12 @@ internal sealed record StoredReplayAnalysis(
     int EndsAtSeconds,
     IReadOnlyList<StoredLaningStats> Players,
     // Added in sprint 11 without a new Version: rows saved before have none (null) and still read.
-    StoredTimeline? Timeline = null);
+    StoredTimeline? Timeline = null,
+    // Added in sprint 12, the same way.
+    IReadOnlyList<StoredHeroDeath>? Deaths = null);
+
+internal sealed record StoredHeroDeath(
+    int HeroId, int Seconds, int X, int Y, KillerKind Killer, int? KillerHeroId, bool Reincarnated);
 
 internal sealed record StoredTimeline(IReadOnlyList<int> Seconds, IReadOnlyList<StoredHeroTimeline> Heroes);
 
@@ -109,7 +114,12 @@ internal static class StoredReplayMappings
                                 ? throw new InvalidDataException("A saved timeline has an empty hero.")
                                 : new HeroTimeline(hero.HeroId, hero.Team, hero.NetWorth ?? [], hero.Experience ?? []))
                             .ToList())
-                    : null);
+                    : null,
+                stored.Deaths?.Select(death => death is null
+                        ? throw new InvalidDataException("A saved replay analysis has an empty death.")
+                        : new HeroDeath(death.HeroId, death.Seconds, death.X, death.Y, death.Killer, death.KillerHeroId,
+                            death.Reincarnated))
+                    .ToList());
         }
         catch (ArgumentException ex)
         {
@@ -134,5 +144,9 @@ internal static class StoredReplayMappings
                     timeline.Heroes
                         .Select(hero => new StoredHeroTimeline(hero.HeroId, hero.Team, hero.NetWorth, hero.Experience))
                         .ToList())
-                : null);
+                : null,
+            Deaths: analysis.Deaths?
+                .Select(death => new StoredHeroDeath(death.HeroId, death.Seconds, death.X, death.Y, death.Killer,
+                    death.KillerHeroId, death.Reincarnated))
+                .ToList());
 }

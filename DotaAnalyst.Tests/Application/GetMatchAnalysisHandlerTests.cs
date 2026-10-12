@@ -234,6 +234,45 @@ public class GetMatchAnalysisHandlerTests
     }
 
     [Fact]
+    public async Task Deaths_Ready_ThePlayersOnlyInTimeOrderWithKillers()
+    {
+        var players = new[] { ReplayBuilder.Hero(31, Team.Radiant, Lane.Bottom), ReplayBuilder.Hero(28, Team.Dire, Lane.Bottom) };
+        var replay = ReplayBuilder.AnalysisWithDeaths(
+            10, players,
+            new HeroDeath(31, 900, 100, -200, KillerKind.Tower, null, reincarnated: false),
+            new HeroDeath(28, 300, 5000, -6000, KillerKind.Hero, 31, reincarnated: false),
+            new HeroDeath(31, 240, 4800, -6100, KillerKind.Hero, 28, reincarnated: true));
+        var handler = CreateHandler(
+            UnparsedMatchWithMe(), new FakeReplayAnalysisRepository(SavedReplayAnalysis.Ready(replay, Now)));
+
+        var deaths = (await handler.HandleAsync(MatchIdOf(10), Me, CancellationToken.None))!.Deaths;
+
+        Assert.NotNull(deaths);
+        Assert.Equal(
+            [
+                new PlayerDeath(240, 4800, -6100, KillerKind.Hero, 28, GetMatchAnalysisHandler.UnknownHeroName, Reincarnated: true, InLaningPhase: true),
+                new PlayerDeath(900, 100, -200, KillerKind.Tower, null, null, Reincarnated: false, InLaningPhase: false),
+            ],
+            deaths);
+    }
+
+    [Fact]
+    public async Task Deaths_SavedWithoutThem_IsParsedAgain()
+    {
+        var players = new[] { ReplayBuilder.Hero(31, Team.Radiant, Lane.Bottom) };
+        var withoutDeaths = new ReplayAnalysis(
+            MatchIdOf(10), ReplayAnalysis.LaningPhaseEndsAtSeconds, players, ReplayBuilder.Timeline(players));
+        var queue = new FakeReplayParseQueue();
+        var handler = CreateHandler(
+            UnparsedMatchWithMe(), new FakeReplayAnalysisRepository(SavedReplayAnalysis.Ready(withoutDeaths, Now)), queue);
+
+        var analysis = await handler.HandleAsync(MatchIdOf(10), Me, CancellationToken.None);
+
+        Assert.Equal(ReplayStatus.Processing, analysis!.ReplayStatus);
+        Assert.Equal([10], queue.Enqueued.Select(entry => entry.MatchId));
+    }
+
+    [Fact]
     public async Task Timeline_SavedWithoutIt_IsParsedAgain()
     {
         var replay = ReplayBuilder.AnalysisWithoutTimeline(10, ReplayBuilder.Hero(31, Team.Radiant, Lane.Bottom));

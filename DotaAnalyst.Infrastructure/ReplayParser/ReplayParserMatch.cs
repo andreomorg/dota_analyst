@@ -14,7 +14,12 @@ internal sealed record ReplayParserMatchResponse(
     ReplayParserMatchInfo? Match,
     IReadOnlyList<ReplayParserMatchPlayer?>? Players,
     ReplayParserTimelines? Timelines,
-    ReplayParserLaning? Laning);
+    ReplayParserLaning? Laning,
+    IReadOnlyList<ReplayParserKill?>? Kills);
+
+// One hero death; killer is a player index (null when no player dealt the blow), killerUnit the combat log name.
+internal sealed record ReplayParserKill(
+    double? T, int? Victim, int? Killer, string? KillerUnit, int? X, int? Y, bool? Reincarnated);
 
 internal sealed record ReplayParserMatchInfo(double? DurationSeconds);
 
@@ -84,6 +89,10 @@ internal static class ReplayParserMappings
         // whole 10:00, otherwise the last point (the end of the match).
         var at = endsAt >= ReplayAnalysis.LaningPhaseEndsAtSeconds && count > 11 ? 10 : count - 1;
 
+        var heroOf = players.ToDictionary(
+            player => player.Player ?? throw Missing("players.player"),
+            player => player.HeroId ?? throw Missing("players.heroId"));
+
         var laningStats = new List<LaningStats>();
         var heroes = new List<HeroTimeline>();
         foreach (var player in players)
@@ -104,8 +113,43 @@ internal static class ReplayParserMappings
             heroes.Add(new HeroTimeline(heroId, team, Required(series.NetWorth, "netWorth"), Required(series.Xp, "xp")));
         }
 
-        return new ReplayAnalysis(matchId, endsAt, laningStats, new MatchTimeline(Seconds(count, duration), heroes));
+        var deaths = Required(response.Kills, "kills")
+            .Select(kill => ToDeath(kill ?? throw Empty("kill"), heroOf))
+            .ToList();
+
+        return new ReplayAnalysis(
+            matchId, endsAt, laningStats, new MatchTimeline(Seconds(count, duration), heroes), deaths);
     }
+
+    private static HeroDeath ToDeath(ReplayParserKill kill, Dictionary<int, int> heroOf)
+    {
+        int HeroOf(int index) =>
+            heroOf.TryGetValue(index, out var heroId) ? heroId : throw new InvalidDataException($"Unknown player {index}.");
+
+        var killer = kill.Killer is not null ? KillerKind.Hero : ToKillerKind(kill.KillerUnit);
+        return new HeroDeath(
+            heroId: HeroOf(kill.Victim ?? throw Missing("kill.victim")),
+            seconds: (int)Math.Round(kill.T ?? throw Missing("kill.t")),
+            x: kill.X ?? throw Missing("kill.x"),
+            y: kill.Y ?? throw Missing("kill.y"),
+            killer: killer,
+            killerHeroId: kill.Killer is { } index ? HeroOf(index) : null,
+            reincarnated: kill.Reincarnated ?? false);
+    }
+
+    // Combat log names of what dealt the blow when it wasn't a player (contract: Kill.KillerUnit). A hero name
+    // without a player (e.g. a kill the replay does not attribute) is still a hero.
+    private static KillerKind ToKillerKind(string? unit) => unit switch
+    {
+        null or "" => KillerKind.Other,
+        _ when unit.StartsWith("npc_dota_hero_", StringComparison.Ordinal) => KillerKind.Hero,
+        _ when unit.Contains("tower", StringComparison.Ordinal) || unit.Contains("fort", StringComparison.Ordinal)
+            || unit.Contains("rax", StringComparison.Ordinal) || unit.Contains("fountain", StringComparison.Ordinal) => KillerKind.Tower,
+        _ when unit.StartsWith("npc_dota_creep", StringComparison.Ordinal) || unit.Contains("siege", StringComparison.Ordinal) => KillerKind.Creeps,
+        _ when unit.StartsWith("npc_dota_neutral", StringComparison.Ordinal) => KillerKind.Neutrals,
+        _ when unit.StartsWith("npc_dota_roshan", StringComparison.Ordinal) => KillerKind.Roshan,
+        _ => KillerKind.Other,
+    };
 
     // Point i is minute i; the last one is the end of the match (kept after the previous point even when the match
     // ended exactly on a minute).

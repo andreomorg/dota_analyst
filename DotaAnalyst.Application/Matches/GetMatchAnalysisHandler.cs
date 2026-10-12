@@ -54,7 +54,7 @@ public class GetMatchAnalysisHandler(
             .Select(player => ToSummary(player, ReferenceEquals(player, currentPlayer), names))
             .ToList();
 
-        var (replayStatus, laning, timeline) = await GetReplayAsync(match, currentPlayer, names, cancellationToken);
+        var (replayStatus, replay) = await GetReplayAsync(match, cancellationToken);
 
         return new MatchAnalysis(
             MatchId: match.MatchId.Value,
@@ -68,20 +68,21 @@ public class GetMatchAnalysisHandler(
             Dire: TeamOf(Team.Dire),
             Performance: currentPlayer is null ? null : ToPerformance(match, currentPlayer, names),
             ReplayStatus: replayStatus,
-            Laning: laning,
-            Timeline: timeline);
+            Laning: replay is null || currentPlayer is null ? null : ToLaningPhase(replay, currentPlayer, names),
+            Timeline: replay?.Timeline is { } timeline ? ToTimelineChart(replay, timeline, currentPlayer, names) : null,
+            Deaths: replay?.Deaths is { } deaths && currentPlayer is not null ? ToDeaths(deaths, currentPlayer, names) : null);
     }
 
-    // Our own reading of the replay (laning phase and timeline), for every match with a replay: OpenDota's parse
-    // has neither in the form we use. It never breaks the analysis: anything that goes wrong here only changes the
-    // status.
-    private async Task<(ReplayStatus Status, LaningPhase? Laning, MatchTimelineChart? Timeline)> GetReplayAsync(
-        MatchDetails match, MatchPlayer? currentPlayer, NameLookup names, CancellationToken cancellationToken)
+    // Our own reading of the replay (laning phase, timeline, deaths), for every match with a replay: OpenDota's
+    // parse has none of them in the form we use. It never breaks the analysis: anything that goes wrong here only
+    // changes the status. The analysis is returned only when the status is Ready.
+    private async Task<(ReplayStatus Status, ReplayAnalysis? Analysis)> GetReplayAsync(
+        MatchDetails match, CancellationToken cancellationToken)
     {
         // Checked in memory first: while the page polls a replay being parsed, the database is left alone.
         if (replayParseQueue.IsQueued(match.MatchId))
         {
-            return (ReplayStatus.Processing, null, null);
+            return (ReplayStatus.Processing, null);
         }
 
         SavedReplayAnalysis? saved;
@@ -93,7 +94,7 @@ public class GetMatchAnalysisHandler(
         {
             // Without the database a result could not be saved either, so nothing is queued.
             logger.LogWarning(ex, "Could not read the replay result of match {MatchId} from the database", match.MatchId);
-            return (ReplayStatus.Unavailable, null, null);
+            return (ReplayStatus.Unavailable, null);
         }
 
         // "Expired" saved too soon after the match ended may only mean Valve hadn't uploaded the replay yet
@@ -104,19 +105,20 @@ public class GetMatchAnalysisHandler(
 
         switch (state)
         {
-            case SavedReplayState.Ready when saved!.Analysis is { Timeline: not null } analysis:
-                return Ready(analysis);
+            case SavedReplayState.Ready when saved!.Analysis is { IsOutdated: false } analysis:
+                return (ReplayStatus.Ready, analysis);
             case SavedReplayState.Ready when saved!.Analysis is { } outdated:
-                // Read before the timeline existed: parsed again when possible; until then, the laning phase we have.
+                // Read before everything the page shows existed (timeline, deaths): parsed again when possible;
+                // until then, what we have.
                 return match.ReplayUrl is not null
                     && replayParseQueue.TryEnqueue(match.MatchId, match.ReplayUrl)
                         is ReplayEnqueueResult.Enqueued or ReplayEnqueueResult.AlreadyQueued
-                    ? (ReplayStatus.Processing, null, null)
-                    : Ready(outdated);
+                    ? (ReplayStatus.Processing, null)
+                    : (ReplayStatus.Ready, outdated);
             case SavedReplayState.Expired:
-                return (ReplayStatus.Expired, null, null);
+                return (ReplayStatus.Expired, null);
             case SavedReplayState.Failed when timeProvider.GetUtcNow() - saved!.SavedAt < FailedReplayRetryInterval:
-                return (ReplayStatus.Failed, null, null);
+                return (ReplayStatus.Failed, null);
         }
 
         // Never parsed, or failed long enough ago to try again. When it can't be queued now, a failure stays a
@@ -127,13 +129,13 @@ public class GetMatchAnalysisHandler(
         // later (and matches saved before the address was stored get it back when refreshed from OpenDota).
         if (match.ReplayUrl is null)
         {
-            return (notQueued, null, null);
+            return (notQueued, null);
         }
 
         var enqueued = replayParseQueue.TryEnqueue(match.MatchId, match.ReplayUrl);
         if (enqueued is ReplayEnqueueResult.Enqueued or ReplayEnqueueResult.AlreadyQueued)
         {
-            return (ReplayStatus.Processing, null, null);
+            return (ReplayStatus.Processing, null);
         }
 
         // Unavailable is not logged: with the feature off it would be every visit.
@@ -142,13 +144,24 @@ public class GetMatchAnalysisHandler(
             logger.LogInformation("The replay parse queue is full; match {MatchId} was not queued", match.MatchId);
         }
 
-        return (notQueued, null, null);
-
-        (ReplayStatus, LaningPhase?, MatchTimelineChart?) Ready(ReplayAnalysis analysis) => (
-            ReplayStatus.Ready,
-            currentPlayer is null ? null : ToLaningPhase(analysis, currentPlayer, names),
-            analysis.Timeline is { } timeline ? ToTimelineChart(analysis, timeline, currentPlayer, names) : null);
+        return (notQueued, null);
     }
+
+    // The point-of-view player's deaths, in time order.
+    private static IReadOnlyList<PlayerDeath> ToDeaths(
+        IReadOnlyList<HeroDeath> deaths, MatchPlayer player, NameLookup names) =>
+        deaths
+            .Where(death => death.HeroId == player.HeroId)
+            .Select(death => new PlayerDeath(
+                Seconds: death.Seconds,
+                X: death.X,
+                Y: death.Y,
+                Killer: death.Killer,
+                KillerHeroId: death.KillerHeroId,
+                KillerHeroName: death.KillerHeroId is { } heroId ? names.Hero(heroId) : null,
+                Reincarnated: death.Reincarnated,
+                InLaningPhase: death.InLaningPhase))
+            .ToList();
 
     private static MatchTimelineChart ToTimelineChart(
         ReplayAnalysis replay, MatchTimeline timeline, MatchPlayer? player, NameLookup names)

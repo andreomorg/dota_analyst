@@ -81,6 +81,38 @@ public class ReplayParserClientTests
     }
 
     [Fact]
+    public async Task Parse_Kills_BecomeDeathsWithTheKiller()
+    {
+        var kills = """
+            "kills": [
+              { "t": 312.4, "victim": 0, "killer": 5, "killerUnit": "npc_dota_hero_slardar", "x": 5100, "y": -6200, "reincarnated": false },
+              { "t": 95.6, "victim": 5, "killer": null, "killerUnit": "npc_dota_goodguys_tower1_bot", "x": 6300, "y": -6000 },
+              { "t": 700, "victim": 0, "killer": null, "killerUnit": "npc_dota_creep_badguys_melee", "x": 0, "y": 0, "reincarnated": true }
+            ]
+            """;
+
+        var analysis = await CreateClient(new FakeParser(Json(HttpStatusCode.OK, MatchJson().Replace("\"kills\": []", kills), "application/json")))
+            .ParseAsync(Match, ReplayUrl, CancellationToken.None);
+
+        Assert.Equal(
+            [
+                new HeroDeath(28, 96, 6300, -6000, KillerKind.Tower, null, reincarnated: false),
+                new HeroDeath(31, 312, 5100, -6200, KillerKind.Hero, 28, reincarnated: false),
+                new HeroDeath(31, 700, 0, 0, KillerKind.Creeps, null, reincarnated: true),
+            ],
+            analysis.Deaths);
+    }
+
+    [Fact]
+    public async Task Parse_KillOfAnUnknownPlayer_IsAnUnreadableReplay()
+    {
+        var body = MatchJson().Replace("\"kills\": []", """ "kills": [ { "t": 1, "victim": 7, "x": 0, "y": 0 } ] """);
+
+        await Assert.ThrowsAsync<ReplayUnreadableException>(() =>
+            CreateClient(new FakeParser(Json(HttpStatusCode.OK, body, "application/json"))).ParseAsync(Match, ReplayUrl, CancellationToken.None));
+    }
+
+    [Fact]
     public async Task Parse_MatchEndedBeforeTenMinutes_UsesTheLastPoint()
     {
         // A 6:40 match: minutes 0..6 and the end — 8 points. The laning numbers are the end's, not minute 6's.

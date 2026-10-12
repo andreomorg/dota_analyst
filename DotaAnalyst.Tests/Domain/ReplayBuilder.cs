@@ -12,7 +12,11 @@ internal static class ReplayBuilder
     // With a timeline (what every analysis has now): each hero's net worth and experience at 0:00, 10:00 and 20:00
     // are 0, then the laning numbers, then twice them.
     public static ReplayAnalysis Analysis(long matchId, params LaningStats[] players) =>
-        new(MatchIdOf(matchId), ReplayAnalysis.LaningPhaseEndsAtSeconds, players, Timeline(players));
+        new(MatchIdOf(matchId), ReplayAnalysis.LaningPhaseEndsAtSeconds, players, Timeline(players), deaths: []);
+
+    // With these deaths (and the timeline).
+    public static ReplayAnalysis AnalysisWithDeaths(long matchId, LaningStats[] players, params HeroDeath[] deaths) =>
+        new(MatchIdOf(matchId), ReplayAnalysis.LaningPhaseEndsAtSeconds, players, Timeline(players), deaths);
 
     // An analysis saved before the timeline existed (laning phase only).
     public static ReplayAnalysis AnalysisWithoutTimeline(long matchId, params LaningStats[] players) =>

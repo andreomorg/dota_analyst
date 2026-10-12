@@ -10,7 +10,11 @@ public record ReplayAnalysis
     public const int LaningPhaseEndsAtSeconds = 600;
 
     public ReplayAnalysis(
-        MatchId matchId, int endsAtSeconds, IReadOnlyList<LaningStats> players, MatchTimeline? timeline = null)
+        MatchId matchId,
+        int endsAtSeconds,
+        IReadOnlyList<LaningStats> players,
+        MatchTimeline? timeline = null,
+        IReadOnlyList<HeroDeath>? deaths = null)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(matchId.Value, nameof(matchId));
         ArgumentOutOfRangeException.ThrowIfNegative(endsAtSeconds);
@@ -32,10 +36,22 @@ public record ReplayAnalysis
         // A copy, so the caller can't change the list afterwards.
         Players = players.ToList();
         Timeline = timeline;
+        if (deaths is not null && deaths.Any(death => death is null))
+        {
+            throw new ArgumentException("A replay analysis can't have an empty death.", nameof(deaths));
+        }
+
+        Deaths = deaths?.OrderBy(death => death.Seconds).ToList();
     }
 
     // Null for analyses made before the timeline existed (they only have the laning phase).
     public MatchTimeline? Timeline { get; }
+
+    // Every hero death of the match, in time order; null for analyses made before deaths were read.
+    public IReadOnlyList<HeroDeath>? Deaths { get; }
+
+    // Made before everything the analysis page shows was read from the replay: worth parsing again.
+    public bool IsOutdated => Timeline is null || Deaths is null;
 
     public MatchId MatchId { get; }
 

@@ -18,6 +18,7 @@ namespace DotaAnalyst.Application.Matches;
 /// <param name="ReplayStatus">Where our own reading of the replay stands (every match with a replay; notNeeded is no longer used). While processing, ask again in a few seconds.</param>
 /// <param name="Laning">The player's laning phase, read from the replay; null unless replayStatus is ready and the player is in the match.</param>
 /// <param name="Timeline">Net worth and experience during the whole match, read from the replay; null unless replayStatus is ready (and for replays read before the timeline existed).</param>
+/// <param name="Deaths">Where and when the player died, read from the replay, in time order; null unless replayStatus is ready and the player is in the match.</param>
 public record MatchAnalysis(
     long MatchId,
     int DurationSeconds,
@@ -31,7 +32,8 @@ public record MatchAnalysis(
     PlayerPerformance? Performance,
     ReplayStatus ReplayStatus,
     LaningPhase? Laning,
-    MatchTimelineChart? Timeline = null);
+    MatchTimelineChart? Timeline = null,
+    IReadOnlyList<PlayerDeath>? Deaths = null);
 
 /// <summary>One of the ten players of the match.</summary>
 /// <param name="AccountId">Dota account ID; null for players with an anonymous profile.</param>
@@ -163,3 +165,22 @@ public enum LaneSide
     Ally,
     Opponent,
 }
+
+/// <summary>One death of the player, read from the replay.</summary>
+/// <param name="Seconds">Game clock of the death, in seconds (negative before the horn).</param>
+/// <param name="X">Map coordinate: roughly −8200 (Radiant's side, left) to 8200.</param>
+/// <param name="Y">Map coordinate: roughly −8200 (Radiant's side, bottom) to 8200.</param>
+/// <param name="Killer">What dealt the killing blow: hero, tower, creeps, neutrals, roshan or other.</param>
+/// <param name="KillerHeroId">The hero that got the kill; null unless killer is hero (and for hero kills the replay does not attribute).</param>
+/// <param name="KillerHeroName">That hero's name, or "Unknown hero"; null when killerHeroId is null.</param>
+/// <param name="Reincarnated">The hero came back (Aegis, Wraith King): not a death on the scoreboard.</param>
+/// <param name="InLaningPhase">Died before 10:00 of the game clock.</param>
+public record PlayerDeath(
+    int Seconds,
+    int X,
+    int Y,
+    KillerKind Killer,
+    int? KillerHeroId,
+    string? KillerHeroName,
+    bool Reincarnated,
+    bool InLaningPhase);

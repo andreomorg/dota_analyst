@@ -1,10 +1,14 @@
 using DotaAnalyst.Application.Abstractions;
 using DotaAnalyst.Infrastructure;
 using DotaAnalyst.Infrastructure.Persistence;
+using DotaAnalyst.Infrastructure.Persistence.Replays;
+using DotaAnalyst.Infrastructure.ReplayParser;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 
 namespace DotaAnalyst.Tests.Infrastructure.Persistence;
 
@@ -59,9 +63,59 @@ public class InfrastructureRegistrationTests(PostgresFixture postgres) : IAsyncL
         Assert.NotEmpty(await db.DataProtectionKeys.ToListAsync());
     }
 
+    [Fact]
+    public async Task ReplayParsing_WithParserAddressAndDatabase_IsOn()
+    {
+        await using var services = BuildServices(postgres.ConnectionString, ParserUrl);
+        await using var scope = services.CreateAsyncScope();
+
+        Assert.IsType<ReplayParserClient>(scope.ServiceProvider.GetRequiredService<IReplayParser>());
+        Assert.IsType<ReplayParseQueue>(scope.ServiceProvider.GetRequiredService<IReplayParseQueue>());
+        Assert.IsType<ReplayAnalysisRepository>(scope.ServiceProvider.GetRequiredService<IReplayAnalysisRepository>());
+        Assert.Contains(services.GetServices<IHostedService>(), service => service is ReplayParseWorker);
+    }
+
+    [Fact]
+    public async Task ReplayParsing_WithoutParserAddress_IsOff_ButSavedResultsAreStillRead()
+    {
+        await using var services = BuildServices(postgres.ConnectionString, replayParserUrl: " ");
+        await using var scope = services.CreateAsyncScope();
+
+        Assert.IsType<NoReplayParser>(scope.ServiceProvider.GetRequiredService<IReplayParser>());
+        Assert.IsType<DisabledReplayParseQueue>(scope.ServiceProvider.GetRequiredService<IReplayParseQueue>());
+        Assert.IsType<ReplayAnalysisRepository>(scope.ServiceProvider.GetRequiredService<IReplayAnalysisRepository>());
+        Assert.DoesNotContain(services.GetServices<IHostedService>(), service => service is ReplayParseWorker);
+    }
+
+    [Fact]
+    public async Task ReplayParsing_WithoutDatabase_IsOff()
+    {
+        // Results could never be kept: the same replay would be parsed on every visit.
+        await using var services = BuildServices(connectionString: null, ParserUrl);
+        await using var scope = services.CreateAsyncScope();
+
+        Assert.IsType<NoReplayParser>(scope.ServiceProvider.GetRequiredService<IReplayParser>());
+        Assert.IsType<DisabledReplayParseQueue>(scope.ServiceProvider.GetRequiredService<IReplayParseQueue>());
+        Assert.IsType<NoReplayAnalyses>(scope.ServiceProvider.GetRequiredService<IReplayAnalysisRepository>());
+        Assert.DoesNotContain(services.GetServices<IHostedService>(), service => service is ReplayParseWorker);
+    }
+
+    [Theory]
+    [InlineData("replay-parser:8081")] // not absolute
+    [InlineData("ftp://replay-parser:8081/")]
+    [InlineData("https://example.ngrok-free.app/parser")] // no trailing '/': "v1/laning" would replace "parser"
+    public async Task ReplayParsing_InvalidParserAddress_FailsOptionsValidation(string replayParserUrl)
+    {
+        await using var services = BuildServices(postgres.ConnectionString, replayParserUrl);
+
+        Assert.Throws<OptionsValidationException>(() => services.GetRequiredService<IOptions<ReplayParserOptions>>().Value);
+    }
+
+    private const string ParserUrl = "http://replay-parser:8081/";
+
     private ServiceProvider BuildServices() => BuildServices(postgres.ConnectionString);
 
-    private static ServiceProvider BuildServices(string? connectionString)
+    private static ServiceProvider BuildServices(string? connectionString, string? replayParserUrl = null)
     {
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -69,6 +123,7 @@ public class InfrastructureRegistrationTests(PostgresFixture postgres) : IAsyncL
                 ["ConnectionStrings:Database"] = connectionString,
                 ["OpenDota:BaseUrl"] = "https://api.opendota.com/api/",
                 ["OpenDota:Timeout"] = "00:00:10",
+                ["ReplayParser:BaseUrl"] = replayParserUrl,
             })
             .Build();
 

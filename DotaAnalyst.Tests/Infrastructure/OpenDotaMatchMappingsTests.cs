@@ -148,6 +148,25 @@ public class OpenDotaMatchMappingsTests
         Assert.Equal(expected, (LoadFixture() with { RadiantWin = radiantWin }).ToMatchDetails().WinningTeam);
     }
 
+    [Fact]
+    public void ToMatchDetails_MapsReplayUrl()
+    {
+        var details = LoadFixture().ToMatchDetails();
+
+        Assert.Equal(new Uri("http://replay202.valve.net/570/9034320024_96247495.dem.bz2"), details.ReplayUrl);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("replay202.valve.net/570/1_2.dem.bz2")] // not absolute
+    [InlineData("ftp://replay202.valve.net/570/1_2.dem.bz2")]
+    [InlineData("file:///etc/passwd")]
+    public void ToMatchDetails_InvalidReplayUrl_BecomesNull(string? replayUrl)
+    {
+        Assert.Null((LoadFixture() with { ReplayUrl = replayUrl }).ToMatchDetails().ReplayUrl);
+    }
+
     internal static OpenDotaMatch LoadFixture()
     {
         var path = Path.Combine(AppContext.BaseDirectory, "Infrastructure", "Fixtures", "match-9034320024.json");

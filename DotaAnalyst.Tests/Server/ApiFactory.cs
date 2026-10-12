@@ -7,6 +7,7 @@ using DotaAnalyst.Domain.Heroes;
 using DotaAnalyst.Domain.Items;
 using DotaAnalyst.Domain.Matches;
 using DotaAnalyst.Domain.Players;
+using DotaAnalyst.Domain.Replays;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
@@ -16,7 +17,10 @@ namespace DotaAnalyst.Tests.Server;
 
 // Runs the real API in memory, with OpenDota and the database replaced by fakes: no test touches the
 // internet or a database here (the repositories have their own tests against PostgreSQL).
-internal sealed class ApiFactory(IReadOnlyDictionary<string, string?>? settings = null) : WebApplicationFactory<Program>
+// replayParsing: turns on the real replay queue and worker, with ReplayParser below in place of the Go service
+// (without it, replay parsing stays off, as in an app without ReplayParser:BaseUrl).
+internal sealed class ApiFactory(IReadOnlyDictionary<string, string?>? settings = null, bool replayParsing = false)
+    : WebApplicationFactory<Program>
 {
     public FakeMatchProvider Matches { get; } = new();
 
@@ -26,9 +30,12 @@ internal sealed class ApiFactory(IReadOnlyDictionary<string, string?>? settings 
 
     public FakePlayerSearchRepository PlayerSearches { get; } = new();
 
-    // Saved replay results. The parser and the queue stay the app's own (replay parsing off), so a match without
-    // a saved result is "unavailable".
+    // Saved replay results. Unless replayParsing is on, the parser and the queue stay the app's own (replay
+    // parsing off), so a match without a saved result is "unavailable".
     public FakeReplayAnalysisRepository ReplayAnalyses { get; } = new();
+
+    // Stands in for the Go service when replayParsing is on.
+    public FakeReplayParser ReplayParser { get; } = new();
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -37,6 +44,8 @@ internal sealed class ApiFactory(IReadOnlyDictionary<string, string?>? settings 
         // Same for the Steam Web API key: profiles come from the fake below.
         builder.UseSetting("ConnectionStrings:Database", "");
         builder.UseSetting("Steam:ApiKey", "");
+        // Same for the replay parser: never the developer's real one.
+        builder.UseSetting("ReplayParser:BaseUrl", "");
 
         // UseSetting (not ConfigureAppConfiguration) so values read while Program builds the app also see them.
         foreach (var (key, value) in settings ?? new Dictionary<string, string?>())
@@ -55,6 +64,13 @@ internal sealed class ApiFactory(IReadOnlyDictionary<string, string?>? settings 
             services.AddSingleton<IPlayerSearchRepository>(PlayerSearches);
             services.AddSingleton<IReplayAnalysisRepository>(ReplayAnalyses);
             services.AddSingleton<ISteamProfileProvider>(SteamProfiles);
+            if (replayParsing)
+            {
+                // The app's real queue, worker and circuit breaker, over the fake parser and repository.
+                DotaAnalyst.Infrastructure.DependencyInjection.AddReplayParseQueue(services);
+                services.AddSingleton<IReplayParser>(ReplayParser);
+            }
+
             // Server-to-Steam calls of the login (OpenID discovery and check_authentication) go to a fake Steam.
             services.Configure<SteamAuthenticationOptions>(
                 SteamAuthenticationDefaults.AuthenticationScheme,
@@ -136,6 +152,29 @@ internal sealed class ApiFactory(IReadOnlyDictionary<string, string?>? settings 
         {
             Results[result.MatchId.Value] = result;
             return Task.CompletedTask;
+        }
+    }
+
+    // Answers (Result, or throws Fail) only once Release is called, so a test can see the replay "processing" first.
+    public sealed class FakeReplayParser : IReplayParser
+    {
+        private readonly TaskCompletionSource release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public ReplayAnalysis? Result { get; set; }
+
+        public Exception? Fail { get; set; }
+
+        public void Release() => release.TrySetResult();
+
+        public async Task<ReplayAnalysis> ParseAsync(MatchId matchId, Uri replayUrl, CancellationToken cancellationToken)
+        {
+            await release.Task.WaitAsync(cancellationToken);
+            if (Fail is not null)
+            {
+                throw Fail;
+            }
+
+            return Result ?? throw new InvalidOperationException("The test set no result for the fake parser.");
         }
     }
 

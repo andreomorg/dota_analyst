@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using DotaAnalyst.Domain.Matches;
 using DotaAnalyst.Domain.Players;
+using DotaAnalyst.Infrastructure.OpenDota;
 
 namespace DotaAnalyst.Infrastructure.Persistence.Matches;
 
@@ -17,7 +18,9 @@ internal sealed record StoredMatchDetails(
     int RadiantScore,
     int DireScore,
     bool IsParsed,
-    IReadOnlyList<StoredMatchPlayer> Players);
+    IReadOnlyList<StoredMatchPlayer> Players,
+    // Added later: rows saved before it have no "replayUrl" and are read with null, so Version stays 1.
+    string? ReplayUrl = null);
 
 internal sealed record StoredMatchPlayer(
     long? AccountId,
@@ -73,7 +76,8 @@ internal static class StoredMatchMappings
             RadiantScore: match.RadiantScore,
             DireScore: match.DireScore,
             IsParsed: match.IsParsed,
-            Players: match.Players.Select(ToStored).ToList());
+            Players: match.Players.Select(ToStored).ToList(),
+            ReplayUrl: match.ReplayUrl?.AbsoluteUri);
 
     private static StoredMatchPlayer ToStored(MatchPlayer player) =>
         new(
@@ -116,7 +120,9 @@ internal static class StoredMatchMappings
             RadiantScore: stored.RadiantScore,
             DireScore: stored.DireScore,
             IsParsed: stored.IsParsed,
-            Players: (stored.Players ?? []).Select(ToDomain).ToList());
+            Players: (stored.Players ?? []).Select(ToDomain).ToList(),
+            // Same rule as for OpenDota's address: anything that isn't absolute http(s) becomes null.
+            ReplayUrl: OpenDotaMappings.ToReplayUrl(stored.ReplayUrl));
     }
 
     private static MatchPlayer ToDomain(StoredMatchPlayer stored) =>

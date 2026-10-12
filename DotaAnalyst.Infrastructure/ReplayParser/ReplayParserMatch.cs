@@ -44,6 +44,20 @@ internal static class ReplayParserMappings
     /// <exception cref="InvalidDataException">The answer is incomplete or breaks a domain rule.</exception>
     public static ReplayAnalysis ToReplayAnalysis(this ReplayParserMatchResponse response, MatchId matchId)
     {
+        try
+        {
+            return Map(response, matchId);
+        }
+        catch (ArgumentException ex)
+        {
+            // The domain refused the values (negative numbers, the same hero twice, 700 s of laning phase...), or the
+            // same player index came twice.
+            throw new InvalidDataException($"The replay analysis breaks a rule: {ex.Message}", ex);
+        }
+    }
+
+    private static ReplayAnalysis Map(ReplayParserMatchResponse response, MatchId matchId)
+    {
         if (response.SchemaVersion is not >= SupportedSchemaVersion)
         {
             throw new InvalidDataException($"Unsupported schemaVersion {response.SchemaVersion}.");
@@ -66,38 +80,31 @@ internal static class ReplayParserMappings
             throw new InvalidDataException("Every player needs the same number of points.");
         }
 
-        try
-        {
-            var laningStats = new List<LaningStats>();
-            var heroes = new List<HeroTimeline>();
-            foreach (var player in players)
-            {
-                var index = player.Player ?? throw Missing("players.player");
-                var heroId = player.HeroId ?? throw Missing("players.heroId");
-                var team = ToTeam(player.Team);
-                var series = minutes.GetValueOrDefault(index) ?? throw Missing($"perMinute of player {index}");
-                var lane = lanes.TryGetValue(index, out var found) ? found : throw Missing($"lane of player {index}");
+        // The numbers at the end of the laning phase are its point in the timeline: minute 10 when it lasted the
+        // whole 10:00, otherwise the last point (the end of the match).
+        var at = endsAt >= ReplayAnalysis.LaningPhaseEndsAtSeconds && count > 11 ? 10 : count - 1;
 
-                // The numbers at the end of the laning phase are its point in the timeline: minute 10, or the last
-                // point when the match ended before.
-                var at = Math.Min(endsAt / 60, count - 1);
-                laningStats.Add(new LaningStats(
-                    heroId, team, lane,
-                    lastHits: Value(series.LastHits, "lastHits", at),
-                    denies: Value(series.Denies, "denies", at),
-                    netWorth: Value(series.NetWorth, "netWorth", at),
-                    experience: Value(series.Xp, "xp", at),
-                    deaths: Value(series.Deaths, "deaths", at)));
-                heroes.Add(new HeroTimeline(heroId, team, Required(series.NetWorth, "netWorth"), Required(series.Xp, "xp")));
-            }
-
-            return new ReplayAnalysis(matchId, endsAt, laningStats, new MatchTimeline(Seconds(count, duration), heroes));
-        }
-        catch (ArgumentException ex)
+        var laningStats = new List<LaningStats>();
+        var heroes = new List<HeroTimeline>();
+        foreach (var player in players)
         {
-            // The domain refused the values (negative numbers, the same hero twice, 700 s of laning phase...).
-            throw new InvalidDataException($"The replay analysis breaks a rule: {ex.Message}", ex);
+            var index = player.Player ?? throw Missing("players.player");
+            var heroId = player.HeroId ?? throw Missing("players.heroId");
+            var team = ToTeam(player.Team);
+            var series = minutes.GetValueOrDefault(index) ?? throw Missing($"perMinute of player {index}");
+            var lane = lanes.TryGetValue(index, out var found) ? found : throw Missing($"lane of player {index}");
+
+            laningStats.Add(new LaningStats(
+                heroId, team, lane,
+                lastHits: Value(series.LastHits, "lastHits", at),
+                denies: Value(series.Denies, "denies", at),
+                netWorth: Value(series.NetWorth, "netWorth", at),
+                experience: Value(series.Xp, "xp", at),
+                deaths: Value(series.Deaths, "deaths", at)));
+            heroes.Add(new HeroTimeline(heroId, team, Required(series.NetWorth, "netWorth"), Required(series.Xp, "xp")));
         }
+
+        return new ReplayAnalysis(matchId, endsAt, laningStats, new MatchTimeline(Seconds(count, duration), heroes));
     }
 
     // Point i is minute i; the last one is the end of the match (kept after the previous point even when the match

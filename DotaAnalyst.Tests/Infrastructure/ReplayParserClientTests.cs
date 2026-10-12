@@ -83,26 +83,26 @@ public class ReplayParserClientTests
     [Fact]
     public async Task Parse_MatchEndedBeforeTenMinutes_UsesTheLastPoint()
     {
+        // A 6:40 match: minutes 0..6 and the end — 8 points. The laning numbers are the end's, not minute 6's.
         var laning = """{ "endsAtSeconds": 400, "lanes": [ { "player": 0, "lane": "bottom" }, { "player": 5, "lane": "top" } ] }""";
-        var short3Points = MatchJson(laning)
-            .Replace("[600,700,800,900,1000,1200,1400,1600,1800,2000,2900,3000]", "[600,700,750]")
-            .Replace("[0,100,200,300,400,500,600,700,800,900,3100,3300]", "[0,100,150]")
-            .Replace("[0,1,2,3,4,5,6,7,8,9,12,13]", "[0,1,2]")
-            .Replace("[0,0,0,0,1,1,1,2,2,2,3,3]", "[0,0,0]")
-            .Replace("[0,0,0,0,0,0,1,1,1,1,1,1]", "[0,0,1]")
-            .Replace("[600,800,1000,1200,1400,1600,1800,2000,2200,2400,3500,3600]", "[600,800,900]")
-            .Replace("[0,150,300,450,600,750,900,1050,1200,1350,2800,2900]", "[0,150,200]")
-            .Replace("[0,3,6,9,12,15,18,21,24,27,40,41]", "[0,3,4]")
-            .Replace("[0,0,0,0,0,0,0,0,0,0,0,0]", "[0,0,0]")
-            .Replace("690.4", "100.2");
+        var short8Points = MatchJson(laning)
+            .Replace("[600,700,800,900,1000,1200,1400,1600,1800,2000,2900,3000]", "[600,700,800,900,1000,1200,1400,1450]")
+            .Replace("[0,100,200,300,400,500,600,700,800,900,3100,3300]", "[0,100,200,300,400,500,600,650]")
+            .Replace("[0,1,2,3,4,5,6,7,8,9,12,13]", "[0,1,2,3,4,5,6,7]")
+            .Replace("[0,0,0,0,1,1,1,2,2,2,3,3]", "[0,0,0,0,1,1,1,2]")
+            .Replace("[0,0,0,0,0,0,1,1,1,1,1,1]", "[0,0,0,0,0,0,1,1]")
+            .Replace("[600,800,1000,1200,1400,1600,1800,2000,2200,2400,3500,3600]", "[600,800,1000,1200,1400,1600,1800,1900]")
+            .Replace("[0,150,300,450,600,750,900,1050,1200,1350,2800,2900]", "[0,150,300,450,600,750,900,950]")
+            .Replace("[0,3,6,9,12,15,18,21,24,27,40,41]", "[0,3,6,9,12,15,18,20]")
+            .Replace("[0,0,0,0,0,0,0,0,0,0,0,0]", "[0,0,0,0,0,0,0,0]")
+            .Replace("690.4", "400.2");
 
-        var analysis = await CreateClient(new FakeParser(Json(HttpStatusCode.OK, short3Points, "application/json")))
+        var analysis = await CreateClient(new FakeParser(Json(HttpStatusCode.OK, short8Points, "application/json")))
             .ParseAsync(Match, ReplayUrl, CancellationToken.None);
 
         Assert.Equal(400, analysis.EndsAtSeconds);
-        Assert.Equal(750, analysis.FindHero(31)!.NetWorth);
-        // The end (100 s) comes after the last minute point (60 s).
-        Assert.Equal([0, 60, 100], analysis.Timeline!.Seconds);
+        Assert.Equal(new LaningStats(31, Team.Radiant, Lane.Bottom, 7, 2, 1450, 650, 1), analysis.FindHero(31));
+        Assert.Equal([0, 60, 120, 180, 240, 300, 360, 400], analysis.Timeline!.Seconds);
     }
 
     [Fact]
@@ -322,6 +322,7 @@ public class ReplayParserClientTests
         { "points differ between players", MatchJson().Replace("2400,3500,3600]", "2400,3500]") },
         { "no xp", MatchJson().Replace("\"xp\": [0,100,", "\"xq\": [0,100,") },
         { "same hero twice", MatchJson().Replace("\"heroId\": 28", "\"heroId\": 31") },
+        { "same player index twice", MatchJson().Replace("{ \"player\": 5, \"netWorth\"", "{ \"player\": 0, \"netWorth\"") },
     };
 
     [Theory]

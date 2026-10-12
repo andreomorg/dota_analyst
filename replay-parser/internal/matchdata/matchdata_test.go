@@ -93,7 +93,7 @@ func TestSectionsJSON(t *testing.T) {
 		{"ward",
 			Ward{Type: Observer, Player: &player, Team: team, X: -307, Y: -976, PlacedAt: -30.3, RemovedAt: &removed},
 			`{"type":"observer","player":0,"team":"radiant","x":-307,"y":-976,"placedAt":-30.3,"removedAt":336.5,` +
-				`"destroyedBy":null}`},
+				`"destroyed":false,"destroyedBy":null,"destroyedByTeam":null}`},
 		{"Roshan", RoshanKill{T: 1092.7, Team: Radiant, AegisPlayer: &killer},
 			`{"t":1092.7,"team":"radiant","killer":null,"aegisPlayer":5}`},
 	}

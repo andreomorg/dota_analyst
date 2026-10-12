@@ -1,6 +1,7 @@
-// Package replay reads Dota 2 replays with manta and hands the laning package what it needs: the game clock, where
-// each hero is and each player's numbers. It is the only package that knows manta (anti-corruption layer): entity
-// classes and property names stay in here.
+// Package replay reads Dota 2 replays with manta. Analyzer hands the laning package what it needs (the game clock,
+// where each hero is and each player's numbers up to 10:00); MatchAnalyzer reads the whole replay into a
+// matchdata.Match through a Session and one Collector per section (match.go, session.go, collect_*.go). It is the
+// only package that knows manta (anti-corruption layer): entity classes and property names stay in here.
 package replay
 
 import (
@@ -62,7 +63,7 @@ type parse struct {
 	entities map[string]int32 // class name -> entity index of the singletons (game rules, player resource, team data)
 
 	positions  laning.Aggregator
-	pause      pauseTracker
+	clock      gameClock
 	clockRan   bool // the game clock has run at least once (the horn sounded)
 	lastSecond int  // last whole second of the game clock already sampled
 	done       bool // 10:00 reached: the numbers in last are final
@@ -90,7 +91,7 @@ func (p *parse) onTick() error {
 	if rules == nil || resource == nil {
 		return nil // still loading
 	}
-	clock, running := p.gameClock(rules)
+	clock, running := p.clock.update(p.parser.NetTick, rules)
 	if !running {
 		return nil
 	}
@@ -118,59 +119,6 @@ func (p *parse) result() (laning.Result, error) {
 		return laning.Result{}, unreadable(p.last.err)
 	}
 	return p.positions.Result(p.last.second, p.last.players), nil
-}
-
-const ticksPerSecond = 30
-
-// gameClock returns the seconds since the horn (0:00), pauses left out. It is not running before the horn, while the
-// game is paused, or right after a pause until the pause is counted in m_nTotalPausedTicks (see pauseTracker).
-func (p *parse) gameClock(rules *manta.Entity) (float64, bool) {
-	gameStart, ok := number(rules, "m_pGameRules.m_flGameStartTime")
-	if !ok || gameStart <= 0 {
-		return 0, false
-	}
-	paused, _ := rules.GetBool("m_pGameRules.m_bGamePaused")
-	pausedTicks, _ := number(rules, "m_pGameRules.m_nTotalPausedTicks")
-	if !p.pause.running(paused, pausedTicks) {
-		return 0, false
-	}
-	clock := float64(p.parser.NetTick)/ticksPerSecond - gameStart - pausedTicks/ticksPerSecond
-	return clock, clock >= 0
-}
-
-// maxPauseSettleTicks is how long, after a pause, the clock waits for m_nTotalPausedTicks to count the pause.
-const maxPauseSettleTicks = ticksPerSecond
-
-// pauseTracker decides whether the game clock can be computed on a tick, given m_bGamePaused and
-// m_nTotalPausedTicks. No paused replay has been checked yet, so it does not rely on when the server updates the
-// counter (during the pause, or when it ends): it only refuses a snapshot that would put the clock in the wrong place.
-// The dangerous one is m_bGamePaused already cleared while m_nTotalPausedTicks does not count the pause yet (a tick
-// later): the clock would jump forward by the whole pause (a 5-minute pause at 8:00 would read as 13:00 and cut the
-// laning phase at 8:00's numbers). So after a pause the clock stays stopped until the counter has changed since the
-// pause began. If it does not change within maxPauseSettleTicks (an unexpected replay format), the clock runs again
-// anyway, as it did before this guard.
-type pauseTracker struct {
-	paused       bool    // inside a pause, or waiting for the counter after one
-	ticksAtPause float64 // m_nTotalPausedTicks when the pause began
-	waited       int     // ticks waited for the counter after the pause flag cleared
-}
-
-// running reports whether the clock can be read on this tick.
-func (t *pauseTracker) running(paused bool, totalPausedTicks float64) bool {
-	if paused {
-		if !t.paused {
-			*t = pauseTracker{paused: true, ticksAtPause: totalPausedTicks}
-		}
-		return false
-	}
-	if t.paused {
-		if totalPausedTicks == t.ticksAtPause && t.waited < maxPauseSettleTicks {
-			t.waited++
-			return false
-		}
-		t.paused = false
-	}
-	return true
 }
 
 // samplePositions records where each living hero is at this second of the game clock.

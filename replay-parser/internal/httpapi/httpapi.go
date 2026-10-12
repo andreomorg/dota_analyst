@@ -1,5 +1,5 @@
-// Package httpapi is the HTTP face of the service: POST /v1/laning and GET /health, the bearer token, the limit of
-// parses running at once and the translation of errors into ProblemDetails (application/problem+json).
+// Package httpapi is the HTTP face of the service: POST /v1/laning, POST /v1/match and GET /health, the bearer token,
+// the limit of parses running at once and the translation of errors into ProblemDetails (application/problem+json).
 package httpapi
 
 import (
@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/andreomorg/dota_analyst/replay-parser/internal/laning"
+	"github.com/andreomorg/dota_analyst/replay-parser/internal/matchdata"
 	"github.com/andreomorg/dota_analyst/replay-parser/internal/valve"
 )
 
@@ -32,7 +33,7 @@ type ReplaySource interface {
 
 // Config tunes the handler. Zero values mean the defaults.
 type Config struct {
-	// APIKey is the bearer token POST /v1/laning requires. Empty disables authentication (local `go run` only).
+	// APIKey is the bearer token POST /v1/laning and /v1/match require. Empty disables authentication (local `go run` only).
 	APIKey string
 	// MaxConcurrentParses is how many replays are downloaded and parsed at once; more requests get 503.
 	MaxConcurrentParses int
@@ -50,10 +51,26 @@ const (
 	retryAfterSeconds = 15
 )
 
+// MatchAnalyzer reads a decompressed replay and returns the whole match (implemented by replay.MatchAnalyzer).
+type MatchAnalyzer interface {
+	Analyze(ctx context.Context, r io.Reader) (matchdata.Match, error)
+}
+
+// Option adds an optional part to the handler.
+type Option func(*server)
+
+// WithMatchAnalyzer turns on POST /v1/match. Without it the route does not exist (404).
+func WithMatchAnalyzer(analyzer MatchAnalyzer) Option {
+	return func(s *server) { s.matchAnalyzer = analyzer }
+}
+
 type server struct {
-	source      ReplaySource
-	analyzer    Analyzer
-	authEnabled bool
+	source        ReplaySource
+	analyzer      Analyzer
+	matchAnalyzer MatchAnalyzer
+	// maxMatchBytes is the largest /v1/match answer (uncompressed); bigger is a bug, answered with 500.
+	maxMatchBytes int
+	authEnabled   bool
 	// The key is kept as a SHA-256 hash so the comparison has a fixed length and does not leak the key's length.
 	apiKeyHash [sha256.Size]byte
 	slots      chan struct{}
@@ -62,7 +79,8 @@ type server struct {
 }
 
 // NewHandler returns the service's HTTP handler.
-func NewHandler(source ReplaySource, analyzer Analyzer, config Config, logger *slog.Logger) http.Handler {
+func NewHandler(source ReplaySource, analyzer Analyzer, config Config, logger *slog.Logger,
+	options ...Option) http.Handler {
 	if config.MaxConcurrentParses <= 0 {
 		config.MaxConcurrentParses = DefaultMaxConcurrentParses
 	}
@@ -77,6 +95,11 @@ func NewHandler(source ReplaySource, analyzer Analyzer, config Config, logger *s
 		slots:       make(chan struct{}, config.MaxConcurrentParses),
 		timeout:     config.RequestTimeout,
 		logger:      logger,
+
+		maxMatchBytes: maxMatchResponseBytes,
+	}
+	for _, option := range options {
+		option(s)
 	}
 
 	// Unknown routes keep the mux's plain-text 404/405 on purpose: the API client treats only problem+json as an
@@ -84,6 +107,9 @@ func NewHandler(source ReplaySource, analyzer Analyzer, config Config, logger *s
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", s.health)
 	mux.Handle("POST /v1/laning", s.requireAPIKey(http.HandlerFunc(s.laning)))
+	if s.matchAnalyzer != nil {
+		mux.Handle("POST /v1/match", s.requireAPIKey(http.HandlerFunc(s.match)))
+	}
 	return s.logRequests(s.recoverPanics(mux))
 }
 
@@ -91,12 +117,33 @@ func (s *server) health(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "healthy"})
 }
 
-type laningRequest struct {
+type replayRequest struct {
 	ReplayURL string `json:"replayUrl"`
 }
 
+// respondFunc writes the 200 answer of a replay analyzed (and its log line).
+type respondFunc func(w http.ResponseWriter, r *http.Request, logger *slog.Logger)
+
+// analyzeFunc parses the decompressed replay and returns how to answer.
+type analyzeFunc func(ctx context.Context, replay io.Reader) (respondFunc, error)
+
 func (s *server) laning(w http.ResponseWriter, r *http.Request) {
-	var request laningRequest
+	s.serveReplay(w, r, func(ctx context.Context, replay io.Reader) (respondFunc, error) {
+		result, err := s.analyzer.Analyze(ctx, replay)
+		if err != nil {
+			return nil, err
+		}
+		return func(w http.ResponseWriter, _ *http.Request, logger *slog.Logger) {
+			logger.Info("replay analyzed", "players", len(result.Players))
+			writeJSON(w, http.StatusOK, newLaningResponse(result))
+		}, nil
+	})
+}
+
+// serveReplay is what every replay endpoint shares: the body ({ "replayUrl": ... }), the limit of parses at once,
+// the time limit, the download and the translation of errors. analyze only parses the replay and says how to answer.
+func (s *server) serveReplay(w http.ResponseWriter, r *http.Request, analyze analyzeFunc) {
+	var request replayRequest
 	if err := decodeJSON(w, r, &request); err != nil {
 		writeProblem(w, http.StatusBadRequest, "Invalid request body", err.Error())
 		return
@@ -121,35 +168,34 @@ func (s *server) laning(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), s.timeout)
 	defer cancel()
 	started := time.Now()
-	result, err := s.analyze(ctx, request.ReplayURL)
-	logger := s.logger.With("replayUrl", request.ReplayURL, "elapsedMs", time.Since(started).Milliseconds())
+	respond, err := s.analyze(ctx, request.ReplayURL, analyze)
+	logger := s.logger.With("path", r.URL.Path, "replayUrl", request.ReplayURL,
+		"elapsedMs", time.Since(started).Milliseconds())
 	if err != nil {
 		s.writeAnalyzeError(ctx, w, r, logger, err)
 		return
 	}
-	logger.Info("replay analyzed", "players", len(result.Players))
-	writeJSON(w, http.StatusOK, newLaningResponse(result))
+	respond(w, r, logger)
 }
 
 // analyze downloads and parses the replay. When reading the replay itself failed (network, size limit), that error
 // wins over the analyzer's: the analyzer may only see "unreadable replay", but the cause is the download.
-func (s *server) analyze(ctx context.Context, replayURL string) (laning.Result, error) {
+func (s *server) analyze(ctx context.Context, replayURL string, analyze analyzeFunc) (respondFunc, error) {
 	stream, err := s.source.Open(ctx, replayURL)
 	if err != nil {
-		return laning.Result{}, err
+		return nil, err
 	}
 	defer stream.Close()
 
 	tracked := &readErrorTracker{r: stream}
-	result, err := s.analyzer.Analyze(ctx, tracked)
+	respond, err := analyze(ctx, tracked)
 	if err != nil && tracked.err != nil {
 		if status, _ := classify(tracked.err); status != http.StatusInternalServerError {
 			err = tracked.err
 		}
 	}
-	return result, err
+	return respond, err
 }
-
 func (s *server) writeAnalyzeError(ctx context.Context, w http.ResponseWriter, r *http.Request, logger *slog.Logger,
 	err error) {
 	if r.Context().Err() != nil {

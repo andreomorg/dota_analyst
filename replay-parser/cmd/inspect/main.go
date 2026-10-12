@@ -2,8 +2,10 @@
 // entities the laning analysis needs, so we can see their exact names in the current Dota version. With -laning it
 // prints each hero's numbers at 10:00 of the game clock; with -full it only measures a whole parse; -catalog prints an
 // inventory of everything in the replay (combat log, messages, game events, entities, end state); -measure parses it
-// with match-like collectors and prints time, memory and JSON sizes; -download saves a Valve replay (decompressed).
+// with match-like collectors and prints time, memory and JSON sizes; -download saves a Valve replay (decompressed);
+// -match writes the POST /v1/match document of the replay (to -out or the standard output).
 //
+//	go run ./cmd/inspect -replay ../work/replays/9034320024.dem.bz2 -match -out ../work/9034320024.json
 //	go run ./cmd/inspect -replay ../work/replays/9034320024.dem.bz2 -filter "Hero|Gamerules|PlayerResource|Data(Radiant|Dire)"
 //	go run ./cmd/inspect -replay ../work/replays/9034320024.dem.bz2 -laning
 //	go run ./cmd/inspect -replay ../work/replays/9034320024.dem.bz2 -catalog > catalog.txt
@@ -34,6 +36,8 @@ func main() {
 	measure := flag.Bool("measure", false, "parse the whole replay with match-like collectors; print time, memory and JSON sizes")
 	sizesOut := flag.String("sizes-out", "", "with -measure: also write the candidate JSON sections to this directory")
 	download := flag.String("download", "", "download this Valve replay URL, decompressed, to the -replay path and exit")
+	match := flag.Bool("match", false, "run the POST /v1/match analyzer and write its JSON (to -out, or the standard output)")
+	out := flag.String("out", "", "with -match: file to write the JSON to")
 	flag.Parse()
 
 	if *download != "" {
@@ -54,6 +58,13 @@ func main() {
 		log.Fatal(err)
 	}
 	defer replay.Close()
+
+	if *match {
+		if err := runMatch(replay, *out); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
 
 	parser, err := manta.NewStreamParser(replay)
 	if err != nil {

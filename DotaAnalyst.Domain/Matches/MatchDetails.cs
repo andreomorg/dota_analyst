@@ -18,6 +18,9 @@ public record MatchDetails(
     // and for matches saved before this field existed.
     Uri? ReplayUrl = null)
 {
+    // When the match ended (start + duration). Pauses count in Duration, so this is wall-clock time.
+    public DateTimeOffset EndedAt => StartTime + Duration;
+
     public MatchPlayer? FindPlayer(AccountId accountId) =>
         Players.FirstOrDefault(player => player.AccountId == accountId);
 

@@ -17,11 +17,25 @@ namespace DotaAnalyst.Infrastructure.ReplayParser;
 // off, ngrok itself answers (an HTML/text page with an "ngrok-error-code" header, sometimes with status 404).
 // So only application/problem+json errors come from our parser and say something about the replay; anything
 // else means "the parser is unavailable", never "the replay doesn't exist".
+//
+// The parser only parses a few replays at a time and is shared with the owner's local API, so "busy" (503 with
+// Retry-After) is normal: the client waits as told (at most MaxBusyWait) and tries again, up to MaxAttempts
+// requests, before giving up with ReplayParserBusyException.
 public class ReplayParserClient(
     HttpClient httpClient,
     IOptions<ReplayParserOptions> options,
+    TimeProvider timeProvider,
     ILogger<ReplayParserClient> logger) : IReplayParser
 {
+    // Requests per replay while the parser answers "busy" (the first one included).
+    public const int MaxAttempts = 3;
+
+    // Longest wait between two of them, whatever Retry-After says (the worker holds the queue meanwhile).
+    public static readonly TimeSpan MaxBusyWait = TimeSpan.FromSeconds(30);
+
+    // Wait when a "busy" answer has no (usable) Retry-After.
+    public static readonly TimeSpan DefaultBusyWait = TimeSpan.FromSeconds(5);
+
     private const string LaningPath = "v1/laning";
     private const string ProblemJson = "application/problem+json";
     private const string NgrokErrorHeader = "ngrok-error-code";
@@ -29,6 +43,40 @@ public class ReplayParserClient(
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     public async Task<ReplayAnalysis> ParseAsync(MatchId matchId, Uri replayUrl, CancellationToken cancellationToken)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            TimeSpan wait;
+            using (var response = await SendAsync(replayUrl, cancellationToken))
+            {
+                if (response.IsSuccessStatusCode)
+                {
+                    return await ReadAnalysisAsync(response, matchId, cancellationToken);
+                }
+
+                if (!IsBusy(response))
+                {
+                    return await ThrowForErrorAsync(response, matchId, cancellationToken);
+                }
+
+                if (attempt == MaxAttempts)
+                {
+                    var detail = await ReadProblemDetailAsync(response, cancellationToken);
+                    throw new ReplayParserBusyException(
+                        $"The replay parser was still busy after {MaxAttempts} attempts for match {matchId}: {detail}");
+                }
+
+                wait = BusyWait(response);
+            }
+
+            logger.LogDebug("The replay parser is busy; match {MatchId} is tried again in {Wait}", matchId, wait);
+            // Through the app's clock, so tests don't really wait. Cancelled when the app stops.
+            await Task.Delay(wait, timeProvider, cancellationToken);
+        }
+    }
+
+    // A new HttpRequestMessage each time: one can't be sent twice.
+    private async Task<HttpResponseMessage> SendAsync(Uri replayUrl, CancellationToken cancellationToken)
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, LaningPath)
         {
@@ -42,11 +90,10 @@ public class ReplayParserClient(
         // Skips ngrok's "you are about to visit" page for free domains; ignored by everything else.
         request.Headers.Add("ngrok-skip-browser-warning", "1");
 
-        HttpResponseMessage response;
         try
         {
             // Default completion option (whole body buffered): the timeout also covers reading the body.
-            response = await httpClient.SendAsync(request, cancellationToken);
+            return await httpClient.SendAsync(request, cancellationToken);
         }
         catch (HttpRequestException ex)
         {
@@ -58,13 +105,21 @@ public class ReplayParserClient(
             // Cancelled without the caller asking for it: the HttpClient timeout expired.
             throw new ReplayParserUnavailableException("The replay parser did not answer in time.", ex);
         }
+    }
 
-        using (response)
-        {
-            return response.IsSuccessStatusCode
-                ? await ReadAnalysisAsync(response, matchId, cancellationToken)
-                : await ThrowForErrorAsync(response, matchId, cancellationToken);
-        }
+    // "Busy" from our parser itself; a 503 from anything else (ngrok, a proxy) is "unavailable".
+    private static bool IsBusy(HttpResponseMessage response) =>
+        response.StatusCode == HttpStatusCode.ServiceUnavailable && IsFromTheParser(response);
+
+    // Retry-After as seconds or as a date, kept between zero and MaxBusyWait.
+    private TimeSpan BusyWait(HttpResponseMessage response)
+    {
+        var retryAfter = response.Headers.RetryAfter;
+        var wait = retryAfter?.Delta
+            ?? (retryAfter?.Date is { } date ? date - timeProvider.GetUtcNow() : DefaultBusyWait);
+        return wait < TimeSpan.Zero ? TimeSpan.Zero
+            : wait > MaxBusyWait ? MaxBusyWait
+            : wait;
     }
 
     private static async Task<ReplayAnalysis> ReadAnalysisAsync(
@@ -102,7 +157,7 @@ public class ReplayParserClient(
     private async Task<ReplayAnalysis> ThrowForErrorAsync(
         HttpResponseMessage response, MatchId matchId, CancellationToken cancellationToken)
     {
-        if (IsFromSomethingElse(response) || response.Content.Headers.ContentType?.MediaType != ProblemJson)
+        if (!IsFromTheParser(response))
         {
             throw new ReplayParserUnavailableException(
                 $"Something other than the replay parser answered ({DescribeAnswer(response)}).");
@@ -117,10 +172,16 @@ public class ReplayParserClient(
             case HttpStatusCode.UnprocessableEntity:
                 throw new ReplayUnreadableException($"The replay parser could not read the replay of match {matchId}: {detail}");
 
+            case HttpStatusCode.BadGateway:
+                // The parser is fine, but Valve's server failed the download this time: saved as failed, so it is
+                // tried again later without pausing the parser for everyone else.
+                throw new ReplayUnreadableException($"The replay parser could not download the replay of match {matchId}: {detail}");
+
             case HttpStatusCode.BadRequest:
                 // We sent something the parser refuses (e.g. an address outside *.valve.net): our bug, not the
-                // replay's. Saved as failed, so the same request isn't sent on every visit.
-                logger.LogError("The replay parser refused our request for match {MatchId}: {Detail}", matchId, detail);
+                // replay's. Saved as failed, so the same request isn't sent on every visit (a warning, not an
+                // error: it comes back every FailedReplayRetryInterval while the match is visited).
+                logger.LogWarning("The replay parser refused our request for match {MatchId}: {Detail}", matchId, detail);
                 throw new ReplayUnreadableException($"The replay parser refused the request for match {matchId}: {detail}");
 
             case HttpStatusCode.Unauthorized:
@@ -130,7 +191,7 @@ public class ReplayParserClient(
                 throw new ReplayParserUnavailableException("The replay parser refused our API key.");
 
             default:
-                // 502 (could not download from Valve), 503 (busy), 500...: try again later.
+                // 500 and anything unexpected: the parser itself is in trouble; try again later.
                 throw new ReplayParserUnavailableException(
                     $"The replay parser could not parse match {matchId} now ({(int)response.StatusCode}): {detail}");
         }
@@ -139,6 +200,10 @@ public class ReplayParserClient(
     // ngrok adds this header to the answers it gives on its own (tunnel offline, endpoint not found...).
     private static bool IsFromSomethingElse(HttpResponseMessage response) =>
         response.Headers.Contains(NgrokErrorHeader);
+
+    // Our parser's errors are always ProblemDetails.
+    private static bool IsFromTheParser(HttpResponseMessage response) =>
+        !IsFromSomethingElse(response) && response.Content.Headers.ContentType?.MediaType == ProblemJson;
 
     private static string DescribeAnswer(HttpResponseMessage response)
     {

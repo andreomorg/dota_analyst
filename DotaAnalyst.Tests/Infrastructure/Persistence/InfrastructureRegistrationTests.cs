@@ -104,18 +104,41 @@ public class InfrastructureRegistrationTests(PostgresFixture postgres) : IAsyncL
     [InlineData("replay-parser:8081")] // not absolute
     [InlineData("ftp://replay-parser:8081/")]
     [InlineData("https://example.ngrok-free.app/parser")] // no trailing '/': "v1/laning" would replace "parser"
-    public async Task ReplayParsing_InvalidParserAddress_FailsOptionsValidation(string replayParserUrl)
+    public async Task ReplayParsing_InvalidParserAddress_IsOffWithAWarning_AndTheAppStillStarts(string replayParserUrl)
     {
         await using var services = BuildServices(postgres.ConnectionString, replayParserUrl);
+        await using var scope = services.CreateAsyncScope();
 
-        Assert.Throws<OptionsValidationException>(() => services.GetRequiredService<IOptions<ReplayParserOptions>>().Value);
+        // ValidateOnStart: what the host runs before starting; it must not stop the app.
+        services.GetRequiredService<IStartupValidator>().Validate();
+        Assert.IsType<NoReplayParser>(scope.ServiceProvider.GetRequiredService<IReplayParser>());
+        Assert.IsType<DisabledReplayParseQueue>(scope.ServiceProvider.GetRequiredService<IReplayParseQueue>());
+        var warning = Assert.Single(StartupWarnings(services));
+        Assert.Contains("ReplayParser:BaseUrl", warning);
     }
+
+    [Theory]
+    [InlineData(null, true)]
+    [InlineData(" ", true)]
+    [InlineData("secret-key", false)]
+    public async Task ReplayParsing_OnWithoutApiKey_WarnsAtStartup(string? apiKey, bool warns)
+    {
+        await using var services = BuildServices(postgres.ConnectionString, ParserUrl, apiKey);
+
+        services.GetRequiredService<IStartupValidator>().Validate();
+        Assert.Equal(warns, StartupWarnings(services).Any(warning => warning.Contains("ReplayParser:ApiKey")));
+        Assert.All(StartupWarnings(services), warning => Assert.DoesNotContain("secret-key", warning));
+    }
+
+    private static List<string> StartupWarnings(ServiceProvider services) =>
+        services.GetServices<IHostedService>().OfType<ReplayParsingStartupWarning>().Select(notice => notice.Message).ToList();
 
     private const string ParserUrl = "http://replay-parser:8081/";
 
     private ServiceProvider BuildServices() => BuildServices(postgres.ConnectionString);
 
-    private static ServiceProvider BuildServices(string? connectionString, string? replayParserUrl = null)
+    private static ServiceProvider BuildServices(
+        string? connectionString, string? replayParserUrl = null, string? replayParserApiKey = "test-key")
     {
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -124,6 +147,7 @@ public class InfrastructureRegistrationTests(PostgresFixture postgres) : IAsyncL
                 ["OpenDota:BaseUrl"] = "https://api.opendota.com/api/",
                 ["OpenDota:Timeout"] = "00:00:10",
                 ["ReplayParser:BaseUrl"] = replayParserUrl,
+                ["ReplayParser:ApiKey"] = replayParserApiKey,
             })
             .Build();
 

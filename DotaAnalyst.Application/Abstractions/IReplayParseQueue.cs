@@ -10,8 +10,9 @@ public enum ReplayEnqueueResult
     AlreadyQueued,
     // Too many replays waiting: not added (a later visit tries again).
     Full,
-    // Replay parsing is off (not configured, or results could not be saved) or temporarily down (the parser
-    // stopped answering recently): not added. A later visit tries again.
+    // Replay parsing is off (not configured, or results could not be saved), temporarily down (the parser
+    // stopped answering recently), or this match was just parsed and its result could not be saved: not added.
+    // A later visit tries again.
     Unavailable,
 }
 

@@ -72,6 +72,18 @@ public class ParseReplayHandlerTests
     }
 
     [Fact]
+    public async Task HandleAsync_ParserBusy_SavesNothing()
+    {
+        var repository = new FakeReplayAnalysisRepository();
+        var parser = new FakeReplayParser(() => throw new ReplayParserBusyException("Busy."));
+
+        var result = await CreateHandler(parser, repository).HandleAsync(Match, ReplayUrl, CancellationToken.None);
+
+        Assert.Equal(ParseReplayResult.ParserBusy, result);
+        Assert.Empty(repository.Saved);
+    }
+
+    [Fact]
     public async Task HandleAsync_DatabaseFails_StillReportsTheResult()
     {
         var replay = ReplayBuilder.Analysis(Match.Value, ReplayBuilder.Hero(31, Team.Radiant, Lane.Bottom));

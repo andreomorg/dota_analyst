@@ -35,30 +35,37 @@ public static class DependencyInjection
 
     // Our own reading of replays (the Go service, replay-parser/), for matches OpenDota didn't parse. Only on
     // when both its address and the database exist: without the database a result could never be kept, so the
-    // same replay would be parsed on every visit. Off, analyses say replayStatus "unavailable".
+    // same replay would be parsed on every visit. Off, analyses say replayStatus "unavailable". An invalid address
+    // also turns it off (with a warning) instead of stopping the app: the rest of the site doesn't need the parser.
     private static void AddReplayParsing(IServiceCollection services, IConfiguration configuration, bool hasDatabase)
     {
         var section = configuration.GetSection(ReplayParserOptions.SectionName);
+        var baseUrl = section[nameof(ReplayParserOptions.BaseUrl)];
         var offReason =
-            string.IsNullOrWhiteSpace(section[nameof(ReplayParserOptions.BaseUrl)]) ? "ReplayParser:BaseUrl is not set"
+            string.IsNullOrWhiteSpace(baseUrl) ? "ReplayParser:BaseUrl is not set"
+            : !IsValidParserAddress(baseUrl) ? "ReplayParser:BaseUrl must be an absolute http(s) URL ending with '/'"
             : !hasDatabase ? "there is no database (ConnectionStrings:Database) to keep the results"
             : null;
         if (offReason is not null)
         {
             services.AddSingleton<IReplayParser, NoReplayParser>();
             services.AddSingleton<IReplayParseQueue, DisabledReplayParseQueue>();
-            services.AddHostedService(provider => new ReplayParsingDisabledNotice(
-                offReason, provider.GetRequiredService<ILogger<ReplayParsingDisabledNotice>>()));
+            services.AddHostedService(provider => new ReplayParsingStartupWarning(
+                $"Replay parsing is off: {offReason}", provider.GetRequiredService<ILogger<ReplayParsingStartupWarning>>()));
             return;
+        }
+
+        // Allowed (a parser run locally without REPLAY_PARSER_API_KEY accepts it), but in production it is a mistake:
+        // the parser would answer 401 and parsing would keep pausing.
+        if (string.IsNullOrWhiteSpace(section[nameof(ReplayParserOptions.ApiKey)]))
+        {
+            services.AddHostedService(provider => new ReplayParsingStartupWarning(
+                "ReplayParser:ApiKey is not set: requests to the replay parser carry no API key, which only a parser without REPLAY_PARSER_API_KEY accepts",
+                provider.GetRequiredService<ILogger<ReplayParsingStartupWarning>>()));
         }
 
         services.AddOptions<ReplayParserOptions>()
             .Bind(section)
-            .Validate(
-                options => options.BaseUrl is { IsAbsoluteUri: true } url
-                    && (url.Scheme == Uri.UriSchemeHttp || url.Scheme == Uri.UriSchemeHttps)
-                    && url.AbsolutePath.EndsWith('/'),
-                "ReplayParser:BaseUrl must be an absolute http(s) URL ending with '/'.")
             .Validate(options => options.Timeout > TimeSpan.Zero, "ReplayParser:Timeout must be positive.")
             .ValidateOnStart();
 
@@ -77,6 +84,12 @@ public static class DependencyInjection
 
         AddReplayParseQueue(services);
     }
+
+    // Absolute http(s), ending with '/': without it "v1/laning" would replace the last segment of the path.
+    private static bool IsValidParserAddress(string baseUrl) =>
+        Uri.TryCreate(baseUrl, UriKind.Absolute, out var url)
+        && (url.Scheme == Uri.UriSchemeHttp || url.Scheme == Uri.UriSchemeHttps)
+        && url.AbsolutePath.EndsWith('/');
 
     // The queue, its worker and the parser's circuit breaker. Separate so the API tests can turn them on with a
     // fake parser (they have no database nor a real parser).

@@ -1,10 +1,11 @@
 namespace DotaAnalyst.Infrastructure.ReplayParser;
 
 // "Circuit breaker" of the replay parser (one for the whole app: Singleton), like StorageGuard is for the
-// database. When the parser is unavailable (machine off, tunnel down, busy, wrong key), replay parsing is treated
+// database. When the parser is unavailable (machine off, tunnel down, timeout, wrong key), replay parsing is treated
 // as off for a while: the queue answers Unavailable (the analysis says replayStatus "unavailable" without
 // queueing) and the worker drops what was waiting. It closes by itself when the time is up; the next visit
-// queues the match again and, if the parser is still down, it opens again.
+// queues the match again and, if the parser is still down, it opens again. Not opened when the parser answers
+// about the replay (including "could not download it from Valve") or says it is busy: then it is up.
 public sealed class ReplayParserCircuitBreaker(TimeProvider timeProvider)
 {
     public static readonly TimeSpan OpenFor = TimeSpan.FromMinutes(5);

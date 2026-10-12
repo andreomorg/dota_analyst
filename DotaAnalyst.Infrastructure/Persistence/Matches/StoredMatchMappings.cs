@@ -2,7 +2,6 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using DotaAnalyst.Domain.Matches;
 using DotaAnalyst.Domain.Players;
-using DotaAnalyst.Infrastructure.OpenDota;
 
 namespace DotaAnalyst.Infrastructure.Persistence.Matches;
 
@@ -122,7 +121,7 @@ internal static class StoredMatchMappings
             IsParsed: stored.IsParsed,
             Players: (stored.Players ?? []).Select(ToDomain).ToList(),
             // Same rule as for OpenDota's address: anything that isn't absolute http(s) becomes null.
-            ReplayUrl: OpenDotaMappings.ToReplayUrl(stored.ReplayUrl));
+            ReplayUrl: ReplayUrls.Parse(stored.ReplayUrl));
     }
 
     private static MatchPlayer ToDomain(StoredMatchPlayer stored) =>

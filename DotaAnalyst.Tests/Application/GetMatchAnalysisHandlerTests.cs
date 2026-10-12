@@ -273,6 +273,28 @@ public class GetMatchAnalysisHandlerTests
     }
 
     [Theory]
+    [InlineData(23 * 60 + 59, 59, ReplayStatus.Failed, false)]     // missing too soon after the match: a failure
+    [InlineData(23 * 60 + 59, 60, ReplayStatus.Processing, true)]  // ... queued again an hour later
+    [InlineData(24 * 60, 59, ReplayStatus.Expired, false)]         // missing a day after the match: expired for good
+    [InlineData(24 * 60, 60 * 24 * 30, ReplayStatus.Expired, false)]
+    public async Task Laning_ExpiredRightAfterTheMatch_IsTreatedAsFailed(
+        int savedMinutesAfterTheMatch, int savedMinutesAgo, ReplayStatus expected, bool queuedAgain)
+    {
+        // Valve uploads the replay some time after the match: right after it, "not found" may mean "not yet".
+        var match = UnparsedMatchWithMe();
+        var savedAt = match.EndedAt.AddMinutes(savedMinutesAfterTheMatch);
+        var replays = new FakeReplayAnalysisRepository(SavedReplayAnalysis.Expired(MatchIdOf(10), savedAt));
+        var queue = new FakeReplayParseQueue();
+        var handler = CreateHandler(match, replays, queue, new FixedTimeProvider(savedAt.AddMinutes(savedMinutesAgo)));
+
+        var analysis = await handler.HandleAsync(MatchIdOf(10), Me, CancellationToken.None);
+
+        Assert.Equal(TimeSpan.FromDays(1), ReplayAvailability.UploadWindow);
+        Assert.Equal(expected, analysis!.ReplayStatus);
+        Assert.Equal(queuedAgain, queue.Enqueued.Count == 1);
+    }
+
+    [Theory]
     [InlineData(59, ReplayStatus.Failed, false)]     // failed recently: shown as failed
     [InlineData(60, ReplayStatus.Processing, true)]  // an hour later: queued again
     public async Task Laning_Failed_IsQueuedAgainAfterAnHour(int failedMinutesAgo, ReplayStatus expected, bool queuedAgain)

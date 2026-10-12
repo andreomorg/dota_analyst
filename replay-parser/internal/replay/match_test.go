@@ -97,8 +97,8 @@ func TestMatchAnalyzerRealReplays(t *testing.T) {
 			if info.PausedSeconds != 0 {
 				t.Errorf("paused %.1f s, want 0 (no pauses in these replays)", info.PausedSeconds)
 			}
-			if len(match.Draft.Bans) != test.bans {
-				t.Errorf("%d bans, want %d: %v", len(match.Draft.Bans), test.bans, match.Draft.Bans)
+			if len(match.Draft.AnnouncedBans) != test.bans {
+				t.Errorf("%d bans, want %d: %v", len(match.Draft.AnnouncedBans), test.bans, match.Draft.AnnouncedBans)
 			}
 
 			raw, err := json.Marshal(match)

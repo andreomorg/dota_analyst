@@ -103,6 +103,6 @@ func (c *matchCollector) Fill(m *matchdata.Match) error {
 		}
 	}
 	m.Match = info
-	m.Draft = matchdata.Draft{Bans: c.bans, PicksBans: c.picksBans}
+	m.Draft = matchdata.Draft{AnnouncedBans: c.bans, PicksBans: c.picksBans}
 	return nil
 }

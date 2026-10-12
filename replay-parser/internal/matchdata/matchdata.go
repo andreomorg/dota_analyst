@@ -89,8 +89,12 @@ type Info struct {
 
 // Draft is the picks and bans.
 type Draft struct {
-	// Bans is the heroIds banned, in the order the bans were announced. All Pick does not say who banned.
-	Bans List[int] `json:"bans"`
+	// AnnouncedBans is every heroId the game announced as banned (CHAT_MESSAGE_HERO_BANNED), in order. It is NOT
+	// just the ban phase: checked on 12/10/2026 against OpenDota (which takes the draft from Valve's match details,
+	// not from the replay) for match 9034320024, the first 6 of 17 were the real ban-phase bans, the next 10 heroes
+	// unavailable in that match, announced in the same tick, and the last one a hero picked and then given up. The
+	// replay has no list that tells them apart, so use OpenDota's picks_bans for the ban phase.
+	AnnouncedBans List[int] `json:"announcedBans"`
 	// PicksBans is the full pick/ban sequence when the replay has it (Captains Mode); [] in All Pick and Turbo, where
 	// each player's Player.PickOrder tells the pick order instead.
 	PicksBans List[DraftEvent] `json:"picksBans"`

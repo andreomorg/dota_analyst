@@ -21,7 +21,7 @@ func TestEmptyMatchJSON(t *testing.T) {
 	want := `{"schemaVersion":1,` +
 		`"match":{"matchId":"","gameMode":0,"leagueId":0,"winner":null,"durationSeconds":0,"startedAt":null,` +
 		`"endedAt":null,"pausedSeconds":0},` +
-		`"draft":{"bans":[],"picksBans":[]},` +
+		`"draft":{"announcedBans":[],"picksBans":[]},` +
 		`"players":[],` +
 		`"timelines":{"perMinute":[],"positionIntervalSeconds":0,"positions":[]},` +
 		`"kills":[],"buybacks":[],` +

@@ -1,23 +1,10 @@
 import { useState } from 'react';
 import { formatDuration } from '../matches/format';
 
-// Where the player died, on a schematic map of our own (lanes, river, bases — not Valve's art). Coordinates come
-// from the replay in map units, roughly −8200..8200 on both axes with Radiant's base bottom-left; the SVG viewBox
-// uses the same units (y flipped), so the map scales to any width without stretching.
+import { svgY, VIEW_BOX } from './mapGeometry';
+import SchematicMap from './SchematicMap';
 
-const EXTENT = 8200;
-const VIEW_BOX = `${-EXTENT} ${-EXTENT} ${2 * EXTENT} ${2 * EXTENT}`;
-// SVG y grows downwards; the map's grows upwards.
-const toSvg = ([x, y]) => `${x},${-y}`;
-const path = points => `M${points.map(toSvg).join('L')}`;
-
-// Approximate lanes from the towers' positions (the same ones the Go parser's zones use).
-const LANES = [
-    [[-6900, -4300], [-6450, 5950], [4000, 6400]], // top
-    [[-4500, -4000], [4000, 3600]], // middle
-    [[-4300, -6800], [6350, -6250], [6750, 3500]], // bottom
-];
-const RIVER = [[-7600, 7300], [-6300, 5600], [-3200, 2600], [0, 0], [3000, -2700], [5900, -6100], [7500, -7600]];
+// Where the player died, on the schematic map (SchematicMap.jsx).
 
 const KILLERS = {
     tower: 'Torre',
@@ -32,20 +19,6 @@ function killerName(death) {
         return death.killerHeroName ?? 'Herói';
     }
     return KILLERS[death.killer] ?? death.killer;
-}
-
-function SchematicMap() {
-    return (
-        <g aria-hidden="true">
-            <rect className="map-ground" x={-EXTENT} y={-EXTENT} width={2 * EXTENT} height={2 * EXTENT} rx="400" />
-            <path className="map-base radiant" d={`M${-EXTENT},${EXTENT} L${-EXTENT},3700 L-3600,3700 L-3600,${EXTENT} Z`} />
-            <path className="map-base dire" d={`M${EXTENT},${-EXTENT} L${EXTENT},-3300 L3300,-3300 L3300,${-EXTENT} Z`} />
-            <path className="map-river" d={path(RIVER)} />
-            {LANES.map(lane => <path key={lane[0].join()} className="map-lane" d={path(lane)} />)}
-            <text className="map-label" x={-7600} y={7700}>Radiant</text>
-            <text className="map-label" x={7600} y={-7300} textAnchor="end">Dire</text>
-        </g>
-    );
 }
 
 // deaths comes from the API (null until the replay is read; absent on older responses: then nothing shows).
@@ -79,7 +52,7 @@ function DeathMap({ deaths }) {
                                     <g
                                         key={`${death.seconds}-${index}`}
                                         className={`death-marker ${death.inLaningPhase ? 'series-1' : 'series-2'}${death.reincarnated ? ' is-reincarnated' : ''}${selected === index ? ' is-selected' : ''}`}
-                                        transform={`translate(${death.x},${-death.y})`}
+                                        transform={`translate(${death.x},${svgY(death.y)})`}
                                         onPointerEnter={() => setSelected(index)}
                                         onPointerLeave={() => setSelected(null)}
                                         onClick={() => setSelected(selected === index ? null : index)}

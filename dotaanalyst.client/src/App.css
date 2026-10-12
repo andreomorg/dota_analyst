@@ -852,3 +852,62 @@ a:focus-visible {
 .death-table {
     margin: 0.5rem auto 0;
 }
+
+/* ----- Ward map (WardMap) ----- */
+.map-filters {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.5rem;
+    margin: 0.5rem 0;
+}
+
+.team-mine { --team: var(--chart-ahead); }
+.team-theirs { --team: var(--chart-behind); }
+
+.legend-swatch.team-mine,
+.legend-swatch.team-theirs {
+    background: var(--team);
+}
+
+.ward-shape {
+    fill: var(--team);
+    stroke: var(--bg);
+    stroke-width: 80;
+}
+
+.ward-cross {
+    /* Ink on top of the whole shape (a cross in the background colour would cut it in pieces). */
+    stroke: var(--text-h);
+    stroke-width: 100;
+    stroke-linecap: round;
+}
+
+.ward-marker {
+    cursor: pointer;
+}
+
+.ward-marker.is-selected .ward-shape {
+    stroke: var(--text-h);
+    stroke-width: 130;
+}
+
+.legend-shape {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    margin-right: 0.35rem;
+    vertical-align: -1px;
+    background: var(--text);
+}
+
+.legend-shape.observer { border-radius: 50%; }
+.legend-shape.sentry { transform: rotate(45deg) scale(0.85); }
+
+.legend-shape.destroyed {
+    background: none;
+    width: auto;
+    height: auto;
+    font-weight: 700;
+    color: var(--text-h);
+}

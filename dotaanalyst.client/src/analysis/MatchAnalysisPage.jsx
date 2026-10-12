@@ -8,6 +8,7 @@ import MatchHeader from './MatchHeader';
 import PerformanceSummary from './PerformanceSummary';
 import TeamTable from './TeamTable';
 import TimelineSection from './TimelineSection';
+import WardMap from './WardMap';
 import { useMatchAnalysis } from './useMatchAnalysis';
 
 const MAX_MATCH_ID = 9223372036854775807n; // long.MaxValue on the API
@@ -132,6 +133,8 @@ function AnalysisContent({ analysis, accountId, replayPollingStopped }) {
             {analysis.replayStatus === 'ready' && <TimelineSection timeline={analysis.timeline} />}
 
             {analysis.replayStatus === 'ready' && <DeathMap deaths={analysis.deaths} />}
+
+            {analysis.replayStatus === 'ready' && <WardMap wards={analysis.wards} />}
 
             <div className="teams">
                 <TeamTable name="Radiant" players={analysis.radiant} won={radiantWon} />

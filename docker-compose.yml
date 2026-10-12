@@ -52,7 +52,7 @@ services:
     restart: unless-stopped
 
   # Go service that reads the laning phase from a replay (replay-parser/). Called only by the API (and, in production,
-  # through the ngrok tunnel), never by the browser.
+  # through the ngrok tunnel planned in sprint 09 card 08), never by the browser.
   replay-parser:
     build: ./replay-parser
     image: dotaanalyst-replay-parser
@@ -60,6 +60,13 @@ services:
     environment:
       # Bearer token the API sends. Required: the parser downloads files on request, so it must not run open.
       REPLAY_PARSER_API_KEY: "${REPLAY_PARSER_API_KEY:?Set REPLAY_PARSER_API_KEY in the .env file (see .env.example)}"
+      # The local API and, through the tunnel, the production API share this parser: one parse (~80 MB, ~2 s)
+      # each, so neither gets "busy" because of the other.
+      MAX_CONCURRENT_PARSES: "2"
+    # A corrupt replay can make the parser allocate a lot (manta trusts sizes written in the file) and Go's
+    # out-of-memory is fatal: the limits make it kill only this container, which restarts.
+    mem_limit: 1g
+    pids_limit: 100
     healthcheck:
       # The image has no shell or curl; the binary checks its own /health.
       test: ["CMD", "/replay-parser", "-healthcheck"]

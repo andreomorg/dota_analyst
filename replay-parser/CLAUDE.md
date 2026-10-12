@@ -1,6 +1,6 @@
 # replay-parser (serviço Go)
 
-Serviço HTTP interno que recebe a URL de um replay do Dota 2 (CDN da Valve), lê com o [`manta`](https://github.com/dotabuff/manta) e devolve a **fase de rotas** (até 10:00) em JSON. Só a API em C# o chama; o React nunca fala com ele. **Em produção** ele roda na máquina do dono do projeto (docker compose) e a API no Render o alcança por um túnel **ngrok** (container no mesmo compose, perfil `tunnel`); por isso o token é obrigatório. Vale também o `CLAUDE.md` da raiz (convenções, Git, tags).
+Serviço HTTP interno que recebe a URL de um replay do Dota 2 (CDN da Valve), lê com o [`manta`](https://github.com/dotabuff/manta) e devolve a **fase de rotas** (até 10:00) em JSON. Só a API em C# o chama; o React nunca fala com ele. **Em produção (planejado, card 08 da sprint 09)** ele vai rodar na máquina do dono do projeto (docker compose) e a API no Render o alcançará por um túnel **ngrok** (container no mesmo compose, perfil `tunnel`); por isso o token já é obrigatório no compose. Vale também o `CLAUDE.md` da raiz (convenções, Git, tags).
 
 O dono do projeto está aprendendo Go (e C#): explique as decisões e os conceitos novos do Go em português, de forma didática.
 
@@ -49,7 +49,8 @@ O dono do projeto está aprendendo Go (e C#): explique as decisões e os conceit
 ## Segurança
 
 - **SSRF:** só `http(s)://*.valve.net/570/<arquivo>.dem.bz2`; redirecionamento para outro host é recusado.
-- **A URL do ngrok é pública:** token obrigatório no compose, só `*.valve.net`, limite de parses simultâneos (`MAX_CONCURRENT_PARSES`, padrão 1 → 503).
+- **A URL do ngrok é pública:** token obrigatório no compose, só `*.valve.net`, limite de parses simultâneos (`MAX_CONCURRENT_PARSES`, padrão 1, **2 no compose** porque a API local e a de produção dividem o serviço; acima disso → 503).
+- **Memória:** o `manta` confia em tamanhos escritos no arquivo e falta de memória no Go é fatal (o `recover` não segura): o compose limita o container (`mem_limit: 1g`, `pids_limit`), então um replay malicioso derruba só ele, que reinicia.
 - Limites: download (ex.: 200 MB), descompactado (ex.: 1 GB), tempo total (ex.: 3 min). `context.Context` em toda operação demorada (a API desistiu → download e parse param).
 - Imagem final mínima, usuário não-root, sem porta publicada no compose (a API e o ngrok o alcançam pela rede do compose). Health check pelo próprio binário (`replay-parser -healthcheck`), já que a imagem não tem shell.
 

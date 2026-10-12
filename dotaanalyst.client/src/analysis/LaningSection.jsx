@@ -56,7 +56,7 @@ const COLUMN_COUNT = 5;
 function GroupHeader({ title }) {
     return (
         <tr className="laning-group">
-            <th scope="colgroup" colSpan={COLUMN_COUNT}>{title}</th>
+            <th scope="rowgroup" colSpan={COLUMN_COUNT}>{title}</th>
         </tr>
     );
 }
@@ -150,23 +150,32 @@ function LaningSummary({ laning }) {
 // replayStatus and laning come from the API (null/absent on older responses: then nothing shows).
 // pollingStopped: the page gave up waiting while the replay was still "processing".
 function LaningSection({ replayStatus, laning, pollingStopped }) {
+    const processingText = pollingStopped
+        ? 'A análise do replay está demorando mais que o normal. Recarregue a página mais tarde para ver a fase de rotas.'
+        : 'Analisando o replay… A fase de rotas aparece aqui em instantes.';
+
+    let content = null;
+    let announcement = '';
     if (replayStatus === 'ready') {
         // Without a point-of-view player there is no laning; the page already explains why.
-        return laning ? <LaningSummary laning={laning} /> : null;
+        content = laning ? <LaningSummary laning={laning} /> : null;
+        announcement = laning ? 'A fase de rotas está pronta.' : '';
+    } else if (replayStatus === 'processing') {
+        content = <p className="notice">{processingText}</p>;
+        announcement = processingText;
+    } else if (STATUS_TEXT[replayStatus]) {
+        content = <p className="replay-status-note">{STATUS_TEXT[replayStatus]}</p>;
+        announcement = STATUS_TEXT[replayStatus];
     }
 
-    if (replayStatus === 'processing') {
-        return (
-            <p className="notice" role="status">
-                {pollingStopped
-                    ? 'A análise do replay está demorando mais que o normal. Recarregue a página mais tarde para ver a fase de rotas.'
-                    : 'Analisando o replay… A fase de rotas aparece aqui em instantes.'}
-            </p>
-        );
-    }
-
-    const text = STATUS_TEXT[replayStatus];
-    return text ? <p className="replay-status-note">{text}</p> : null;
+    // The live region stays mounted while the status changes (processing → ready), so screen readers
+    // announce the change; a region that appears together with its text is often not announced.
+    return (
+        <>
+            <p className="visually-hidden" aria-live="polite">{announcement}</p>
+            {content}
+        </>
+    );
 }
 
 export default LaningSection;

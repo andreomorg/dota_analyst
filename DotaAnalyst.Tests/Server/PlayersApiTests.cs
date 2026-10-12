@@ -2,6 +2,7 @@ using System.Net;
 using System.Text.Json;
 using DotaAnalyst.Application.Abstractions;
 using DotaAnalyst.Domain.Matches;
+using DotaAnalyst.Domain.Replays;
 using DotaAnalyst.Tests.Domain;
 
 namespace DotaAnalyst.Tests.Server;
@@ -70,6 +71,46 @@ public class PlayersApiTests
         var performance = json.GetProperty("performance");
         Assert.Equal("deniesPerMinute", performance.GetProperty("strengths")[0].GetString());
         Assert.Equal("strong", performance.GetProperty("metrics")[0].GetProperty("rating").GetString());
+
+        // Unparsed, but replay parsing is off.
+        Assert.Equal("unavailable", json.GetProperty("replayStatus").GetString());
+        Assert.Equal(JsonValueKind.Null, json.GetProperty("laning").ValueKind);
+    }
+
+    [Fact]
+    public async Task MatchAnalysis_ReadyReplay_ReturnsTheLaningPhase()
+    {
+        using var factory = new ApiFactory();
+        factory.Analyzer.Matches[MatchIdValue] = CreateMatch();
+        var replay = ReplayBuilder.Analysis(
+            MatchIdValue,
+            new LaningStats(31, Team.Radiant, Lane.Bottom, lastHits: 12, denies: 9, netWorth: 2047, experience: 2609, deaths: 2),
+            ReplayBuilder.Hero(17, Team.Radiant, Lane.Bottom, netWorth: 3000),
+            ReplayBuilder.Hero(28, Team.Dire, Lane.Bottom, netWorth: 3797));
+        factory.ReplayAnalyses.Results[MatchIdValue] = SavedReplayAnalysis.Ready(replay, DateTimeOffset.UnixEpoch);
+
+        var response = await factory.CreateClient().GetAsync($"/api/v1/players/{MyAccountId}/matches/{MatchIdValue}");
+
+        // The contract the React page reads.
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var json = await ReadJsonAsync(response);
+        Assert.Equal("ready", json.GetProperty("replayStatus").GetString());
+        var laning = json.GetProperty("laning");
+        Assert.Equal(
+            ["endsAtSeconds", "lane", "outcome", "netWorthDifference", "player", "allies", "opponents"],
+            laning.EnumerateObject().Select(property => property.Name));
+        Assert.Equal(600, laning.GetProperty("endsAtSeconds").GetInt32());
+        Assert.Equal("bottom", laning.GetProperty("lane").GetString());
+        Assert.Equal("won", laning.GetProperty("outcome").GetString());
+        Assert.Equal(1250, laning.GetProperty("netWorthDifference").GetInt32());
+        var player = laning.GetProperty("player");
+        Assert.Equal(
+            ["heroId", "heroName", "lastHits", "denies", "netWorth", "experience", "deaths"],
+            player.EnumerateObject().Select(property => property.Name));
+        Assert.Equal("Lich", player.GetProperty("heroName").GetString());
+        Assert.Equal(2609, player.GetProperty("experience").GetInt32());
+        Assert.Equal(17, Assert.Single(laning.GetProperty("allies").EnumerateArray()).GetProperty("heroId").GetInt32());
+        Assert.Equal(28, Assert.Single(laning.GetProperty("opponents").EnumerateArray()).GetProperty("heroId").GetInt32());
     }
 
     [Theory]

@@ -4,6 +4,7 @@ using DotaAnalyst.Domain.Heroes;
 using DotaAnalyst.Domain.Items;
 using DotaAnalyst.Domain.Matches;
 using DotaAnalyst.Domain.Players;
+using DotaAnalyst.Domain.Replays;
 using Microsoft.Extensions.Logging;
 
 namespace DotaAnalyst.Application.Matches;
@@ -12,6 +13,8 @@ namespace DotaAnalyst.Application.Matches;
 public class GetMatchAnalysisHandler(
     IReplayAnalyzer replayAnalyzer,
     IMatchRepository matchRepository,
+    IReplayAnalysisRepository replayAnalysisRepository,
+    IReplayParseQueue replayParseQueue,
     IHeroCatalog heroCatalog,
     IItemCatalog itemCatalog,
     TimeProvider timeProvider,
@@ -22,6 +25,9 @@ public class GetMatchAnalysisHandler(
 
     // How long a saved unparsed match is used before OpenDota is asked again (its replay may get parsed).
     public static readonly TimeSpan UnparsedRefreshInterval = TimeSpan.FromMinutes(15);
+
+    // How long a replay we could not read is shown as failed before it is queued again.
+    public static readonly TimeSpan FailedReplayRetryInterval = TimeSpan.FromHours(1);
 
     /// <returns>The analysis, or null when the match does not exist.</returns>
     /// <exception cref="DataSourceUnavailableException">The match could not be loaded.</exception>
@@ -47,6 +53,8 @@ public class GetMatchAnalysisHandler(
             .Select(player => ToSummary(player, ReferenceEquals(player, currentPlayer), names))
             .ToList();
 
+        var (replayStatus, laning) = await GetLaningAsync(match, currentPlayer, names, cancellationToken);
+
         return new MatchAnalysis(
             MatchId: match.MatchId.Value,
             DurationSeconds: (int)match.Duration.TotalSeconds,
@@ -57,7 +65,101 @@ public class GetMatchAnalysisHandler(
             IsParsed: match.IsParsed,
             Radiant: TeamOf(Team.Radiant),
             Dire: TeamOf(Team.Dire),
-            Performance: currentPlayer is null ? null : ToPerformance(match, currentPlayer, names));
+            Performance: currentPlayer is null ? null : ToPerformance(match, currentPlayer, names),
+            ReplayStatus: replayStatus,
+            Laning: laning);
+    }
+
+    // Our own reading of the replay, for matches OpenDota didn't parse. It never breaks the analysis: anything
+    // that goes wrong here only changes the status.
+    private async Task<(ReplayStatus Status, LaningPhase? Laning)> GetLaningAsync(
+        MatchDetails match, MatchPlayer? currentPlayer, NameLookup names, CancellationToken cancellationToken)
+    {
+        // OpenDota's data is already complete: the database isn't even asked.
+        if (match.IsParsed)
+        {
+            return (ReplayStatus.NotNeeded, null);
+        }
+
+        // Checked in memory first: while the page polls a replay being parsed, the database is left alone.
+        if (replayParseQueue.IsQueued(match.MatchId))
+        {
+            return (ReplayStatus.Processing, null);
+        }
+
+        SavedReplayAnalysis? saved;
+        try
+        {
+            saved = await replayAnalysisRepository.FindAsync(match.MatchId, cancellationToken);
+        }
+        catch (StorageUnavailableException ex)
+        {
+            // Without the database a result could not be saved either, so nothing is queued.
+            logger.LogWarning(ex, "Could not read the replay result of match {MatchId} from the database", match.MatchId);
+            return (ReplayStatus.Unavailable, null);
+        }
+
+        switch (saved)
+        {
+            case { State: SavedReplayState.Ready, Analysis: { } analysis }:
+                return (ReplayStatus.Ready, currentPlayer is null ? null : ToLaningPhase(analysis, currentPlayer, names));
+            case { State: SavedReplayState.Expired }:
+                return (ReplayStatus.Expired, null);
+            case { State: SavedReplayState.Failed } when timeProvider.GetUtcNow() - saved.SavedAt < FailedReplayRetryInterval:
+                return (ReplayStatus.Failed, null);
+        }
+
+        // Never parsed, or failed long enough ago to try again. When it can't be queued now, a failure stays a
+        // failure; otherwise the feature is just unavailable at the moment (the next visit tries again).
+        var notQueued = saved is null ? ReplayStatus.Unavailable : ReplayStatus.Failed;
+
+        // Without the replay's address there is nothing to parse. Not "expired": OpenDota may learn the address
+        // later (and matches saved before the address was stored get it back when refreshed from OpenDota).
+        if (match.ReplayUrl is null)
+        {
+            return (notQueued, null);
+        }
+
+        var enqueued = replayParseQueue.TryEnqueue(match.MatchId, match.ReplayUrl);
+        if (enqueued is ReplayEnqueueResult.Enqueued or ReplayEnqueueResult.AlreadyQueued)
+        {
+            return (ReplayStatus.Processing, null);
+        }
+
+        // Unavailable is not logged: with the feature off it would be every visit.
+        if (enqueued == ReplayEnqueueResult.Full)
+        {
+            logger.LogInformation("The replay parse queue is full; match {MatchId} was not queued", match.MatchId);
+        }
+
+        return (notQueued, null);
+    }
+
+    // Null when the player's hero is not in the replay.
+    private static LaningPhase? ToLaningPhase(ReplayAnalysis replay, MatchPlayer player, NameLookup names)
+    {
+        if (LaneOutcomeEvaluator.Evaluate(replay, player.HeroId) is not { } lane)
+        {
+            return null;
+        }
+
+        LaningPlayer ToLaningPlayer(LaningStats stats) => new(
+            HeroId: stats.HeroId,
+            HeroName: names.Hero(stats.HeroId),
+            LastHits: stats.LastHits,
+            Denies: stats.Denies,
+            NetWorth: stats.NetWorth,
+            Experience: stats.Experience,
+            Deaths: stats.Deaths);
+
+        return new LaningPhase(
+            EndsAtSeconds: replay.EndsAtSeconds,
+            Lane: lane.Player.Lane,
+            Outcome: lane.Outcome,
+            NetWorthDifference: lane.NetWorthDifference,
+            Player: ToLaningPlayer(lane.Player),
+            Allies: lane.Allies.Select(ToLaningPlayer).ToList(),
+            Opponents: lane.Opponents.Select(ToLaningPlayer).ToList());
     }
 
     // Our database first, then OpenDota:

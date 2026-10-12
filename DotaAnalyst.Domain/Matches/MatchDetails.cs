@@ -13,7 +13,10 @@ public record MatchDetails(
     int DireScore,
     // True when the replay was parsed (detailed data such as timelines is available).
     bool IsParsed,
-    IReadOnlyList<MatchPlayer> Players)
+    IReadOnlyList<MatchPlayer> Players,
+    // Where Valve keeps the replay file (it expires after a few weeks). Null when the source doesn't know it,
+    // and for matches saved before this field existed.
+    Uri? ReplayUrl = null)
 {
     public MatchPlayer? FindPlayer(AccountId accountId) =>
         Players.FirstOrDefault(player => player.AccountId == accountId);

@@ -6,6 +6,7 @@ using DotaAnalyst.Infrastructure.Persistence;
 using DotaAnalyst.Infrastructure.Persistence.Catalogs;
 using DotaAnalyst.Infrastructure.Persistence.Matches;
 using DotaAnalyst.Infrastructure.Persistence.Players;
+using DotaAnalyst.Infrastructure.ReplayParser;
 using DotaAnalyst.Infrastructure.Steam;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Configuration;
@@ -25,8 +26,18 @@ public static class DependencyInjection
         AddOpenDota(services, configuration);
         AddSteamProfiles(services, configuration);
         AddDatabase(services, configuration);
+        AddReplayParsing(services);
 
         return services;
+    }
+
+    // The Go replay parser is not connected yet: the feature is off and analyses of matches OpenDota didn't
+    // parse say replayStatus "unavailable".
+    private static void AddReplayParsing(IServiceCollection services)
+    {
+        services.AddSingleton<IReplayParser, NoReplayParser>();
+        services.AddSingleton<IReplayParseQueue, DisabledReplayParseQueue>();
+        services.AddSingleton<IReplayAnalysisRepository, NoReplayAnalyses>();
     }
 
     private static void AddSteamProfiles(IServiceCollection services, IConfiguration configuration)

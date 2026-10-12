@@ -1,5 +1,6 @@
 # Runs the whole project: docker compose up --build
-# Settings come from a .env file next to this one (copy .env.example); POSTGRES_PASSWORD is required.
+# Settings come from a .env file next to this one (copy .env.example); POSTGRES_PASSWORD and REPLAY_PARSER_API_KEY
+# are required.
 
 services:
   api:
@@ -14,6 +15,11 @@ services:
       ConnectionStrings__Database: "Host=db;Port=5432;Database=dotaanalyst;Username=dotaanalyst;Timeout=5;Password=${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the .env file (see .env.example)}"
       # Optional: Steam Web API key for names/avatars of logged-in users (empty = not shown).
       Steam__ApiKey: "${STEAM_API_KEY:-}"
+      # Replay parser (Go service below), reached by its service name inside the compose network, with its token.
+      ReplayParser__BaseUrl: "http://replay-parser:8081/"
+      ReplayParser__ApiKey: "${REPLAY_PARSER_API_KEY}"
+    # No depends_on replay-parser on purpose: the API must work without it (the laning phase just shows as
+    # unavailable), and waiting for its health check would let a broken parser keep the whole site down.
     depends_on:
       # Waits for PostgreSQL to accept connections (its health check), not just for its container to start.
       db:
@@ -43,6 +49,28 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+    restart: unless-stopped
+
+  # Go service that reads the laning phase from a replay (replay-parser/). Called only by the API (and, in production,
+  # through the ngrok tunnel), never by the browser.
+  replay-parser:
+    build: ./replay-parser
+    image: dotaanalyst-replay-parser
+    # No "ports:" on purpose: only containers of this compose project reach it (http://replay-parser:8081).
+    environment:
+      # Bearer token the API sends. Required: the parser downloads files on request, so it must not run open.
+      REPLAY_PARSER_API_KEY: "${REPLAY_PARSER_API_KEY:?Set REPLAY_PARSER_API_KEY in the .env file (see .env.example)}"
+    healthcheck:
+      # The image has no shell or curl; the binary checks its own /health.
+      test: ["CMD", "/replay-parser", "-healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    # It handles URLs from outside: no writable filesystem, no Linux capabilities, no privilege escalation.
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
     restart: unless-stopped
 
 volumes:

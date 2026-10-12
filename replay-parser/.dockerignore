@@ -1,0 +1,13 @@
+# Build context is this folder (replay-parser/). Only Go sources are needed.
+
+# Local builds (go build drops the executable here)
+*.exe
+/replay-parser
+/inspect
+
+# Docs, Docker files and secrets
+*.md
+Dockerfile
+.dockerignore
+**/.env
+**/.env.*

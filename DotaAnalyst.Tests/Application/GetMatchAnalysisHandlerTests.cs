@@ -5,6 +5,7 @@ using DotaAnalyst.Domain.Heroes;
 using DotaAnalyst.Domain.Items;
 using DotaAnalyst.Domain.Matches;
 using DotaAnalyst.Domain.Players;
+using DotaAnalyst.Domain.Replays;
 using DotaAnalyst.Tests.Domain;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -169,16 +170,211 @@ public class GetMatchAnalysisHandlerTests
         Assert.NotNull(analysis);
     }
 
+    // ----- Laning phase from our own replay parsing -----
+
+    private static readonly Uri ReplayUrl = new("http://replay202.valve.net/570/10_96247495.dem.bz2");
+
+    [Fact]
+    public async Task Laning_ParsedByOpenDota_IsNotNeededAndSkipsTheReplayStorage()
+    {
+        var replays = new FakeReplayAnalysisRepository { Fail = true };
+        var queue = new FakeReplayParseQueue();
+        var handler = CreateHandler(UnparsedMatchWithMe() with { IsParsed = true }, replays, queue);
+
+        var analysis = await handler.HandleAsync(MatchIdOf(10), Me, CancellationToken.None);
+
+        Assert.Equal(ReplayStatus.NotNeeded, analysis!.ReplayStatus);
+        Assert.Null(analysis.Laning);
+        Assert.Equal(0, replays.FindCalls);
+        Assert.Empty(queue.Enqueued);
+    }
+
+    [Fact]
+    public async Task Laning_AlreadyQueued_IsProcessingWithoutAskingTheDatabase()
+    {
+        var replays = new FakeReplayAnalysisRepository { Fail = true };
+        var queue = new FakeReplayParseQueue { Queued = { 10 } };
+        var handler = CreateHandler(UnparsedMatchWithMe(), replays, queue);
+
+        var analysis = await handler.HandleAsync(MatchIdOf(10), Me, CancellationToken.None);
+
+        Assert.Equal(ReplayStatus.Processing, analysis!.ReplayStatus);
+        Assert.Equal(0, replays.FindCalls);
+    }
+
+    [Fact]
+    public async Task Laning_Ready_FillsTheLaningPhaseOfTheCurrentPlayer()
+    {
+        var replay = ReplayBuilder.Analysis(
+            10,
+            ReplayBuilder.Hero(31, Team.Radiant, Lane.Bottom, netWorth: 2047),
+            ReplayBuilder.Hero(17, Team.Radiant, Lane.Bottom, netWorth: 3000),
+            ReplayBuilder.Hero(28, Team.Dire, Lane.Bottom, netWorth: 3797),
+            ReplayBuilder.Hero(5, Team.Dire, Lane.Middle, netWorth: 5000));
+        var replays = new FakeReplayAnalysisRepository(SavedReplayAnalysis.Ready(replay, Now.AddDays(-3)));
+        var queue = new FakeReplayParseQueue();
+        var handler = CreateHandler(UnparsedMatchWithMe(), replays, queue);
+
+        var analysis = await handler.HandleAsync(MatchIdOf(10), Me, CancellationToken.None);
+
+        Assert.Equal(ReplayStatus.Ready, analysis!.ReplayStatus);
+        var laning = analysis.Laning;
+        Assert.NotNull(laning);
+        Assert.Equal(600, laning.EndsAtSeconds);
+        Assert.Equal(Lane.Bottom, laning.Lane);
+        Assert.Equal(LaneOutcome.Won, laning.Outcome);
+        Assert.Equal(2047 + 3000 - 3797, laning.NetWorthDifference);
+        Assert.Equal(new LaningPlayer(31, "Lich", 20, 3, 2047, 2500, 1), laning.Player);
+        Assert.Equal([17], laning.Allies.Select(ally => ally.HeroId));
+        Assert.Equal(GetMatchAnalysisHandler.UnknownHeroName, laning.Allies[0].HeroName);
+        Assert.Equal([28], laning.Opponents.Select(opponent => opponent.HeroId));
+        Assert.Empty(queue.Enqueued);
+    }
+
+    [Fact]
+    public async Task Laning_ReadyButPlayerNotInTheMatch_HasNoLaning()
+    {
+        var replay = ReplayBuilder.Analysis(10, ReplayBuilder.Hero(31, Team.Radiant, Lane.Bottom));
+        var replays = new FakeReplayAnalysisRepository(SavedReplayAnalysis.Ready(replay, Now));
+        var someoneElse = MatchPlayerBuilder.Create(accountId: MatchPlayerBuilder.Account(1), heroId: 31);
+        var handler = CreateHandler(CreateMatch(Team.Radiant, someoneElse) with { ReplayUrl = ReplayUrl }, replays);
+
+        var analysis = await handler.HandleAsync(MatchIdOf(10), Me, CancellationToken.None);
+
+        Assert.Equal(ReplayStatus.Ready, analysis!.ReplayStatus);
+        Assert.Null(analysis.Laning);
+    }
+
+    [Fact]
+    public async Task Laning_ReadyButHeroNotInTheReplay_HasNoLaning()
+    {
+        var replay = ReplayBuilder.Analysis(10, ReplayBuilder.Hero(99, Team.Radiant, Lane.Bottom));
+        var replays = new FakeReplayAnalysisRepository(SavedReplayAnalysis.Ready(replay, Now));
+        var handler = CreateHandler(UnparsedMatchWithMe(), replays);
+
+        var analysis = await handler.HandleAsync(MatchIdOf(10), Me, CancellationToken.None);
+
+        Assert.Equal(ReplayStatus.Ready, analysis!.ReplayStatus);
+        Assert.Null(analysis.Laning);
+    }
+
+    [Fact]
+    public async Task Laning_Expired_IsNeverQueuedAgain()
+    {
+        var replays = new FakeReplayAnalysisRepository(SavedReplayAnalysis.Expired(MatchIdOf(10), Now.AddDays(-30)));
+        var queue = new FakeReplayParseQueue();
+        var handler = CreateHandler(UnparsedMatchWithMe(), replays, queue);
+
+        var analysis = await handler.HandleAsync(MatchIdOf(10), Me, CancellationToken.None);
+
+        Assert.Equal(ReplayStatus.Expired, analysis!.ReplayStatus);
+        Assert.Null(analysis.Laning);
+        Assert.Empty(queue.Enqueued);
+    }
+
+    [Theory]
+    [InlineData(59, ReplayStatus.Failed, false)]     // failed recently: shown as failed
+    [InlineData(60, ReplayStatus.Processing, true)]  // an hour later: queued again
+    public async Task Laning_Failed_IsQueuedAgainAfterAnHour(int failedMinutesAgo, ReplayStatus expected, bool queuedAgain)
+    {
+        var failedAt = Now.AddMinutes(-failedMinutesAgo);
+        var replays = new FakeReplayAnalysisRepository(SavedReplayAnalysis.Failed(MatchIdOf(10), failedAt));
+        var queue = new FakeReplayParseQueue();
+        var handler = CreateHandler(UnparsedMatchWithMe(), replays, queue, new FixedTimeProvider(Now));
+
+        var analysis = await handler.HandleAsync(MatchIdOf(10), Me, CancellationToken.None);
+
+        Assert.Equal(TimeSpan.FromHours(1), GetMatchAnalysisHandler.FailedReplayRetryInterval);
+        Assert.Equal(expected, analysis!.ReplayStatus);
+        Assert.Equal(queuedAgain, queue.Enqueued.Count == 1);
+    }
+
+    [Theory]
+    [InlineData(ReplayEnqueueResult.Full)]
+    [InlineData(ReplayEnqueueResult.Unavailable)]
+    public async Task Laning_OldFailureThatCantBeQueuedNow_StaysFailed(ReplayEnqueueResult enqueueResult)
+    {
+        var replays = new FakeReplayAnalysisRepository(SavedReplayAnalysis.Failed(MatchIdOf(10), Now.AddDays(-1)));
+        var handler = CreateHandler(UnparsedMatchWithMe(), replays, new FakeReplayParseQueue { Result = enqueueResult });
+
+        var analysis = await handler.HandleAsync(MatchIdOf(10), Me, CancellationToken.None);
+
+        Assert.Equal(ReplayStatus.Failed, analysis!.ReplayStatus);
+    }
+
+    [Theory]
+    [InlineData(ReplayEnqueueResult.Enqueued, ReplayStatus.Processing)]
+    [InlineData(ReplayEnqueueResult.AlreadyQueued, ReplayStatus.Processing)]
+    [InlineData(ReplayEnqueueResult.Full, ReplayStatus.Unavailable)]
+    [InlineData(ReplayEnqueueResult.Unavailable, ReplayStatus.Unavailable)]
+    public async Task Laning_NeverParsed_IsQueued(ReplayEnqueueResult enqueueResult, ReplayStatus expected)
+    {
+        var queue = new FakeReplayParseQueue { Result = enqueueResult };
+        var handler = CreateHandler(UnparsedMatchWithMe(), new FakeReplayAnalysisRepository(), queue);
+
+        var analysis = await handler.HandleAsync(MatchIdOf(10), Me, CancellationToken.None);
+
+        Assert.Equal(expected, analysis!.ReplayStatus);
+        Assert.Null(analysis.Laning);
+        Assert.Equal((10L, ReplayUrl), Assert.Single(queue.Enqueued));
+    }
+
+    [Fact]
+    public async Task Laning_WithoutReplayUrl_IsUnavailable()
+    {
+        var queue = new FakeReplayParseQueue();
+        var handler = CreateHandler(UnparsedMatchWithMe() with { ReplayUrl = null }, new FakeReplayAnalysisRepository(), queue);
+
+        var analysis = await handler.HandleAsync(MatchIdOf(10), Me, CancellationToken.None);
+
+        Assert.Equal(ReplayStatus.Unavailable, analysis!.ReplayStatus);
+        Assert.Empty(queue.Enqueued);
+    }
+
+    [Fact]
+    public async Task Laning_DatabaseFails_IsUnavailableAndTheAnalysisStillAnswers()
+    {
+        var queue = new FakeReplayParseQueue();
+        var handler = CreateHandler(UnparsedMatchWithMe(), new FakeReplayAnalysisRepository { Fail = true }, queue);
+
+        var analysis = await handler.HandleAsync(MatchIdOf(10), Me, CancellationToken.None);
+
+        Assert.NotNull(analysis);
+        Assert.NotNull(analysis.Performance);
+        Assert.Equal(ReplayStatus.Unavailable, analysis.ReplayStatus);
+        // Nothing queued: the result could not be saved either.
+        Assert.Empty(queue.Enqueued);
+    }
+
+    // An unparsed match with a replay address, where the current player plays Lich (hero 31) on Radiant.
+    private static MatchDetails UnparsedMatchWithMe() =>
+        CreateMatch(Team.Radiant, MatchPlayerBuilder.Create(accountId: Me, heroId: 31, team: Team.Radiant))
+            with { ReplayUrl = ReplayUrl };
+
+    private static GetMatchAnalysisHandler CreateHandler(
+        MatchDetails match,
+        FakeReplayAnalysisRepository replays,
+        FakeReplayParseQueue? queue = null,
+        TimeProvider? clock = null) =>
+        CreateHandler(new FakeReplayAnalyzer(match), replays: replays, queue: queue, clock: clock);
+
     private static GetMatchAnalysisHandler CreateHandler(MatchDetails? match) =>
         CreateHandler(new FakeReplayAnalyzer(match));
 
-    private static GetMatchAnalysisHandler CreateHandler(FakeReplayAnalyzer analyzer, FakeMatchRepository? repository = null) =>
+    private static GetMatchAnalysisHandler CreateHandler(
+        FakeReplayAnalyzer analyzer,
+        FakeMatchRepository? repository = null,
+        FakeReplayAnalysisRepository? replays = null,
+        FakeReplayParseQueue? queue = null,
+        TimeProvider? clock = null) =>
         new(
             analyzer,
             repository ?? new FakeMatchRepository(),
+            replays ?? new FakeReplayAnalysisRepository(),
+            queue ?? new FakeReplayParseQueue(),
             new FakeHeroCatalog(new Hero(31, "Lich")),
             new FakeItemCatalog(new Item(1, "Blink Dagger"), new Item(2, "Trusty Shovel")),
-            new FixedTimeProvider(Now),
+            clock ?? new FixedTimeProvider(Now),
             NullLogger<GetMatchAnalysisHandler>.Instance);
 
     private static MatchDetails CreateMatch(Team? winningTeam, params MatchPlayer[] players) =>
@@ -225,6 +421,39 @@ public class GetMatchAnalysisHandlerTests
             Saved.Add(match);
             return Task.CompletedTask;
         }
+    }
+
+    private class FakeReplayAnalysisRepository(SavedReplayAnalysis? saved = null) : IReplayAnalysisRepository
+    {
+        public bool Fail { get; init; }
+
+        public int FindCalls { get; private set; }
+
+        public Task<SavedReplayAnalysis?> FindAsync(MatchId matchId, CancellationToken cancellationToken)
+        {
+            FindCalls++;
+            return Fail ? throw new StorageUnavailableException("The database is down.") : Task.FromResult(saved);
+        }
+
+        public Task SaveAsync(SavedReplayAnalysis result, CancellationToken cancellationToken) =>
+            throw new InvalidOperationException("The analysis never saves replay results.");
+    }
+
+    private class FakeReplayParseQueue : IReplayParseQueue
+    {
+        public ReplayEnqueueResult Result { get; init; } = ReplayEnqueueResult.Enqueued;
+
+        public HashSet<long> Queued { get; } = [];
+
+        public List<(long MatchId, Uri ReplayUrl)> Enqueued { get; } = [];
+
+        public ReplayEnqueueResult TryEnqueue(MatchId matchId, Uri replayUrl)
+        {
+            Enqueued.Add((matchId.Value, replayUrl));
+            return Result;
+        }
+
+        public bool IsQueued(MatchId matchId) => Queued.Contains(matchId.Value);
     }
 
     private class FakeHeroCatalog(params Hero[] heroes) : IHeroCatalog

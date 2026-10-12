@@ -26,6 +26,10 @@ internal sealed class ApiFactory(IReadOnlyDictionary<string, string?>? settings 
 
     public FakePlayerSearchRepository PlayerSearches { get; } = new();
 
+    // Saved replay results. The parser and the queue stay the app's own (replay parsing off), so a match without
+    // a saved result is "unavailable".
+    public FakeReplayAnalysisRepository ReplayAnalyses { get; } = new();
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         // No database: an empty connection string wins over the developer's user-secrets (which the
@@ -49,6 +53,7 @@ internal sealed class ApiFactory(IReadOnlyDictionary<string, string?>? settings 
             services.AddSingleton<IItemCatalog>(new FakeItemCatalog());
             services.AddSingleton<IMatchRepository>(SavedMatches);
             services.AddSingleton<IPlayerSearchRepository>(PlayerSearches);
+            services.AddSingleton<IReplayAnalysisRepository>(ReplayAnalyses);
             services.AddSingleton<ISteamProfileProvider>(SteamProfiles);
             // Server-to-Steam calls of the login (OpenID discovery and check_authentication) go to a fake Steam.
             services.Configure<SteamAuthenticationOptions>(
@@ -116,6 +121,20 @@ internal sealed class ApiFactory(IReadOnlyDictionary<string, string?>? settings 
         public Task SaveAsync(MatchDetails match, DateTimeOffset savedAt, CancellationToken cancellationToken)
         {
             Matches[match.MatchId.Value] = new SavedMatch(match, savedAt);
+            return Task.CompletedTask;
+        }
+    }
+
+    public sealed class FakeReplayAnalysisRepository : IReplayAnalysisRepository
+    {
+        public ConcurrentDictionary<long, SavedReplayAnalysis> Results { get; } = new();
+
+        public Task<SavedReplayAnalysis?> FindAsync(MatchId matchId, CancellationToken cancellationToken) =>
+            Task.FromResult(Results.GetValueOrDefault(matchId.Value));
+
+        public Task SaveAsync(SavedReplayAnalysis result, CancellationToken cancellationToken)
+        {
+            Results[result.MatchId.Value] = result;
             return Task.CompletedTask;
         }
     }

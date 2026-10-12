@@ -1,5 +1,6 @@
 using DotaAnalyst.Domain.Analysis;
 using DotaAnalyst.Domain.Matches;
+using DotaAnalyst.Domain.Replays;
 
 namespace DotaAnalyst.Application.Matches;
 
@@ -14,6 +15,8 @@ namespace DotaAnalyst.Application.Matches;
 /// <param name="Radiant">The Radiant players.</param>
 /// <param name="Dire">The Dire players.</param>
 /// <param name="Performance">How the requested player did; null when they are not in the match (or have an anonymous profile).</param>
+/// <param name="ReplayStatus">Where our own reading of the replay stands (only for matches OpenDota didn't parse; otherwise notNeeded). While processing, ask again in a few seconds.</param>
+/// <param name="Laning">The player's laning phase, read from the replay; null unless replayStatus is ready and the player is in the match.</param>
 public record MatchAnalysis(
     long MatchId,
     int DurationSeconds,
@@ -24,7 +27,9 @@ public record MatchAnalysis(
     bool IsParsed,
     IReadOnlyList<MatchPlayerSummary> Radiant,
     IReadOnlyList<MatchPlayerSummary> Dire,
-    PlayerPerformance? Performance);
+    PlayerPerformance? Performance,
+    ReplayStatus ReplayStatus,
+    LaningPhase? Laning);
 
 /// <summary>One of the ten players of the match.</summary>
 /// <param name="AccountId">Dota account ID; null for players with an anonymous profile.</param>
@@ -88,3 +93,37 @@ public record PlayerPerformance(
 /// <param name="Percentile">From 0 to 1 against other players of the same hero; higher is always better, even for deaths.</param>
 /// <param name="Rating">strong (≥ 0.70), average, or weak (≤ 0.30).</param>
 public record MetricPerformance(BenchmarkMetric Metric, double Value, double Percentile, PerformanceRating Rating);
+
+/// <summary>How the player's lane went, at the end of the laning phase (10:00 of the game clock).</summary>
+/// <param name="EndsAtSeconds">Game clock, in seconds, at which the numbers were taken: 600, or less when the match ended earlier.</param>
+/// <param name="Lane">Where the player spent the laning phase: top, middle, bottom (physical lanes, the same for both teams), jungle or roaming.</param>
+/// <param name="Outcome">won (lane net worth lead ≥ 1000), lost (≤ −1000) or even; null in the jungle, roaming, or when no enemy was in the lane.</param>
+/// <param name="NetWorthDifference">Net worth of the player and allies minus the opponents'; null when outcome is null.</param>
+/// <param name="Player">The player's numbers.</param>
+/// <param name="Allies">Teammates in the same lane (without the player), richest first.</param>
+/// <param name="Opponents">Enemies in the same lane, richest first.</param>
+public record LaningPhase(
+    int EndsAtSeconds,
+    Lane Lane,
+    LaneOutcome? Outcome,
+    int? NetWorthDifference,
+    LaningPlayer Player,
+    IReadOnlyList<LaningPlayer> Allies,
+    IReadOnlyList<LaningPlayer> Opponents);
+
+/// <summary>One hero's numbers at the end of the laning phase.</summary>
+/// <param name="HeroId">Hero played.</param>
+/// <param name="HeroName">Hero name, or "Unknown hero".</param>
+/// <param name="LastHits">Last hits (creeps killed).</param>
+/// <param name="Denies">Own creeps denied.</param>
+/// <param name="NetWorth">Gold plus the value of the items.</param>
+/// <param name="Experience">Experience points.</param>
+/// <param name="Deaths">Deaths.</param>
+public record LaningPlayer(
+    int HeroId,
+    string HeroName,
+    int LastHits,
+    int Denies,
+    int NetWorth,
+    int Experience,
+    int Deaths);

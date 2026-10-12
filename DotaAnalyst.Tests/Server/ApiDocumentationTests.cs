@@ -19,6 +19,12 @@ public class ApiDocumentationTests
         Assert.Equal(["weak", "average", "strong"], values);
         Assert.Contains("goldPerMinute", schemas.GetProperty("BenchmarkMetric").GetProperty("enum")
             .EnumerateArray().Select(value => value.GetString()));
+        Assert.Equal(
+            ["ready", "processing", "failed", "expired", "unavailable", "notNeeded"],
+            schemas.GetProperty("ReplayStatus").GetProperty("enum").EnumerateArray().Select(value => value.GetString()));
+        Assert.Equal(
+            ["top", "middle", "bottom", "jungle", "roaming"],
+            schemas.GetProperty("Lane").GetProperty("enum").EnumerateArray().Select(value => value.GetString()));
     }
 
     [Fact]

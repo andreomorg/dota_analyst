@@ -15,8 +15,9 @@ namespace DotaAnalyst.Application.Matches;
 /// <param name="Radiant">The Radiant players.</param>
 /// <param name="Dire">The Dire players.</param>
 /// <param name="Performance">How the requested player did; null when they are not in the match (or have an anonymous profile).</param>
-/// <param name="ReplayStatus">Where our own reading of the replay stands (only for matches OpenDota didn't parse; otherwise notNeeded). While processing, ask again in a few seconds.</param>
+/// <param name="ReplayStatus">Where our own reading of the replay stands (every match with a replay; notNeeded is no longer used). While processing, ask again in a few seconds.</param>
 /// <param name="Laning">The player's laning phase, read from the replay; null unless replayStatus is ready and the player is in the match.</param>
+/// <param name="Timeline">Net worth and experience during the whole match, read from the replay; null unless replayStatus is ready (and for replays read before the timeline existed).</param>
 public record MatchAnalysis(
     long MatchId,
     int DurationSeconds,
@@ -29,7 +30,8 @@ public record MatchAnalysis(
     IReadOnlyList<MatchPlayerSummary> Dire,
     PlayerPerformance? Performance,
     ReplayStatus ReplayStatus,
-    LaningPhase? Laning);
+    LaningPhase? Laning,
+    MatchTimelineChart? Timeline = null);
 
 /// <summary>One of the ten players of the match.</summary>
 /// <param name="AccountId">Dota account ID; null for players with an anonymous profile.</param>
@@ -127,3 +129,37 @@ public record LaningPlayer(
     int NetWorth,
     int Experience,
     int Deaths);
+
+/// <summary>Net worth and experience during the whole match, for the charts.</summary>
+/// <param name="Seconds">Game clock, in seconds, of each point: one per minute (0, 60, 120…) and a last one at the end of the match. Every list below has one value per point.</param>
+/// <param name="Perspective">The team the leads are counted for: the player's team, or radiant when the player is not in the match.</param>
+/// <param name="NetWorthLead">Net worth of the perspective team minus the other team's, at each point (negative when behind).</param>
+/// <param name="ExperienceLead">Experience of the perspective team minus the other team's, at each point.</param>
+/// <param name="Lane">The player and the heroes of their lane (allies and opponents, as in the laning phase); just the player in the jungle or roaming; empty when the player is not in the match.</param>
+public record MatchTimelineChart(
+    IReadOnlyList<int> Seconds,
+    Team Perspective,
+    IReadOnlyList<int> NetWorthLead,
+    IReadOnlyList<int> ExperienceLead,
+    IReadOnlyList<TimelineHero> Lane);
+
+/// <summary>One hero's net worth and experience at each point of the timeline.</summary>
+/// <param name="HeroId">Hero played.</param>
+/// <param name="HeroName">Hero name, or "Unknown hero".</param>
+/// <param name="Side">player (the point of view), ally or opponent.</param>
+/// <param name="NetWorth">Net worth at each point.</param>
+/// <param name="Experience">Experience at each point.</param>
+public record TimelineHero(
+    int HeroId,
+    string HeroName,
+    LaneSide Side,
+    IReadOnlyList<int> NetWorth,
+    IReadOnlyList<int> Experience);
+
+/// <summary>Which side of the player's lane a hero was on.</summary>
+public enum LaneSide
+{
+    Player,
+    Ally,
+    Opponent,
+}

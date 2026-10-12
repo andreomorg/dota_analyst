@@ -175,18 +175,91 @@ public class GetMatchAnalysisHandlerTests
     private static readonly Uri ReplayUrl = new("http://replay202.valve.net/570/10_96247495.dem.bz2");
 
     [Fact]
-    public async Task Laning_ParsedByOpenDota_IsNotNeededAndSkipsTheReplayStorage()
+    public async Task Laning_ParsedByOpenDota_IsQueuedToo()
     {
-        var replays = new FakeReplayAnalysisRepository { Fail = true };
+        // OpenDota's parse has neither the laning phase nor the timeline in the form we use.
         var queue = new FakeReplayParseQueue();
-        var handler = CreateHandler(UnparsedMatchWithMe() with { IsParsed = true }, replays, queue);
+        var handler = CreateHandler(UnparsedMatchWithMe() with { IsParsed = true }, new FakeReplayAnalysisRepository(), queue);
 
         var analysis = await handler.HandleAsync(MatchIdOf(10), Me, CancellationToken.None);
 
-        Assert.Equal(ReplayStatus.NotNeeded, analysis!.ReplayStatus);
-        Assert.Null(analysis.Laning);
-        Assert.Equal(0, replays.FindCalls);
-        Assert.Empty(queue.Enqueued);
+        Assert.Equal(ReplayStatus.Processing, analysis!.ReplayStatus);
+        Assert.Equal([10], queue.Enqueued.Select(entry => entry.MatchId));
+    }
+
+    [Fact]
+    public async Task Timeline_Ready_LeadsForThePlayersTeamAndTheirLane()
+    {
+        var replay = ReplayBuilder.Analysis(
+            10,
+            ReplayBuilder.Hero(31, Team.Radiant, Lane.Bottom, netWorth: 2047),
+            ReplayBuilder.Hero(17, Team.Radiant, Lane.Bottom, netWorth: 3000),
+            ReplayBuilder.Hero(28, Team.Dire, Lane.Bottom, netWorth: 3797),
+            ReplayBuilder.Hero(5, Team.Dire, Lane.Middle, netWorth: 5000));
+        var handler = CreateHandler(
+            UnparsedMatchWithMe(), new FakeReplayAnalysisRepository(SavedReplayAnalysis.Ready(replay, Now)));
+
+        var timeline = (await handler.HandleAsync(MatchIdOf(10), Me, CancellationToken.None))!.Timeline;
+
+        Assert.NotNull(timeline);
+        Assert.Equal([0, 600, 1200], timeline.Seconds);
+        Assert.Equal(Team.Radiant, timeline.Perspective);
+        var lead = 2047 + 3000 - 3797 - 5000;
+        Assert.Equal([0, lead, 2 * lead], timeline.NetWorthLead);
+        Assert.Equal([0, 0, 0], timeline.ExperienceLead); // 2 heroes per team, same experience
+        Assert.Equal(
+            [(31, LaneSide.Player), (17, LaneSide.Ally), (28, LaneSide.Opponent)],
+            timeline.Lane.Select(hero => (hero.HeroId, hero.Side)));
+        Assert.Equal([0, 2047, 4094], timeline.Lane[0].NetWorth);
+        Assert.Equal("Lich", timeline.Lane[0].HeroName);
+    }
+
+    [Fact]
+    public async Task Timeline_PlayerNotInTheMatch_RadiantPerspectiveAndNoLane()
+    {
+        var replay = ReplayBuilder.Analysis(
+            10, ReplayBuilder.Hero(31, Team.Radiant, Lane.Bottom, netWorth: 3000),
+            ReplayBuilder.Hero(28, Team.Dire, Lane.Bottom, netWorth: 1000));
+        var someoneElse = MatchPlayerBuilder.Create(accountId: MatchPlayerBuilder.Account(1), heroId: 31);
+        var handler = CreateHandler(
+            CreateMatch(Team.Radiant, someoneElse) with { ReplayUrl = ReplayUrl },
+            new FakeReplayAnalysisRepository(SavedReplayAnalysis.Ready(replay, Now)));
+
+        var timeline = (await handler.HandleAsync(MatchIdOf(10), Me, CancellationToken.None))!.Timeline;
+
+        Assert.NotNull(timeline);
+        Assert.Equal(Team.Radiant, timeline.Perspective);
+        Assert.Equal([0, 2000, 4000], timeline.NetWorthLead);
+        Assert.Empty(timeline.Lane);
+    }
+
+    [Fact]
+    public async Task Timeline_SavedWithoutIt_IsParsedAgain()
+    {
+        var replay = ReplayBuilder.AnalysisWithoutTimeline(10, ReplayBuilder.Hero(31, Team.Radiant, Lane.Bottom));
+        var queue = new FakeReplayParseQueue();
+        var handler = CreateHandler(
+            UnparsedMatchWithMe(), new FakeReplayAnalysisRepository(SavedReplayAnalysis.Ready(replay, Now)), queue);
+
+        var analysis = await handler.HandleAsync(MatchIdOf(10), Me, CancellationToken.None);
+
+        Assert.Equal(ReplayStatus.Processing, analysis!.ReplayStatus);
+        Assert.Equal([10], queue.Enqueued.Select(entry => entry.MatchId));
+    }
+
+    [Fact]
+    public async Task Timeline_SavedWithoutItAndCannotQueue_KeepsTheLaningPhase()
+    {
+        var replay = ReplayBuilder.AnalysisWithoutTimeline(10, ReplayBuilder.Hero(31, Team.Radiant, Lane.Bottom));
+        var queue = new FakeReplayParseQueue { Result = ReplayEnqueueResult.Unavailable };
+        var handler = CreateHandler(
+            UnparsedMatchWithMe(), new FakeReplayAnalysisRepository(SavedReplayAnalysis.Ready(replay, Now)), queue);
+
+        var analysis = await handler.HandleAsync(MatchIdOf(10), Me, CancellationToken.None);
+
+        Assert.Equal(ReplayStatus.Ready, analysis!.ReplayStatus);
+        Assert.NotNull(analysis.Laning);
+        Assert.Null(analysis.Timeline);
     }
 
     [Fact]

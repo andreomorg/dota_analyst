@@ -2,14 +2,15 @@ using DotaAnalyst.Domain.Matches;
 
 namespace DotaAnalyst.Domain.Replays;
 
-// What we read from a match replay ourselves: the laning phase of every hero. It complements OpenDota (which
-// has the percentiles) for matches OpenDota didn't parse; it never replaces it.
+// What we read from a match replay ourselves: the laning phase of every hero and how net worth and experience
+// changed during the whole match. It complements OpenDota (which has the percentiles); it never replaces it.
 public record ReplayAnalysis
 {
     // The laning phase ends at 10:00 of the game clock (pauses left out).
     public const int LaningPhaseEndsAtSeconds = 600;
 
-    public ReplayAnalysis(MatchId matchId, int endsAtSeconds, IReadOnlyList<LaningStats> players)
+    public ReplayAnalysis(
+        MatchId matchId, int endsAtSeconds, IReadOnlyList<LaningStats> players, MatchTimeline? timeline = null)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(matchId.Value, nameof(matchId));
         ArgumentOutOfRangeException.ThrowIfNegative(endsAtSeconds);
@@ -30,7 +31,11 @@ public record ReplayAnalysis
         EndsAtSeconds = endsAtSeconds;
         // A copy, so the caller can't change the list afterwards.
         Players = players.ToList();
+        Timeline = timeline;
     }
+
+    // Null for analyses made before the timeline existed (they only have the laning phase).
+    public MatchTimeline? Timeline { get; }
 
     public MatchId MatchId { get; }
 

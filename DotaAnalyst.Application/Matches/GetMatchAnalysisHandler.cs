@@ -54,7 +54,7 @@ public class GetMatchAnalysisHandler(
             .Select(player => ToSummary(player, ReferenceEquals(player, currentPlayer), names))
             .ToList();
 
-        var (replayStatus, laning) = await GetLaningAsync(match, currentPlayer, names, cancellationToken);
+        var (replayStatus, laning, timeline) = await GetReplayAsync(match, currentPlayer, names, cancellationToken);
 
         return new MatchAnalysis(
             MatchId: match.MatchId.Value,
@@ -68,24 +68,20 @@ public class GetMatchAnalysisHandler(
             Dire: TeamOf(Team.Dire),
             Performance: currentPlayer is null ? null : ToPerformance(match, currentPlayer, names),
             ReplayStatus: replayStatus,
-            Laning: laning);
+            Laning: laning,
+            Timeline: timeline);
     }
 
-    // Our own reading of the replay, for matches OpenDota didn't parse. It never breaks the analysis: anything
-    // that goes wrong here only changes the status.
-    private async Task<(ReplayStatus Status, LaningPhase? Laning)> GetLaningAsync(
+    // Our own reading of the replay (laning phase and timeline), for every match with a replay: OpenDota's parse
+    // has neither in the form we use. It never breaks the analysis: anything that goes wrong here only changes the
+    // status.
+    private async Task<(ReplayStatus Status, LaningPhase? Laning, MatchTimelineChart? Timeline)> GetReplayAsync(
         MatchDetails match, MatchPlayer? currentPlayer, NameLookup names, CancellationToken cancellationToken)
     {
-        // OpenDota's data is already complete: the database isn't even asked.
-        if (match.IsParsed)
-        {
-            return (ReplayStatus.NotNeeded, null);
-        }
-
         // Checked in memory first: while the page polls a replay being parsed, the database is left alone.
         if (replayParseQueue.IsQueued(match.MatchId))
         {
-            return (ReplayStatus.Processing, null);
+            return (ReplayStatus.Processing, null, null);
         }
 
         SavedReplayAnalysis? saved;
@@ -97,7 +93,7 @@ public class GetMatchAnalysisHandler(
         {
             // Without the database a result could not be saved either, so nothing is queued.
             logger.LogWarning(ex, "Could not read the replay result of match {MatchId} from the database", match.MatchId);
-            return (ReplayStatus.Unavailable, null);
+            return (ReplayStatus.Unavailable, null, null);
         }
 
         // "Expired" saved too soon after the match ended may only mean Valve hadn't uploaded the replay yet
@@ -108,12 +104,19 @@ public class GetMatchAnalysisHandler(
 
         switch (state)
         {
-            case SavedReplayState.Ready when saved!.Analysis is { } analysis:
-                return (ReplayStatus.Ready, currentPlayer is null ? null : ToLaningPhase(analysis, currentPlayer, names));
+            case SavedReplayState.Ready when saved!.Analysis is { Timeline: not null } analysis:
+                return Ready(analysis);
+            case SavedReplayState.Ready when saved!.Analysis is { } outdated:
+                // Read before the timeline existed: parsed again when possible; until then, the laning phase we have.
+                return match.ReplayUrl is not null
+                    && replayParseQueue.TryEnqueue(match.MatchId, match.ReplayUrl)
+                        is ReplayEnqueueResult.Enqueued or ReplayEnqueueResult.AlreadyQueued
+                    ? (ReplayStatus.Processing, null, null)
+                    : Ready(outdated);
             case SavedReplayState.Expired:
-                return (ReplayStatus.Expired, null);
+                return (ReplayStatus.Expired, null, null);
             case SavedReplayState.Failed when timeProvider.GetUtcNow() - saved!.SavedAt < FailedReplayRetryInterval:
-                return (ReplayStatus.Failed, null);
+                return (ReplayStatus.Failed, null, null);
         }
 
         // Never parsed, or failed long enough ago to try again. When it can't be queued now, a failure stays a
@@ -124,13 +127,13 @@ public class GetMatchAnalysisHandler(
         // later (and matches saved before the address was stored get it back when refreshed from OpenDota).
         if (match.ReplayUrl is null)
         {
-            return (notQueued, null);
+            return (notQueued, null, null);
         }
 
         var enqueued = replayParseQueue.TryEnqueue(match.MatchId, match.ReplayUrl);
         if (enqueued is ReplayEnqueueResult.Enqueued or ReplayEnqueueResult.AlreadyQueued)
         {
-            return (ReplayStatus.Processing, null);
+            return (ReplayStatus.Processing, null, null);
         }
 
         // Unavailable is not logged: with the feature off it would be every visit.
@@ -139,7 +142,38 @@ public class GetMatchAnalysisHandler(
             logger.LogInformation("The replay parse queue is full; match {MatchId} was not queued", match.MatchId);
         }
 
-        return (notQueued, null);
+        return (notQueued, null, null);
+
+        (ReplayStatus, LaningPhase?, MatchTimelineChart?) Ready(ReplayAnalysis analysis) => (
+            ReplayStatus.Ready,
+            currentPlayer is null ? null : ToLaningPhase(analysis, currentPlayer, names),
+            analysis.Timeline is { } timeline ? ToTimelineChart(analysis, timeline, currentPlayer, names) : null);
+    }
+
+    private static MatchTimelineChart ToTimelineChart(
+        ReplayAnalysis replay, MatchTimeline timeline, MatchPlayer? player, NameLookup names)
+    {
+        var perspective = player?.Team ?? Team.Radiant;
+        var lead = TimelineEvaluator.LeadOf(timeline, perspective);
+
+        // The lane chart shows the same heroes as the laning phase: the player, allies and opponents of their lane.
+        var lane = new List<TimelineHero>();
+        if (player is not null && LaneOutcomeEvaluator.Evaluate(replay, player.HeroId) is { } evaluation)
+        {
+            void Add(LaningStats stats, LaneSide side)
+            {
+                if (timeline.FindHero(stats.HeroId) is { } hero)
+                {
+                    lane.Add(new TimelineHero(hero.HeroId, names.Hero(hero.HeroId), side, hero.NetWorth, hero.Experience));
+                }
+            }
+
+            Add(evaluation.Player, LaneSide.Player);
+            evaluation.Allies.ToList().ForEach(ally => Add(ally, LaneSide.Ally));
+            evaluation.Opponents.ToList().ForEach(opponent => Add(opponent, LaneSide.Opponent));
+        }
+
+        return new MatchTimelineChart(timeline.Seconds, perspective, lead.NetWorth, lead.Experience, lane);
     }
 
     // Null when the player's hero is not in the replay.

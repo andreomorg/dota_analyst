@@ -1,0 +1,398 @@
+<mxfile host="65bd71144e">
+    <diagram id="arquitetura" name="1. Arquitetura">
+        <mxGraphModel dx="1146" dy="1262" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1120" pageHeight="1100" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="local" parent="1" style="swimlane;startSize=30;fillColor=#e8f5e9;strokeColor=#82b366;html=1;" value="Máquina do dono do projeto (docker compose) — processamento pesado" vertex="1">
+                    <mxGeometry height="420" width="560" x="20" y="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="parser" parent="local" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" value="&lt;b&gt;replay-parser&lt;/b&gt; (Go)&lt;br&gt;lê os replays .dem" vertex="1">
+                    <mxGeometry height="60" width="160" x="30" y="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="collector" parent="local" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" value="&lt;b&gt;collector&lt;/b&gt;&lt;br&gt;coleta partidas pro/alto nível&lt;br&gt;publica de hora em hora" vertex="1">
+                    <mxGeometry height="70" width="160" x="30" y="200" as="geometry"/>
+                </mxCell>
+                <mxCell id="localapi" parent="local" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" value="&lt;b&gt;api&lt;/b&gt; (C# + React)&lt;br&gt;localhost:8080" vertex="1">
+                    <mxGeometry height="60" width="160" x="340" y="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="localdb" parent="local" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;size=12;fillColor=#fff2cc;strokeColor=#d6b656;" value="PostgreSQL local&lt;br&gt;dados brutos + prontos" vertex="1">
+                    <mxGeometry height="80" width="140" x="350" y="200" as="geometry"/>
+                </mxCell>
+                <mxCell id="ngrok" parent="local" style="rounded=1;whiteSpace=wrap;html=1;dashed=1;" value="tunnel (ngrok)&lt;br&gt;só conexão de saída" vertex="1">
+                    <mxGeometry height="60" width="160" x="30" y="330" as="geometry"/>
+                </mxCell>
+                <mxCell id="e4" edge="1" parent="local" source="ngrok" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;dashed=1;" target="parser">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e5" edge="1" parent="local" source="collector" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" target="parser" value="parse">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e6" edge="1" parent="local" source="collector" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" target="localdb" value="bruto">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e8" edge="1" parent="local" source="localapi" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" target="localdb">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e9" edge="1" parent="local" source="localapi" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" target="parser">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="cloud" parent="1" style="swimlane;startSize=30;fillColor=#dae8fc;strokeColor=#6c8ebf;html=1;" value="Nuvem — produção mínima" vertex="1">
+                    <mxGeometry height="420" width="300" x="660" y="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="render" parent="cloud" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="&lt;b&gt;Render&lt;/b&gt;&lt;br&gt;API + React&lt;br&gt;dotaanalyst.onrender.com" vertex="1">
+                    <mxGeometry height="70" width="180" x="60" y="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="neon" parent="cloud" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;size=12;fillColor=#fff2cc;strokeColor=#d6b656;" value="Neon (PostgreSQL)&lt;br&gt;só dados refinados" vertex="1">
+                    <mxGeometry height="80" width="140" x="80" y="250" as="geometry"/>
+                </mxCell>
+                <mxCell id="e2" edge="1" parent="cloud" source="render" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" target="neon" value="lê / grava dados do site">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="user" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;" value="Jogador (navegador)" vertex="1">
+                    <mxGeometry height="60" width="30" x="1040" y="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="ext" parent="1" style="swimlane;startSize=30;fillColor=#f5f5f5;html=1;" value="Serviços externos" vertex="1">
+                    <mxGeometry height="110" width="940" x="20" y="500" as="geometry"/>
+                </mxCell>
+                <mxCell id="od" parent="ext" style="rounded=1;whiteSpace=wrap;html=1;" value="OpenDota API" vertex="1">
+                    <mxGeometry height="50" width="160" x="60" y="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="valve" parent="ext" style="rounded=1;whiteSpace=wrap;html=1;" value="Valve (replays)" vertex="1">
+                    <mxGeometry height="50" width="160" x="380" y="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="steam" parent="ext" style="rounded=1;whiteSpace=wrap;html=1;" value="Steam (login OpenID)" vertex="1">
+                    <mxGeometry height="50" width="160" x="700" y="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="e1" edge="1" parent="1" source="user" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" target="render" value="HTTPS">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e3" edge="1" parent="1" source="render" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;dashed=1;" target="ngrok" value="POST /v1/match">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e7" edge="1" parent="1" source="collector" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#d79b00;strokeWidth=2;" target="neon" value="espelho (só o pronto)">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e10" edge="1" parent="1" source="parser" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" target="valve" value="download">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e11" edge="1" parent="1" source="render" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" target="od" value="partidas">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="e12" edge="1" parent="1" source="render" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" target="steam" value="login">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+    <diagram id="camadas" name="2. Camadas DDD">
+        <mxGraphModel dx="950" dy="891" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="900" pageHeight="1100" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="server" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="&lt;b&gt;DotaAnalyst.Server&lt;/b&gt;&lt;br&gt;controllers /api/v1, login Steam, Program.cs&lt;br&gt;&lt;i&gt;só valida, chama caso de uso, traduz para HTTP&lt;/i&gt;" vertex="1">
+                    <mxGeometry height="80" width="320" x="220" y="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="infra" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" value="&lt;b&gt;DotaAnalyst.Infrastructure&lt;/b&gt;&lt;br&gt;OpenDota, Steam, PostgreSQL/EF Core,&lt;br&gt;cliente do parser Go, coletor, cache" vertex="1">
+                    <mxGeometry height="80" width="300" x="600" y="180" as="geometry"/>
+                </mxCell>
+                <mxCell id="app" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" value="&lt;b&gt;DotaAnalyst.Application&lt;/b&gt;&lt;br&gt;casos de uso (handlers), DTOs,&lt;br&gt;interfaces do que vem de fora (Abstractions)" vertex="1">
+                    <mxGeometry height="80" width="320" x="220" y="320" as="geometry"/>
+                </mxCell>
+                <mxCell id="domain" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" value="&lt;b&gt;DotaAnalyst.Domain&lt;/b&gt;&lt;br&gt;regras do Dota: entidades, value objects,&lt;br&gt;domain services (métricas, lutas, regiões...)&lt;br&gt;&lt;i&gt;não referencia nada&lt;/i&gt;" vertex="1">
+                    <mxGeometry height="90" width="320" x="220" y="460" as="geometry"/>
+                </mxCell>
+                <mxCell id="react" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;" value="dotaanalyst.client&lt;br&gt;React 19 + Vite" vertex="1">
+                    <mxGeometry height="60" width="160" y="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="a1" edge="1" parent="1" source="server" style="edgeStyle=orthogonalEdgeStyle;html=1;" target="app" value="usa">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="a2" edge="1" parent="1" source="server" style="edgeStyle=orthogonalEdgeStyle;html=1;dashed=1;" target="infra" value="registra (DI)">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="a3" edge="1" parent="1" source="infra" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;endFill=0;dashed=1;" target="app" value="implementa interfaces">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="a4" edge="1" parent="1" source="app" style="edgeStyle=orthogonalEdgeStyle;html=1;" target="domain" value="usa">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="a5" edge="1" parent="1" source="react" style="edgeStyle=orthogonalEdgeStyle;html=1;" target="server" value="só fala com a API (/api)">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="note" parent="1" style="shape=note;whiteSpace=wrap;html=1;size=14;fillColor=#fff9e6;" value="Dependências só apontam para dentro:&lt;br&gt;Server → Application → Domain&lt;br&gt;Infrastructure → Application" vertex="1">
+                    <mxGeometry height="80" width="260" x="620" y="460" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+    <diagram id="analise" name="3. Fluxo da análise">
+        <mxGraphModel dx="1093" dy="1025" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1120" pageHeight="700" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="l1" parent="1" style="shape=umlLifeline;perimeter=lifelinePerimeter;size=40;html=1;" value="React" vertex="1">
+                    <mxGeometry height="620" width="100" x="40" y="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="l2" parent="1" style="shape=umlLifeline;perimeter=lifelinePerimeter;size=40;html=1;whiteSpace=wrap;" value="API (GetMatchAnalysisHandler)" vertex="1">
+                    <mxGeometry height="620" width="140" x="220" y="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="l3" parent="1" style="shape=umlLifeline;perimeter=lifelinePerimeter;size=40;html=1;" value="OpenDota" vertex="1">
+                    <mxGeometry height="620" width="120" x="430" y="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="l4" parent="1" style="shape=umlLifeline;perimeter=lifelinePerimeter;size=40;html=1;" value="PostgreSQL" vertex="1">
+                    <mxGeometry height="620" width="120" x="610" y="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="l5" parent="1" style="shape=umlLifeline;perimeter=lifelinePerimeter;size=40;html=1;" value="Fila + Worker" vertex="1">
+                    <mxGeometry height="620" width="120" x="790" y="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="l6" parent="1" style="shape=umlLifeline;perimeter=lifelinePerimeter;size=40;html=1;" value="Parser Go (túnel)" vertex="1">
+                    <mxGeometry height="620" width="120" x="970" y="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="m1" edge="1" parent="1" style="html=1;endArrow=block;endSize=6;" value="GET /api/v1/players/{id}/matches/{matchId}">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="90" y="110" as="sourcePoint"/>
+                        <mxPoint x="290" y="110" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="m2" edge="1" parent="1" style="html=1;endArrow=block;endSize=6;" value="consulta partida / análise salvas">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="290" y="150" as="sourcePoint"/>
+                        <mxPoint x="670" y="150" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="m3" edge="1" parent="1" style="html=1;endArrow=open;dashed=1;endSize=6;" value="dados salvos, se houver">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="670" y="180" as="sourcePoint"/>
+                        <mxPoint x="290" y="180" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="m4" edge="1" parent="1" style="html=1;endArrow=block;endSize=6;" value="consulta se ausente / desatualizada">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="290" y="220" as="sourcePoint"/>
+                        <mxPoint x="490" y="220" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="m5" edge="1" parent="1" style="html=1;endArrow=open;dashed=1;endSize=6;" value="partida e catálogos">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="490" y="250" as="sourcePoint"/>
+                        <mxPoint x="290" y="250" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="m6" edge="1" parent="1" style="html=1;endArrow=block;endSize=6;" value="salva dados atualizados">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="290" y="280" as="sourcePoint"/>
+                        <mxPoint x="670" y="280" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="m7" edge="1" parent="1" style="html=1;endArrow=block;endSize=6;" value="sem análise: enfileira">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="290" y="320" as="sourcePoint"/>
+                        <mxPoint x="850" y="320" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="m8" edge="1" parent="1" style="html=1;endArrow=open;dashed=1;endSize=6;" value="replayStatus: processing">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="290" y="350" as="sourcePoint"/>
+                        <mxPoint x="90" y="350" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="m9" edge="1" parent="1" style="html=1;endArrow=block;endSize=6;" value="POST /v1/match">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="850" y="400" as="sourcePoint"/>
+                        <mxPoint x="1030" y="400" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="m10" edge="1" parent="1" style="html=1;endArrow=open;dashed=1;endSize=6;" value="partida inteira (JSON)">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="1030" y="430" as="sourcePoint"/>
+                        <mxPoint x="850" y="430" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="m11" edge="1" parent="1" style="html=1;endArrow=block;endSize=6;" value="métricas (Domain): salva ready">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="850" y="470" as="sourcePoint"/>
+                        <mxPoint x="670" y="470" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="m12" edge="1" parent="1" style="html=1;endArrow=block;endSize=6;" value="consulta de novo (polling)">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="90" y="530" as="sourcePoint"/>
+                        <mxPoint x="290" y="530" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="m13" edge="1" parent="1" style="html=1;endArrow=open;dashed=1;endSize=6;" value="análise completa: ready">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="290" y="560" as="sourcePoint"/>
+                        <mxPoint x="90" y="560" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+    <diagram id="base" name="4. Base de comparação">
+        <mxGraphModel dx="874" dy="820" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="960" pageHeight="1100" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="b1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;" value="OpenDota&lt;br&gt;/proMatches, /publicMatches" vertex="1">
+                    <mxGeometry height="60" width="170" x="40" y="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="b2" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" value="CollectBaselineHandler&lt;br&gt;1 partida por vez, até 300/dia" vertex="1">
+                    <mxGeometry height="60" width="200" x="280" y="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="b3" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" value="Parser Go&lt;br&gt;+ RoleInference (pro)" vertex="1">
+                    <mxGeometry height="60" width="170" x="560" y="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="b4" parent="1" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;size=12;fillColor=#fff2cc;strokeColor=#d6b656;" value="baseline_matches&lt;br&gt;baseline_metrics&lt;br&gt;(bruto, LOCAL)" vertex="1">
+                    <mxGeometry height="90" width="140" x="310" y="170" as="geometry"/>
+                </mxCell>
+                <mxCell id="b5" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" value="PublishBaselineHandler (a cada hora)&lt;br&gt;BaselineComparer.Distribute:&lt;br&gt;percentis 0..100 por herói × posição × métrica" vertex="1">
+                    <mxGeometry height="80" width="240" x="260" y="320" as="geometry"/>
+                </mxCell>
+                <mxCell id="b6" parent="1" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;size=12;fillColor=#fff2cc;strokeColor=#d6b656;" value="baseline_distributions&lt;br&gt;(local)" vertex="1">
+                    <mxGeometry height="80" width="140" x="100" y="460" as="geometry"/>
+                </mxCell>
+                <mxCell id="b7" parent="1" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;size=12;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="baseline_distributions&lt;br&gt;(Neon, espelho)" vertex="1">
+                    <mxGeometry height="80" width="140" x="520" y="460" as="geometry"/>
+                </mxCell>
+                <mxCell id="b8" parent="1" style="rounded=1;whiteSpace=wrap;html=1;" value="site local&lt;br&gt;localhost:8080" vertex="1">
+                    <mxGeometry height="50" width="140" x="100" y="600" as="geometry"/>
+                </mxCell>
+                <mxCell id="b9" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="produção (Render)&lt;br&gt;DistributionBaselineProvider" vertex="1">
+                    <mxGeometry height="50" width="180" x="500" y="600" as="geometry"/>
+                </mxCell>
+                <mxCell id="c1" edge="1" parent="1" source="b1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" target="b2" value="candidatas">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="c2" edge="1" parent="1" source="b2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" target="b3" value="métricas dos 10 heróis">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="c3" edge="1" parent="1" source="b2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" target="b4" value="grava">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="c4" edge="1" parent="1" source="b4" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" target="b5" value="lê">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="c5" edge="1" parent="1" source="b5" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" target="b6">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="c6" edge="1" parent="1" source="b5" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#d79b00;strokeWidth=2;" target="b7" value="poucos KB">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="c7" edge="1" parent="1" source="b8" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" target="b6" value="lê">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="c8" edge="1" parent="1" source="b9" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" target="b7" value="lê">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+    <diagram id="login" name="5. Login Steam">
+        <mxGraphModel dx="874" dy="820" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="s1" parent="1" style="shape=umlLifeline;perimeter=lifelinePerimeter;size=40;html=1;" value="Navegador" vertex="1">
+                    <mxGeometry height="460" width="110" x="40" y="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="s2" parent="1" style="shape=umlLifeline;perimeter=lifelinePerimeter;size=40;html=1;" value="API (AuthController)" vertex="1">
+                    <mxGeometry height="460" width="130" x="260" y="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="s3" parent="1" style="shape=umlLifeline;perimeter=lifelinePerimeter;size=40;html=1;" value="Steam OpenID" vertex="1">
+                    <mxGeometry height="460" width="120" x="500" y="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="t1" edge="1" parent="1" style="html=1;endArrow=block;endSize=6;" value="GET /api/v1/auth/login?returnUrl=">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="95" y="110" as="sourcePoint"/>
+                        <mxPoint x="325" y="110" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="t2" edge="1" parent="1" style="html=1;endArrow=open;dashed=1;endSize=6;" value="redireciona para a Steam">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="325" y="150" as="sourcePoint"/>
+                        <mxPoint x="95" y="150" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="t3" edge="1" parent="1" style="html=1;endArrow=block;endSize=6;" value="senha ou QR code (app Steam)">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="95" y="200" as="sourcePoint"/>
+                        <mxPoint x="560" y="200" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="t4" edge="1" parent="1" style="html=1;endArrow=block;endSize=6;" value="volta para /api/auth/steam/callback">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="560" y="250" as="sourcePoint"/>
+                        <mxPoint x="325" y="250" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="t5" edge="1" parent="1" style="html=1;endArrow=block;endSize=6;" value="check_authentication (confirma)">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="325" y="300" as="sourcePoint"/>
+                        <mxPoint x="560" y="300" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="t6" edge="1" parent="1" style="html=1;endArrow=open;dashed=1;endSize=6;" value="cookie dotaanalyst.session (HttpOnly, 30 dias)&lt;br&gt;só account_id; volta ao returnUrl">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="325" y="360" as="sourcePoint"/>
+                        <mxPoint x="95" y="360" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="t7" edge="1" parent="1" style="html=1;endArrow=block;endSize=6;" value="GET /api/v1/me">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="95" y="430" as="sourcePoint"/>
+                        <mxPoint x="325" y="430" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+    <diagram id="banco" name="6. Banco de dados">
+        <mxGraphModel dx="950" dy="891" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="both" parent="1" style="swimlane;startSize=30;fillColor=#dae8fc;strokeColor=#6c8ebf;html=1;" value="Local e Neon (dado refinado)" vertex="1">
+                    <mxGeometry height="380" width="560" x="20" y="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="d1" parent="both" style="rounded=0;whiteSpace=wrap;html=1;align=left;spacingLeft=6;" value="&lt;b&gt;matches&lt;/b&gt;&lt;br&gt;match_id (PK)&lt;br&gt;details jsonb, replay_url, saved_at" vertex="1">
+                    <mxGeometry height="70" width="240" x="20" y="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="d2" parent="both" style="rounded=0;whiteSpace=wrap;html=1;align=left;spacingLeft=6;" value="&lt;b&gt;replay_analyses&lt;/b&gt;&lt;br&gt;match_id (PK), status&lt;br&gt;data jsonb (métricas, mortes, wards...)" vertex="1">
+                    <mxGeometry height="70" width="250" x="290" y="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="d3" parent="both" style="rounded=0;whiteSpace=wrap;html=1;align=left;spacingLeft=6;" value="&lt;b&gt;catalog_entries&lt;/b&gt;&lt;br&gt;catalog + id (PK), name&lt;br&gt;details jsonb (itens)" vertex="1">
+                    <mxGeometry height="70" width="240" x="20" y="150" as="geometry"/>
+                </mxCell>
+                <mxCell id="d4" parent="both" style="rounded=0;whiteSpace=wrap;html=1;align=left;spacingLeft=6;" value="&lt;b&gt;baseline_distributions&lt;/b&gt;&lt;br&gt;hero_id + role + source (PK)&lt;br&gt;matches, distributions jsonb" vertex="1">
+                    <mxGeometry height="70" width="250" x="290" y="150" as="geometry"/>
+                </mxCell>
+                <mxCell id="d5" parent="both" style="rounded=0;whiteSpace=wrap;html=1;align=left;spacingLeft=6;" value="&lt;b&gt;player_searches&lt;/b&gt;&lt;br&gt;account_id (PK), contagem" vertex="1">
+                    <mxGeometry height="60" width="240" x="20" y="250" as="geometry"/>
+                </mxCell>
+                <mxCell id="d6" parent="both" style="rounded=0;whiteSpace=wrap;html=1;align=left;spacingLeft=6;" value="&lt;b&gt;data_protection_keys&lt;/b&gt;&lt;br&gt;chaves do cookie de login" vertex="1">
+                    <mxGeometry height="60" width="250" x="290" y="250" as="geometry"/>
+                </mxCell>
+                <mxCell id="local" parent="1" style="swimlane;startSize=30;fillColor=#e8f5e9;strokeColor=#82b366;html=1;" value="Só no banco local (bruto / pesado)" vertex="1">
+                    <mxGeometry height="380" width="300" x="620" y="20" as="geometry"/>
+                </mxCell>
+                <mxCell id="d7" parent="local" style="rounded=0;whiteSpace=wrap;html=1;align=left;spacingLeft=6;" value="&lt;b&gt;replay_documents&lt;/b&gt;&lt;br&gt;match_id (PK), document jsonb&lt;br&gt;~130 KB por partida" vertex="1">
+                    <mxGeometry height="70" width="260" x="20" y="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="d8" parent="local" style="rounded=0;whiteSpace=wrap;html=1;align=left;spacingLeft=6;" value="&lt;b&gt;baseline_matches&lt;/b&gt;&lt;br&gt;match_id (PK), source, status, tried_at" vertex="1">
+                    <mxGeometry height="70" width="260" x="20" y="150" as="geometry"/>
+                </mxCell>
+                <mxCell id="d9" parent="local" style="rounded=0;whiteSpace=wrap;html=1;align=left;spacingLeft=6;" value="&lt;b&gt;baseline_metrics&lt;/b&gt;&lt;br&gt;match_id + hero_id (PK), role, source&lt;br&gt;metrics jsonb" vertex="1">
+                    <mxGeometry height="70" width="260" x="20" y="250" as="geometry"/>
+                </mxCell>
+                <mxCell id="r1" edge="1" parent="local" source="d8" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=ERmany;startArrow=ERone;" target="d9" value="1 → 10 heróis">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="r2" edge="1" parent="1" source="d9" style="edgeStyle=orthogonalEdgeStyle;html=1;dashed=1;strokeColor=#d79b00;" target="d4" value="publica (resumo)">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>

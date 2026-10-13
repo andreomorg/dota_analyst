@@ -100,6 +100,34 @@ dotnet ef migrations add <Nome> --project DotaAnalyst.Infrastructure --startup-p
 
 Regras de arquitetura, decisões e detalhes de cada parte: [`CLAUDE.md`](CLAUDE.md) e [`replay-parser/CLAUDE.md`](replay-parser/CLAUDE.md).
 
+## Diagramas
+
+Os diagramas abaixo são exibidos diretamente no README. O arquivo-fonte editável está em [`docs/diagrams/dotaanalyst.drawio`](docs/diagrams/dotaanalyst.drawio) e pode ser aberto no draw.io.
+
+### Arquitetura
+
+![Arquitetura do DotaAnalyst: processamento local e serviços em produção](docs/diagrams/images/architecture.svg)
+
+### Camadas DDD
+
+![Camadas DDD e dependências entre os projetos](docs/diagrams/images/ddd-layers.svg)
+
+### Fluxo da análise
+
+![Fluxo de análise de uma partida, do React ao parser de replay](docs/diagrams/images/match-analysis.svg)
+
+### Base de comparação
+
+![Coleta local e publicação da base de comparação](docs/diagrams/images/comparison-baseline.svg)
+
+### Login com a Steam
+
+![Fluxo de autenticação com Steam OpenID](docs/diagrams/images/steam-login.svg)
+
+### Banco de dados
+
+![Tabelas principais nos bancos local e Neon](docs/diagrams/images/database.svg)
+
 ## Versões e publicação
 
 Versionamento semântico (`vMAJOR.MINOR.PATCH`; o MAJOR acompanha a versão da API, `/api/v1`). Uma tag `v*` no `main` roda os testes, publica a imagem no ghcr.io e faz o deploy no Render.

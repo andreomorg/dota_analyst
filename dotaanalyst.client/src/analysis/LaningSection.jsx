@@ -1,5 +1,7 @@
 import { formatDuration, formatNumber, formatSignedNumber } from '../matches/format';
 import { HeroIcon } from '../heroes/HeroImage';
+import { YouChip } from '../ui/Chips';
+import SectionHead from '../ui/SectionHead';
 
 const LANE_LABELS = {
     top: 'Top (rota de cima)',
@@ -19,15 +21,15 @@ const LANES = ['top', 'middle', 'bottom'];
 
 // The text always says the result; the color only reinforces it.
 const OUTCOMES = {
-    won: { label: 'Ganhou a rota', className: 'result-win' },
-    even: { label: 'Rota empatada', className: 'result-even' },
-    lost: { label: 'Perdeu a rota', className: 'result-loss' },
+    won: { label: 'Ganhou a rota', className: 'text-win' },
+    even: { label: 'Rota empatada', className: 'text-even' },
+    lost: { label: 'Perdeu a rota', className: 'text-loss' },
 };
 
 // Short lines for when there is no laning data; statuses not listed here (notNeeded, or no
 // replayStatus at all) show nothing.
 const STATUS_TEXT = {
-    expired: 'O replay desta partida não está mais disponível na Valve, por isso não há análise da fase de rotas.',
+    expired: 'O replay desta partida não está mais disponível na Valve, por isso não há fase de rotas, mapas nem lutas.',
     failed: 'Não foi possível analisar o replay desta partida.',
     unavailable: 'A análise do replay está indisponível no momento.',
 };
@@ -44,18 +46,18 @@ function laneLabel(lane) {
 
 function PlayerRow({ player, isCurrentPlayer }) {
     return (
-        <tr className={isCurrentPlayer ? 'current-player' : undefined}>
+        <tr className={isCurrentPlayer ? 'is-you' : undefined}>
             <th scope="row">
                 <span className="hero-cell">
                     <HeroIcon heroId={player.heroId} />
                     {player.heroName}
+                    {isCurrentPlayer && <YouChip />}
                 </span>
-                {isCurrentPlayer && <>{' '}<span className="you-badge">Você</span></>}
             </th>
-            <td>{formatNumber(player.lastHits)} / {formatNumber(player.denies)}</td>
-            <td>{formatNumber(player.netWorth)}</td>
-            <td>{formatNumber(player.experience)}</td>
-            <td>{formatNumber(player.deaths)}</td>
+            <td className="num-col mono">{formatNumber(player.lastHits)} / {formatNumber(player.denies)}</td>
+            <td className="num-col mono">{formatNumber(player.netWorth)}</td>
+            <td className="num-col mono">{formatNumber(player.experience)}</td>
+            <td className="num-col mono">{formatNumber(player.deaths)}</td>
         </tr>
     );
 }
@@ -64,7 +66,7 @@ const COLUMN_COUNT = 5;
 
 function GroupHeader({ title }) {
     return (
-        <tr className="laning-group">
+        <tr className="group-row">
             <th scope="rowgroup" colSpan={COLUMN_COUNT}>{title}</th>
         </tr>
     );
@@ -78,17 +80,17 @@ function LaningTable({ laning, time, isLane }) {
 
     return (
         <div className="table-scroll">
-            <table className="laning-table">
+            <table className="data-table">
                 <caption className="visually-hidden">
                     Last hits, denies, patrimônio, experiência e mortes aos {time}
                 </caption>
                 <thead>
                     <tr>
                         <th scope="col">Herói</th>
-                        <th scope="col">LH / DN</th>
-                        <th scope="col">Patrimônio</th>
-                        <th scope="col">Experiência</th>
-                        <th scope="col">Mortes</th>
+                        <th scope="col" className="num-col">LH / DN</th>
+                        <th scope="col" className="num-col">Patrimônio</th>
+                        <th scope="col" className="num-col">Experiência</th>
+                        <th scope="col" className="num-col">Mortes</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -121,54 +123,62 @@ function LaningSummary({ laning }) {
     const hasDifference = outcome && laning.netWorthDifference !== null && laning.netWorthDifference !== undefined;
 
     return (
-        <section className="laning-summary" aria-labelledby="laning-title">
-            <h2 id="laning-title">Fase de rotas</h2>
-            <p className="laning-intro">Como estava a sua rota aos {time} de jogo, segundo o replay.</p>
-
-            <dl className="match-facts laning-facts">
-                <div>
-                    <dt>Rota</dt>
-                    <dd>{laneLabel(laning.lane)}</dd>
-                </div>
-                {outcome && (
-                    <div>
-                        <dt>Resultado</dt>
-                        <dd><span className={outcome.className}>{outcome.label}</span></dd>
+        <section className="section" aria-labelledby="laning-title">
+            <SectionHead id="laning-title" title="Fase de rotas">
+                <span>Aos {time} de jogo, segundo o replay</span>
+            </SectionHead>
+            <div className="card">
+                <dl className="fact-row">
+                    <div className="tile">
+                        <dt className="stat-label">Rota</dt>
+                        <dd>{laneLabel(laning.lane)}</dd>
                     </div>
-                )}
+                    {outcome && (
+                        <div className="tile">
+                            <dt className="stat-label">Resultado</dt>
+                            <dd className={outcome.className}>{outcome.label}</dd>
+                        </div>
+                    )}
+                    {hasDifference && (
+                        <div className="tile">
+                            <dt className="stat-label">Diferença de patrimônio</dt>
+                            <dd className={`mono ${laning.netWorthDifference >= 0 ? 'text-win' : 'text-loss'}`}>
+                                {formatSignedNumber(laning.netWorthDifference)}
+                            </dd>
+                        </div>
+                    )}
+                </dl>
+
                 {hasDifference && (
-                    <div>
-                        <dt>Diferença de patrimônio</dt>
-                        <dd>{formatSignedNumber(laning.netWorthDifference)}</dd>
-                    </div>
+                    <p className="section-note">
+                        Patrimônio somado do seu lado na rota menos o dos adversários, aos {time}.
+                    </p>
                 )}
-            </dl>
+                {!outcome && noLaneText && <p className="section-note">{noLaneText}</p>}
 
-            {hasDifference && (
-                <p className="laning-note">
-                    Patrimônio somado do seu lado na rota menos o dos adversários, aos {time}.
-                </p>
-            )}
-            {!outcome && noLaneText && <p className="laning-note">{noLaneText}</p>}
-
-            <LaningTable laning={laning} time={time} isLane={isLane} />
+                <LaningTable laning={laning} time={time} isLane={isLane} />
+            </div>
         </section>
     );
 }
 
-// replayStatus and laning come from the API (null/absent on older responses: then nothing shows).
+// The laning phase section; laning comes from the API (null without a point-of-view player or before the replay is
+// read: then nothing shows).
+function LaningSection({ laning }) {
+    return laning ? <LaningSummary laning={laning} /> : null;
+}
+
+// Where the reading of the replay stands, as a banner at the top of the analysis (nothing once it is ready).
 // pollingStopped: the page gave up waiting while the replay was still "processing".
-function LaningSection({ replayStatus, laning, pollingStopped }) {
+export function ReplayStatusBanner({ replayStatus, pollingStopped }) {
     const processingText = pollingStopped
-        ? 'A análise do replay está demorando mais que o normal. Recarregue a página mais tarde para ver a fase de rotas.'
-        : 'Analisando o replay… A fase de rotas aparece aqui em instantes.';
+        ? 'A análise do replay está demorando mais que o normal. Recarregue a página mais tarde para ver mapas, lutas e dicas.'
+        : 'Analisando o replay… Fase de rotas, mapas, lutas e dicas aparecem aqui em instantes.';
 
     let content = null;
     let announcement = '';
     if (replayStatus === 'ready') {
-        // Without a point-of-view player there is no laning; the page already explains why.
-        content = laning ? <LaningSummary laning={laning} /> : null;
-        announcement = laning ? 'A fase de rotas está pronta.' : '';
+        announcement = 'A análise do replay está pronta.';
     } else if (replayStatus === 'processing') {
         content = (
             <div className={`replay-status replay-status-processing${pollingStopped ? ' replay-status-delayed' : ''}`}>

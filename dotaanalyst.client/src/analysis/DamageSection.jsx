@@ -4,7 +4,7 @@ import { inflictorName } from './inflictors';
 import ItemIcon from '../items/ItemIcon';
 
 // The player's damage to and from enemy heroes, read from the replay: one measure per list, horizontal bars with
-// the value written next to them (the bar only helps to compare).
+// the value written next to them (the bar only helps to compare). Green = dealt, red = taken.
 
 const TOP_INFLICTORS = 8;
 
@@ -12,25 +12,28 @@ function sum(rows) {
     return rows.reduce((total, row) => total + row.amount, 0);
 }
 
-function BarList({ title, rows, max, labelOf, iconOf, emptyText }) {
+function BarList({ title, total, rows, max, labelOf, iconOf, emptyText, tone }) {
     return (
         <div className="bar-group">
-            <h3>{title}</h3>
+            <h4 className="bar-group-title">
+                {title}
+                {total !== undefined && <span className="mono">{formatNumber(total)}</span>}
+            </h4>
             {rows.length === 0
-                ? <p className="laning-note">{emptyText}</p>
+                ? <p className="section-note">{emptyText}</p>
                 : (
                     <ol className="bar-list">
                         {/* Index keys: the list never reorders, and two heroes can share "Unknown hero". */}
                         {rows.map((row, index) => (
                             <li key={index} className="bar-row">
-                                <span className="bar-label bar-label-with-icon">
+                                <span className="bar-label">
                                     {iconOf?.(row)}
-                                    {labelOf(row)}
+                                    <span className="bar-label-text">{labelOf(row)}</span>
                                 </span>
+                                <span className="bar-value mono">{formatNumber(row.amount)}</span>
                                 <span className="bar-track" aria-hidden="true">
-                                    <span className="bar-fill" style={{ width: `${max > 0 ? (row.amount / max) * 100 : 0}%` }} />
+                                    <span className={`bar-fill fill-${tone}`} style={{ width: `${max > 0 ? (row.amount / max) * 100 : 0}%` }} />
                                 </span>
-                                <span className="bar-value">{formatNumber(row.amount)}</span>
                             </li>
                         ))}
                     </ol>
@@ -61,35 +64,36 @@ function DamageSection({ damage, heroName }) {
         return null;
     }
 
-    const dealt = sum(damage.toHeroes);
-    const taken = sum(damage.fromHeroes);
     // The same scale for dealt and taken, so the two lists can be compared.
     const heroMax = Math.max(0, ...damage.toHeroes.map(row => row.amount), ...damage.fromHeroes.map(row => row.amount));
     const inflictors = topInflictors(damage.byInflictor, heroName);
 
     return (
-        <section className="damage-section" aria-labelledby="damage-title">
-            <h2 id="damage-title">Dano em heróis</h2>
-            <p className="laning-intro">
-                Você causou {formatNumber(dealt)} de dano em heróis inimigos e recebeu {formatNumber(taken)} deles
-                (a partida inteira, com ilusões e invocações contando para o dono).
-            </p>
+        <div className="card damage-card">
+            <div className="card-head">
+                <h3 id="damage-title">Dano em heróis</h3>
+                <span className="card-aside">a partida inteira; ilusões e invocações contam para o dono</span>
+            </div>
             <div className="bar-groups">
                 <BarList
                     title="Causado em cada herói"
+                    total={sum(damage.toHeroes)}
                     rows={damage.toHeroes}
                     max={heroMax}
                     labelOf={row => row.heroName}
                     iconOf={row => <HeroIcon heroId={row.heroId} />}
                     emptyText="Você não causou dano em heróis inimigos."
+                    tone="win"
                 />
                 <BarList
                     title="Recebido de cada herói"
+                    total={sum(damage.fromHeroes)}
                     rows={damage.fromHeroes}
                     max={heroMax}
                     labelOf={row => row.heroName}
                     iconOf={row => <HeroIcon heroId={row.heroId} />}
                     emptyText="Você não recebeu dano de heróis inimigos."
+                    tone="loss"
                 />
             </div>
             {inflictors.length > 0 && (
@@ -99,9 +103,10 @@ function DamageSection({ damage, heroName }) {
                     max={inflictors.reduce((max, row) => Math.max(max, row.amount), 0)}
                     labelOf={row => row.label}
                     iconOf={row => row.itemId && <ItemIcon itemId={row.itemId} />}
+                    tone="neutral"
                 />
             )}
-        </section>
+        </div>
     );
 }
 

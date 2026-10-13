@@ -2,11 +2,11 @@ import { BrowserRouter, Route, Routes } from 'react-router';
 import MatchAnalysisPage from './analysis/MatchAnalysisPage';
 import CurrentUserProvider from './auth/CurrentUserProvider';
 import LoginFailedNotice from './layout/LoginFailedNotice';
+import SiteFooter from './layout/SiteFooter';
 import SiteHeader from './layout/SiteHeader';
 import MatchesPage from './matches/MatchesPage';
 import NotFoundPage from './NotFoundPage';
 import './App.css';
-import './StitchDesign.css';
 
 function App() {
     return (
@@ -20,6 +20,7 @@ function App() {
                     <Route path="/matches/:matchId" element={<MatchAnalysisPage />} />
                     <Route path="*" element={<NotFoundPage />} />
                 </Routes>
+                <SiteFooter />
             </CurrentUserProvider>
         </BrowserRouter>
     );

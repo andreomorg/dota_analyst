@@ -229,7 +229,8 @@ internal static class ReplayParserMappings
             rolesInferred: queueRoles is null, damageMinutes) ?? [];
 
         return new ReplayAnalysis(
-            matchId, endsAt, laningStats, timeline, deaths, wards, damage, purchases, mapObjectives, metrics);
+            matchId, endsAt, laningStats, timeline, deaths, wards, damage, purchases, mapObjectives, metrics,
+            positions.Select(HeroHeatmap.FromPositions).ToList());
     }
 
     // [t, x, y] -> a position sample.

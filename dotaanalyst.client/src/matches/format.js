@@ -13,6 +13,15 @@ export function formatDate(isoDate) {
     return dateFormatter.format(new Date(isoDate));
 }
 
+const dayFormatter = new Intl.DateTimeFormat('pt-BR', { day: 'numeric', month: 'short', year: 'numeric' });
+const timeFormatter = new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' });
+
+// "12 de out. de 2026 · 17:23".
+export function formatDateTime(isoDate) {
+    const date = new Date(isoDate);
+    return `${dayFormatter.format(date)} · ${timeFormatter.format(date)}`;
+}
+
 // Up to 2 decimals so per-minute rates like 0.07 kills/min stay readable; integers stay integers.
 const numberFormatter = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 2 });
 

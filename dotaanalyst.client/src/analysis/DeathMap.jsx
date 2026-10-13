@@ -30,22 +30,22 @@ function DeathMap({ deaths }) {
 
     const laning = deaths.filter(death => death.inLaningPhase).length;
     return (
-        <section className="death-map" aria-labelledby="death-map-title">
-            <h2 id="death-map-title">Onde você morreu</h2>
+        <div className="card map-card">
+            <div className="card-head">
+                <h3 id="death-map-title">Onde você morreu</h3>
+                <span className="card-aside mono">{deaths.length} {deaths.length === 1 ? 'morte' : 'mortes'}</span>
+            </div>
             {deaths.length === 0
-                ? <p className="laning-note">Você não morreu nesta partida.</p>
+                ? <p className="section-note">Você não morreu nesta partida.</p>
                 : (
                     <>
-                        <p className="laning-intro">
-                            {deaths.length} {deaths.length === 1 ? 'morte' : 'mortes'}, {laning} na fase de rotas (até 10:00).
-                            No minimapa do jogo.
-                        </p>
-                        <ul className="chart-legend death-legend">
+                        <p className="section-intro">{laning} na fase de rotas (até 10:00).</p>
+                        <ul className="chart-legend">
                             <li><span className="legend-swatch series-1" aria-hidden="true" /> Fase de rotas (até 10:00)</li>
                             <li><span className="legend-swatch series-2" aria-hidden="true" /> Depois dos 10:00</li>
                             <li><span className="legend-swatch reincarnated" aria-hidden="true" /> Voltou com Aegis</li>
                         </ul>
-                        <div className="death-map-frame">
+                        <div className="map-frame">
                             <svg viewBox={VIEW_BOX} role="img" aria-label={`Mapa com ${deaths.length} mortes; os detalhes estão na tabela abaixo.`}>
                                 <GameMap />
                                 {deaths.map((death, index) => (
@@ -72,32 +72,35 @@ function DeathMap({ deaths }) {
                                 </div>
                             )}
                         </div>
-                        <div className="table-scroll">
-                            <table className="death-table">
-                                <caption className="visually-hidden">Suas mortes, em ordem</caption>
-                                <thead>
-                                    <tr>
-                                        <th scope="col">#</th>
-                                        <th scope="col">Tempo</th>
-                                        <th scope="col">Morto por</th>
-                                        <th scope="col">Fase</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {deaths.map((death, index) => (
-                                        <tr key={`${death.seconds}-${index}`} className={selected === index ? 'current-player' : undefined}>
-                                            <th scope="row">{index + 1}</th>
-                                            <td>{formatDuration(death.seconds)}</td>
-                                            <td>{killerName(death)}{death.reincarnated ? ' (voltou com Aegis)' : ''}</td>
-                                            <td>{death.inLaningPhase ? 'Rotas' : 'Depois'}</td>
+                        <details className="inline-details">
+                            <summary>Ver as mortes em tabela</summary>
+                            <div className="table-scroll">
+                                <table className="data-table">
+                                    <caption className="visually-hidden">Suas mortes, em ordem</caption>
+                                    <thead>
+                                        <tr>
+                                            <th scope="col">#</th>
+                                            <th scope="col">Tempo</th>
+                                            <th scope="col">Morto por</th>
+                                            <th scope="col">Fase</th>
                                         </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
+                                    </thead>
+                                    <tbody>
+                                        {deaths.map((death, index) => (
+                                            <tr key={`${death.seconds}-${index}`} className={selected === index ? 'is-you' : undefined}>
+                                                <th scope="row" className="mono">{index + 1}</th>
+                                                <td className="mono">{formatDuration(death.seconds)}</td>
+                                                <td>{killerName(death)}{death.reincarnated ? ' (voltou com Aegis)' : ''}</td>
+                                                <td>{death.inLaningPhase ? 'Rotas' : 'Depois'}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </details>
                     </>
                 )}
-        </section>
+        </div>
     );
 }
 

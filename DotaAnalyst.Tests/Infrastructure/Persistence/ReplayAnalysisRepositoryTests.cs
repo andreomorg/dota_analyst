@@ -87,6 +87,11 @@ public class ReplayAnalysisRepositoryTests(PostgresFixture postgres) : IAsyncLif
                         new PerRegion<int>(0, 1, 0, 0, 0, 1, 0, 2),
                         new PerRegion<int>(1, 0, 0, 0, 0, 1, 0, 1),
                         new PerRegion<int>(0, 0, 0, 1, 0, 1, 0, 0))),
+            ],
+            heatmaps:
+            [
+                new HeroHeatmap(31, new PerGamePhase<IReadOnlyList<HeatCell>>(
+                    [new HeatCell(3, 28, 140), new HeatCell(4, 28, 60)], [new HeatCell(16, 16, 2)], [])),
             ]);
         var repository = CreateRepository();
 
@@ -98,6 +103,11 @@ public class ReplayAnalysisRepositoryTests(PostgresFixture postgres) : IAsyncLif
         Assert.Equal(analysis.Purchases, found?.Analysis?.Purchases);
         Assert.Equal(analysis.Objectives, found?.Analysis?.Objectives);
         Assert.Equal(analysis.Metrics, found?.Analysis?.Metrics);
+        var heatmap = Assert.Single(found!.Analysis!.Heatmaps!);
+        Assert.Equal(31, heatmap.HeroId);
+        Assert.Equal(analysis.Heatmaps![0].Phases.EarlyGame, heatmap.Phases.EarlyGame);
+        Assert.Equal(analysis.Heatmaps[0].Phases.MidGame, heatmap.Phases.MidGame);
+        Assert.Empty(heatmap.Phases.LateGame);
     }
 
     [Fact]

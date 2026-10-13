@@ -257,6 +257,10 @@ public class ReplayParserClientTests
 
         var me = Assert.Single(analysis.Metrics!, hero => hero.HeroId == 31);
         Assert.Equal((1, 0.5, 2900), (me.Role, me.EnemySideShare, me.NetWorthAt10));
+        // The positions also become the heatmaps (-4000,-4000 → cell 9,22; 5000,5000 → cell 24,7).
+        var heatmap = Assert.Single(analysis.Heatmaps!, hero => hero.HeroId == 31);
+        Assert.Equal([new HeatCell(24, 7, 1), new HeatCell(9, 22, 1)], heatmap.Phases.EarlyGame);
+        Assert.Equal(2, analysis.Heatmaps!.Count);
     }
 
     [Fact]

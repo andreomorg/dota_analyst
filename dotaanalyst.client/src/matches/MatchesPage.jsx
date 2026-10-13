@@ -12,14 +12,18 @@ function isValidAccountId(value) {
 
 function MatchesSkeleton() {
     return (
-        <div className="matches-skeleton-list" aria-hidden="true">
-            {Array.from({ length: 5 }, (_, index) => (
-                <div className="matches-skeleton-card" key={index}>
-                    <span className="skeleton-line skeleton-hero" />
-                    <span className="skeleton-line skeleton-stat" />
-                </div>
-            ))}
+        <div className="match-list" aria-hidden="true">
+            {Array.from({ length: 5 }, (_, index) => <span className="skeleton match-row-skeleton" key={index} />)}
         </div>
+    );
+}
+
+function SearchIcon() {
+    return (
+        <svg className="search-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="10.5" cy="10.5" r="6" />
+            <path d="M15 15l5 5" />
+        </svg>
     );
 }
 
@@ -114,60 +118,68 @@ function MatchesPage() {
         ownAccountId !== null && typedSearch !== null && toAccountId(typedSearch.accountId) !== ownAccountId;
 
     return (
-        <main className="matches-page">
-            <div className="matches-heading">
-                <div>
-                    <p className="matches-kicker">Dota 2 · histórico de partidas</p>
-                    <h1>{viewingSomeoneElse ? 'Partidas' : 'Minhas partidas'}</h1>
-                    <p className="matches-description">
-                        Consulte os resultados recentes e abra uma partida para ver os detalhes da análise.
-                    </p>
-                </div>
-            </div>
-
-            <form className="search-form" onSubmit={handleSubmit}>
-                <label htmlFor="account-id">
-                    {ownAccountId ? 'Ver as partidas de outro jogador' : 'Account ID do Dota ou SteamID64'}
-                </label>
-                <input
-                    id="account-id"
-                    inputMode="numeric"
-                    value={inputValue}
-                    onChange={event => {
-                        setAccountIdInput(event.target.value);
-                        setInputError(null);
-                    }}
-                    placeholder="ex.: 87278757"
-                    aria-describedby={inputError ? 'account-id-error' : 'account-id-hint'}
-                    aria-invalid={Boolean(inputError)}
-                />
-                <button type="submit" disabled={state.status === 'loading'}>Buscar</button>
-                {viewingSomeoneElse && (
-                    <button type="button" onClick={showOwnMatches}>Ver minhas partidas</button>
-                )}
-                <p id="account-id-hint" className="search-hint">
-                    Informe o account ID do Dota ou o SteamID64.
+        <main className="page container matches-page">
+            <section className="matches-hero" aria-labelledby="matches-title">
+                <p className="kicker">Dota 2 <span aria-hidden="true">//</span> histórico de partidas</p>
+                <h1 id="matches-title">{viewingSomeoneElse ? 'Partidas' : 'Minhas partidas'}</h1>
+                <p className="matches-description">
+                    Os resultados recentes. Abra uma partida para ver a análise do replay: fase de rotas, mapa de
+                    calor, lutas, itens e o que melhorar.
                 </p>
-            </form>
 
-            {inputError && <p id="account-id-error" className="error-message" role="alert">{inputError}</p>}
+                <form className="search-bar" onSubmit={handleSubmit}>
+                    <label className="visually-hidden" htmlFor="account-id">
+                        {ownAccountId ? 'Ver as partidas de outro jogador' : 'Account ID do Dota ou SteamID64'}
+                    </label>
+                    <div className="search-field">
+                        <SearchIcon />
+                        <input
+                            id="account-id"
+                            inputMode="numeric"
+                            autoComplete="off"
+                            value={inputValue}
+                            onChange={event => {
+                                setAccountIdInput(event.target.value);
+                                setInputError(null);
+                            }}
+                            placeholder="Account ID do Dota ou SteamID64 (ex.: 87278757)"
+                            aria-describedby={inputError ? 'account-id-error' : 'account-id-hint'}
+                            aria-invalid={Boolean(inputError)}
+                        />
+                    </div>
+                    <button className="button-primary" type="submit" disabled={state.status === 'loading'}>Buscar</button>
+                    <p id="account-id-hint" className="search-hint">
+                        {ownAccountId
+                            ? 'Mostrando as suas partidas. Para ver as de outro jogador, informe o account ID ou o SteamID64 dele.'
+                            : 'Informe o account ID do Dota ou o SteamID64, ou entre com a Steam para ver as suas.'}
+                        {viewingSomeoneElse && (
+                            <>
+                                {' '}
+                                <button type="button" className="link-button" onClick={showOwnMatches}>Ver minhas partidas</button>
+                            </>
+                        )}
+                    </p>
+                </form>
+            </section>
+
+            {inputError && <p id="account-id-error" className="alert" role="alert">{inputError}</p>}
             {state.status === 'loading' && (
-                <div className="matches-loading" role="status" aria-live="polite" aria-busy="true">
-                    <p className="matches-state">Carregando partidas...</p>
+                <div role="status" aria-live="polite" aria-busy="true">
+                    <p className="loading-line"><span className="spinner" aria-hidden="true" /> Carregando partidas...</p>
                     <MatchesSkeleton />
                 </div>
             )}
             {state.status === 'error' && !inputError && (
-                <div className="matches-state matches-error" role="alert">
+                <div className="alert" role="alert">
                     <p>{state.message}</p>
-                    <button className="retry-button" type="button" onClick={retrySearch}>Tentar novamente</button>
+                    <button className="button-secondary" type="button" onClick={retrySearch}>Tentar novamente</button>
                 </div>
             )}
             {state.status === 'idle' && (
-                <p className="matches-state">Informe um ID acima para buscar as partidas recentes.</p>
+                <p className="empty-state">Informe um ID acima para buscar as partidas recentes.</p>
             )}
             {state.status === 'success' && state.matches.length === 0 && (
-                <div className="matches-state matches-empty">
+                <div className="empty-state">
                     <h2>Nenhuma partida encontrada</h2>
                     <p>O perfil pode estar privado ou ainda não ter partidas disponíveis.</p>
                 </div>

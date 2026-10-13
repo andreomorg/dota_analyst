@@ -82,7 +82,33 @@ public class GetMatchAnalysisHandler(
             Objectives: replay?.Objectives is { } objectives ? ToObjectives(objectives, currentPlayer, names) : null,
             SmartStats: replay?.Metrics is { } metrics && currentPlayer is not null
                 ? await WithBaselinesAsync(ToSmartStats(metrics, currentPlayer, names), metrics, currentPlayer, match, cancellationToken)
-                : null);
+                : null,
+            Heatmaps: replay?.Heatmaps is { } heatmaps ? ToHeatmaps(heatmaps, match, currentPlayer, names) : null);
+    }
+
+    // The parser samples positions every 2 s (replay-parser: timelines.positions).
+    private const int HeatmapSecondsPerSample = 2;
+
+    private static HeatmapSet ToHeatmaps(
+        IReadOnlyList<HeroHeatmap> heatmaps, MatchDetails match, MatchPlayer? player, NameLookup names)
+    {
+        static IReadOnlyList<int> Flat(IReadOnlyList<HeatCell> cells) =>
+            cells.SelectMany(cell => new[] { cell.Column, cell.Row, cell.Samples }).ToList();
+
+        var heroes = heatmaps
+            .Select(heatmap => (heatmap, hero: match.Players.FirstOrDefault(candidate => candidate.HeroId == heatmap.HeroId)))
+            .Where(entry => entry.hero is not null)
+            .OrderBy(entry => entry.hero!.Team == Team.Radiant ? 0 : 1)
+            .Select(entry => new HeroHeatmapView(
+                HeroId: entry.heatmap.HeroId,
+                HeroName: names.Hero(entry.heatmap.HeroId),
+                Team: entry.hero!.Team,
+                IsCurrentPlayer: player is not null && entry.heatmap.HeroId == player.HeroId,
+                EarlyGame: Flat(entry.heatmap.Phases.EarlyGame),
+                MidGame: Flat(entry.heatmap.Phases.MidGame),
+                LateGame: Flat(entry.heatmap.Phases.LateGame)))
+            .ToList();
+        return new HeatmapSet(HeroHeatmap.GridSize, HeroHeatmap.MapMin, HeroHeatmap.MapMax, HeatmapSecondsPerSample, heroes);
     }
 
     // The player's metrics against other players of the same hero and role (pro and high-rank matches), from the

@@ -1,18 +1,20 @@
 import { formatDuration } from '../matches/format';
 import ItemIcon from '../items/ItemIcon';
+import SectionHead from '../ui/SectionHead';
 
-// The player's item build, read from the replay purchases: the starting items, then when each item was ready.
+// The player's item build, read from the replay purchases (the Stitch item timeline): the starting items, then when
+// each item was ready, left to right on a line.
 
 function StartingItems({ items }) {
     return (
-        <span className="item-chip-list">
+        <ul className="item-chip-list" aria-label="Itens iniciais">
             {items.map((item, index) => (
-                <span className="item-chip" key={`${item.itemId}-${index}`}>
+                <li className="item-chip" key={`${item.itemId}-${index}`}>
                     <ItemIcon itemId={item.itemId} />
-                    {item.name}{item.count > 1 ? ` ×${item.count}` : ''}
-                </span>
+                    {item.name}{item.count > 1 ? <span className="mono"> ×{item.count}</span> : ''}
+                </li>
             ))}
-        </span>
+        </ul>
     );
 }
 
@@ -25,34 +27,37 @@ function ItemBuildSection({ itemBuild }) {
 
     const { startingItems, items } = itemBuild;
     return (
-        <section className="item-build" aria-labelledby="item-build-title">
-            <h2 id="item-build-title">Build de itens</h2>
-            <p className="laning-intro">
-                Quando cada item ficou pronto, segundo as compras do replay. É aproximado: item vendido ou dado a um
-                aliado continua contando para quem comprou.
-            </p>
-
-            {startingItems.length > 0 && (
-                <p className="item-build-start">
-                    <strong>Itens iniciais:</strong> <StartingItems items={startingItems} />
-                </p>
-            )}
-
-            {items.length === 0
-                ? <p className="laning-note">Nenhum item grande nesta partida (só consumíveis e peças baratas).</p>
-                : (
-                    <ol className="item-build-list">
-                        {items.map((item, index) => (
-                            <li key={`${item.itemId}-${index}`}>
-                                <span className="item-build-time">{formatDuration(item.seconds)}</span>
-                                <span className="item-build-name item-build-entry">
-                                    <ItemIcon itemId={item.itemId} />
-                                    {item.name}
-                                </span>
-                            </li>
-                        ))}
-                    </ol>
+        <section className="section" aria-labelledby="item-build-title">
+            <SectionHead id="item-build-title" title="Itens">
+                <span>Quando cada item ficou pronto, segundo o replay</span>
+            </SectionHead>
+            <div className="card">
+                {startingItems.length > 0 && (
+                    <div className="item-start">
+                        <span className="stat-label">Itens iniciais</span>
+                        <StartingItems items={startingItems} />
+                    </div>
                 )}
+
+                {items.length === 0
+                    ? <p className="section-note">Nenhum item grande nesta partida (só consumíveis e peças baratas).</p>
+                    : (
+                        <div className="item-timeline-scroll">
+                            <ol className="item-timeline">
+                                {items.map((item, index) => (
+                                    <li key={`${item.itemId}-${index}`} className="item-step">
+                                        <span className="item-step-time mono">{formatDuration(item.seconds)}</span>
+                                        <span className="item-step-icon"><ItemIcon itemId={item.itemId} /></span>
+                                        <span className="item-step-name">{item.name}</span>
+                                    </li>
+                                ))}
+                            </ol>
+                        </div>
+                    )}
+                <p className="section-note">
+                    Aproximado: item vendido ou dado a um aliado continua contando para quem comprou.
+                </p>
+            </div>
         </section>
     );
 }

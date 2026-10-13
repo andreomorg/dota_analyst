@@ -1,5 +1,6 @@
 import { useId, useLayoutEffect, useRef, useState } from 'react';
 import { formatDuration, formatNumber, formatSignedNumber } from '../matches/format';
+import SectionHead from '../ui/SectionHead';
 import { KIND_LABELS, objectiveFullName, teamName as objectivesTeamName } from './objectives';
 
 // Two charts from the replay's timeline (net worth or experience, picked with one toggle — never two scales on one
@@ -314,7 +315,7 @@ function TimelineTable({ timeline, metric, teamName }) {
         <details className="timeline-table">
             <summary>Ver os valores minuto a minuto</summary>
             <div className="table-scroll">
-                <table>
+                <table className="data-table">
                     <thead>
                         <tr>
                             <th scope="col">Tempo</th>
@@ -347,9 +348,8 @@ function TimelineSection({ timeline, objectives }) {
 
     const teamName = timeline.perspective === 'dire' ? 'Dire' : 'Radiant';
     return (
-        <section className="timeline-section" aria-labelledby="timeline-title">
-            <div className="timeline-header">
-                <h2 id="timeline-title">Ao longo da partida</h2>
+        <section className="section" aria-labelledby="timeline-title">
+            <SectionHead id="timeline-title" title="Vantagem de patrimônio e experiência">
                 <div className="segmented" role="group" aria-label="Medida dos gráficos">
                     {Object.entries(METRICS).map(([key, { label }]) => (
                         <button key={key} type="button" aria-pressed={metric === key} onClick={() => setMetric(key)}>
@@ -357,10 +357,12 @@ function TimelineSection({ timeline, objectives }) {
                         </button>
                     ))}
                 </div>
+            </SectionHead>
+            <div className="card">
+                <LeadChart timeline={timeline} metric={metric} teamName={teamName} objectives={objectives ?? []} />
+                {timeline.lane.length > 0 && <LaneChart timeline={timeline} metric={metric} />}
+                <TimelineTable timeline={timeline} metric={metric} teamName={teamName} />
             </div>
-            <LeadChart timeline={timeline} metric={metric} teamName={teamName} objectives={objectives ?? []} />
-            {timeline.lane.length > 0 && <LaneChart timeline={timeline} metric={metric} />}
-            <TimelineTable timeline={timeline} metric={metric} teamName={teamName} />
         </section>
     );
 }

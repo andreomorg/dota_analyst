@@ -66,24 +66,27 @@ function WardMap({ wards }) {
     const teamLabels = hasPlayer ? TEAMS : { mine: 'Radiant', theirs: 'Dire', all: 'Ambos' };
 
     return (
-        <section className="death-map ward-map" aria-labelledby="ward-map-title">
-            <h2 id="ward-map-title">Wards</h2>
-            <p className="laning-intro">
+        <div className="card map-card">
+            <div className="card-head">
+                <h3 id="ward-map-title">Wards</h3>
+                <span className="card-aside mono">{shown.length} de {wards.length}</span>
+            </div>
+            <p className="section-intro">
                 {wards.filter(isMine).length} do {hasPlayer ? 'seu time' : 'Radiant'} e {wards.filter(ward => !isMine(ward)).length} do
-                {hasPlayer ? ' adversário' : ' Dire'}. Mostrando {shown.length}.
+                {hasPlayer ? ' adversário' : ' Dire'}.
             </p>
             <div className="map-filters">
                 <Filter label="Time" options={teamLabels} value={team} onChange={setTeam} />
                 <Filter label="Período" options={PERIODS} value={period} onChange={setPeriod} />
             </div>
-            <ul className="chart-legend death-legend">
+            <ul className="chart-legend">
                 <li><span className="legend-swatch team-mine" aria-hidden="true" /> {teamLabels.mine}</li>
                 <li><span className="legend-swatch team-theirs" aria-hidden="true" /> {teamLabels.theirs}</li>
                 <li><span className="legend-shape observer" aria-hidden="true" /> Observer</li>
                 <li><span className="legend-shape sentry" aria-hidden="true" /> Sentry</li>
                 <li><span className="legend-shape destroyed" aria-hidden="true">×</span> Destruído</li>
             </ul>
-            <div className="death-map-frame">
+            <div className="map-frame">
                 <svg viewBox={VIEW_BOX} role="img" aria-label={`Mapa com ${shown.length} wards; os detalhes estão na tabela abaixo.`}>
                     <GameMap />
                     {shown.map(({ ward, index }) => (
@@ -108,10 +111,10 @@ function WardMap({ wards }) {
                     </div>
                 )}
             </div>
-            <details className="timeline-table">
+            <details className="inline-details">
                 <summary>Ver os {shown.length} wards em tabela</summary>
                 <div className="table-scroll">
-                    <table className="death-table">
+                    <table className="data-table">
                         <thead>
                             <tr>
                                 <th scope="col">Plantado</th>
@@ -133,7 +136,7 @@ function WardMap({ wards }) {
                     </table>
                 </div>
             </details>
-        </section>
+        </div>
     );
 }
 

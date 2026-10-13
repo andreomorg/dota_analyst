@@ -1,12 +1,14 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router';
 import { readSavedAccountId } from '../accountStorage';
 import { useCurrentUser } from '../auth/useCurrentUser';
+import SectionHead from '../ui/SectionHead';
 import DamageSection from './DamageSection';
 import DeathMap from './DeathMap';
 import FightsSection from './FightsSection';
+import HeatmapSection from './HeatmapSection';
 import ItemBuildSection from './ItemBuildSection';
-import LaningSection from './LaningSection';
+import LaningSection, { ReplayStatusBanner } from './LaningSection';
 import MatchHeader from './MatchHeader';
 import ObjectivesSection from './ObjectivesSection';
 import PerformanceSummary from './PerformanceSummary';
@@ -33,16 +35,17 @@ function BackLink() {
 function MatchAnalysisSkeleton({ matchId }) {
     return (
         <section className="analysis-loading" role="status" aria-live="polite" aria-busy="true">
-            <h1>Partida {matchId}</h1>
-            <p>Carregando os dados da partida...</p>
-            <div className="skeleton-card skeleton-match" aria-hidden="true">
-                <span className="skeleton-line skeleton-title" />
-                <span className="skeleton-line skeleton-summary" />
-                <span className="skeleton-line skeleton-facts" />
-            </div>
-            <div className="skeleton-grid" aria-hidden="true">
-                <span className="skeleton-card" />
-                <span className="skeleton-card" />
+            <h1 className="visually-hidden">Partida {matchId}</h1>
+            <p className="loading-line"><span className="spinner" aria-hidden="true" /> Carregando os dados da partida {matchId}...</p>
+            <div aria-hidden="true" className="skeleton-stack">
+                <span className="skeleton skeleton-banner" />
+                <div className="skeleton-tiles">
+                    <span className="skeleton" />
+                    <span className="skeleton" />
+                    <span className="skeleton" />
+                    <span className="skeleton" />
+                </div>
+                <span className="skeleton skeleton-block" />
             </div>
         </section>
     );
@@ -72,43 +75,51 @@ function MatchAnalysisPage() {
 
     if (accountId === '') {
         return (
-            <main className="page analysis-page">
+            <main className="page container">
                 <BackLink />
-                <h1>Partida {matchId}</h1>
-                <p>
-                    Para ver a análise, entre com a Steam ou informe o seu account ID do Dota na{' '}
-                    <Link to="/">lista de partidas</Link>.
-                </p>
+                <div className="empty-state">
+                    <h1>Partida {matchId}</h1>
+                    <p>
+                        Para ver a análise, entre com a Steam ou informe o seu account ID do Dota na{' '}
+                        <Link to="/">lista de partidas</Link>.
+                    </p>
+                </div>
             </main>
         );
     }
 
     if (!isValidMatchId(matchId)) {
         return (
-            <main className="page analysis-page">
+            <main className="page container">
                 <BackLink />
-                <h1>Partida inválida</h1>
-                <p className="error-message" role="alert">O número da partida deve conter só dígitos.</p>
+                <div className="empty-state">
+                    <h1>Partida inválida</h1>
+                    <p className="alert" role="alert">O número da partida deve conter só dígitos.</p>
+                </div>
             </main>
         );
     }
 
     return (
-        <main className="page analysis-page">
-            <BackLink />
-
+        <main className="analysis-page">
             {state.status === 'loading' && (
-                <MatchAnalysisSkeleton matchId={matchId} />
+                <div className="page container">
+                    <BackLink />
+                    <MatchAnalysisSkeleton matchId={matchId} />
+                </div>
             )}
 
             {state.status === 'error' && (
-                <>
-                    <h1>Partida {matchId}</h1>
-                    <p className="error-message" role="alert">{state.message}</p>
-                    <button className="retry-button" type="button" onClick={state.retry}>
-                        Tentar novamente
-                    </button>
-                </>
+                <div className="page container">
+                    <BackLink />
+                    <div className="alert alert-block" role="alert">
+                        <h1>Partida {matchId}</h1>
+                        <p>{state.message}</p>
+                        <button className="button-secondary" type="button" onClick={state.retry}>
+                            Tentar novamente
+                        </button>
+                    </div>
+                </div>
             )}
 
             {state.status === 'success' && (
@@ -122,48 +133,102 @@ function MatchAnalysisPage() {
     );
 }
 
+// The section links under the match header; the one of the section on screen is highlighted (scroll spy).
+function SectionNav({ sections }) {
+    const [active, setActive] = useState(sections[0]?.id);
+    const barRef = useRef(null);
+    const ids = sections.map(section => section.id).join(',');
+
+    useEffect(() => {
+        const elements = ids.split(',').map(id => document.getElementById(id)).filter(Boolean);
+        if (elements.length === 0) {
+            return undefined;
+        }
+        // The last section whose heading has passed under the sticky bars (about 160 px from the top); at the very
+        // bottom of the page, the last section.
+        let frame = 0;
+        function update() {
+            frame = 0;
+            const atBottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4;
+            const passed = elements.filter(element => element.getBoundingClientRect().top <= 160);
+            const current = atBottom ? elements.at(-1) : passed.at(-1) ?? elements[0];
+            setActive(current.id);
+        }
+        function onScroll() {
+            if (!frame) {
+                frame = requestAnimationFrame(update);
+            }
+        }
+        update();
+        window.addEventListener('scroll', onScroll, { passive: true });
+        return () => {
+            window.removeEventListener('scroll', onScroll);
+            cancelAnimationFrame(frame);
+        };
+    }, [ids]);
+
+    // On a narrow screen the links scroll sideways: keep the active one in view.
+    useEffect(() => {
+        const bar = barRef.current;
+        const link = bar?.querySelector('[aria-current="true"]');
+        if (bar && link && (link.offsetLeft < bar.scrollLeft || link.offsetLeft + link.offsetWidth > bar.scrollLeft + bar.clientWidth)) {
+            bar.scrollTo({ left: link.offsetLeft - 16 });
+        }
+    }, [active]);
+
+    return (
+        <nav className="analysis-nav" aria-label="Seções da análise">
+            <div className="container analysis-nav-inner" ref={barRef}>
+                {sections.map(section => (
+                    <a
+                        key={section.id}
+                        href={`#${section.id}`}
+                        aria-current={active === section.id ? 'true' : undefined}
+                    >
+                        {section.label}
+                    </a>
+                ))}
+            </div>
+        </nav>
+    );
+}
+
 function AnalysisContent({ analysis, accountId, replayPollingStopped }) {
     const { performance } = analysis;
+    const ready = analysis.replayStatus === 'ready';
     // null stays null for both teams: an unknown winner highlights nobody.
     const radiantWon = analysis.radiantWon ?? null;
     const direWon = radiantWon === null ? null : !radiantWon;
+    const hasMaps = ready && ((analysis.heatmaps?.heroes?.length ?? 0) > 0 || Boolean(analysis.deaths) || (analysis.wards?.length ?? 0) > 0);
+    const hasFights = ready && (Boolean(analysis.fights) || Boolean(analysis.damage));
     const sections = [
-        { id: 'performance-title', label: 'Desempenho', visible: Boolean(performance) },
-        {
-            id: 'laning-title',
-            label: 'Fase de rotas',
-            visible: analysis.replayStatus === 'ready' && Boolean(analysis.laning),
-        },
-        { id: 'smart-stats-title', label: 'Como melhorar', visible: Boolean(analysis.smartStats) },
-        { id: 'item-build-title', label: 'Build de itens', visible: Boolean(analysis.itemBuild) },
-        { id: 'timeline-title', label: 'Gráficos', visible: (analysis.timeline?.seconds?.length ?? 0) > 1 },
-        { id: 'objectives-title', label: 'Objetivos', visible: Boolean(analysis.objectives) },
-        { id: 'fights-title', label: 'Lutas', visible: Boolean(analysis.fights) },
-        { id: 'damage-title', label: 'Dano', visible: Boolean(analysis.damage) },
-        { id: 'death-map-title', label: 'Mortes', visible: Boolean(analysis.deaths) },
-        { id: 'ward-map-title', label: 'Wards', visible: (analysis.wards?.length ?? 0) > 0 },
-        { id: 'teams', label: 'Times', visible: true },
+        { id: 'performance-title', label: 'Visão geral', visible: Boolean(performance) },
+        { id: 'smart-stats-title', label: 'Dicas', visible: Boolean(performance || analysis.smartStats) },
+        { id: 'laning-title', label: 'Fase de rotas', visible: ready && Boolean(analysis.laning) },
+        { id: 'item-build-title', label: 'Itens', visible: ready && Boolean(analysis.itemBuild) },
+        { id: 'timeline-title', label: 'Economia', visible: ready && (analysis.timeline?.seconds?.length ?? 0) > 1 },
+        { id: 'objectives-title', label: 'Objetivos', visible: ready && Boolean(analysis.objectives) },
+        { id: 'fights-damage-title', label: 'Lutas e dano', visible: hasFights },
+        { id: 'maps-title', label: 'Mapas', visible: hasMaps },
+        { id: 'teams-title', label: 'Os 10 jogadores', visible: true },
     ].filter(section => section.visible);
 
     return (
         <>
             <MatchHeader analysis={analysis} />
-            <nav className="analysis-nav" aria-label="Seções da análise">
-                <a href="#match-overview">Resumo</a>
-                {sections.map(section => (
-                    <a key={section.id} href={`#${section.id}`}>{section.label}</a>
-                ))}
-            </nav>
+            <SectionNav sections={sections} />
 
-            <div className="analysis-sections">
+            <div className="container analysis-sections">
                 {!analysis.isParsed && (
                     <p className="notice">
-                        Dados detalhados indisponíveis: o replay desta partida ainda não foi processado pelo OpenDota.
+                        O OpenDota ainda não processou o replay desta partida: os percentis de desempenho podem faltar.
                     </p>
                 )}
 
+                <ReplayStatusBanner replayStatus={analysis.replayStatus} pollingStopped={replayPollingStopped} />
+
                 {performance
-                    ? <PerformanceSummary performance={performance} />
+                    ? <PerformanceSummary analysis={analysis} />
                     : (
                         <p className="notice">
                             O jogador {accountId} não aparece nesta partida, por isso não há análise de desempenho.
@@ -171,38 +236,53 @@ function AnalysisContent({ analysis, accountId, replayPollingStopped }) {
                         </p>
                     )}
 
-                <LaningSection
-                    replayStatus={analysis.replayStatus}
-                    laning={analysis.laning}
-                    pollingStopped={replayPollingStopped}
-                />
+                <SmartStatsSection performance={performance} laning={analysis.laning} smartStats={ready ? analysis.smartStats : null} />
 
-                {analysis.replayStatus === 'ready' && <SmartStatsSection smartStats={analysis.smartStats} />}
+                {ready && <LaningSection laning={analysis.laning} />}
 
-                {analysis.replayStatus === 'ready' && <ItemBuildSection itemBuild={analysis.itemBuild} />}
+                {ready && <ItemBuildSection itemBuild={analysis.itemBuild} />}
 
-                {analysis.replayStatus === 'ready' && (
-                    <TimelineSection timeline={analysis.timeline} objectives={analysis.objectives} />
+                {ready && <TimelineSection timeline={analysis.timeline} objectives={analysis.objectives} />}
+
+                {ready && <ObjectivesSection objectives={analysis.objectives} />}
+
+                {hasFights && (
+                    <section className="section" aria-labelledby="fights-damage-title">
+                        <SectionHead id="fights-damage-title" title="Lutas e dano" />
+                        <div className="split split-5-7">
+                            <FightsSection fights={analysis.fights} isRadiant={performance ? performance.isRadiant : null} />
+                            <DamageSection damage={analysis.damage} heroName={performance?.heroName} />
+                        </div>
+                    </section>
                 )}
 
-                {analysis.replayStatus === 'ready' && <ObjectivesSection objectives={analysis.objectives} />}
-
-                {analysis.replayStatus === 'ready' && (
-                    <FightsSection fights={analysis.fights} isRadiant={performance ? performance.isRadiant : null} />
+                {hasMaps && (
+                    <section className="section" aria-labelledby="maps-title">
+                        <SectionHead id="maps-title" title="Mapas da partida">
+                            <span>No minimapa do jogo, com as posições do replay</span>
+                        </SectionHead>
+                        <div className="stack">
+                            <HeatmapSection
+                                heatmaps={analysis.heatmaps}
+                                deaths={analysis.deaths}
+                                smartStats={analysis.smartStats}
+                                laning={analysis.laning}
+                            />
+                            <div className="split">
+                                <DeathMap deaths={analysis.deaths} />
+                                <WardMap wards={analysis.wards} />
+                            </div>
+                        </div>
+                    </section>
                 )}
 
-                {analysis.replayStatus === 'ready' && (
-                    <DamageSection damage={analysis.damage} heroName={performance?.heroName} />
-                )}
-
-                {analysis.replayStatus === 'ready' && <DeathMap deaths={analysis.deaths} />}
-
-                {analysis.replayStatus === 'ready' && <WardMap wards={analysis.wards} />}
-
-                <div id="teams" className="teams">
-                    <TeamTable name="Radiant" players={analysis.radiant} won={radiantWon} />
-                    <TeamTable name="Dire" players={analysis.dire} won={direWon} />
-                </div>
+                <section className="section" aria-labelledby="teams-title">
+                    <SectionHead id="teams-title" title="Os 10 jogadores" />
+                    <div className="stack">
+                        <TeamTable name="Radiant" side="radiant" players={analysis.radiant} won={radiantWon} score={analysis.radiantScore} />
+                        <TeamTable name="Dire" side="dire" players={analysis.dire} won={direWon} score={analysis.direScore} />
+                    </div>
+                </section>
             </div>
         </>
     );

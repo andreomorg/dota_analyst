@@ -28,7 +28,13 @@ internal sealed record StoredReplayAnalysis(
     // Added in sprint 16, the same way.
     IReadOnlyList<StoredMapObjective>? Objectives = null,
     // Added in sprint 17, the same way (empty: a match without role queue).
-    IReadOnlyList<StoredHeroMetrics>? Metrics = null);
+    IReadOnlyList<StoredHeroMetrics>? Metrics = null,
+    // Added with the heatmaps, the same way.
+    IReadOnlyList<StoredHeatmap>? Heatmaps = null);
+
+// Each phase as a flat list [column, row, samples, column, row, samples, ...]: a match's heatmaps are about 30
+// lists of a few hundred cells, and objects per cell would triple the size of the row.
+internal sealed record StoredHeatmap(int HeroId, IReadOnlyList<int> EarlyGame, IReadOnlyList<int> MidGame, IReadOnlyList<int> LateGame);
 
 internal sealed record StoredHeroMetrics(
     int HeroId, Team Team, int Role, int Deaths, int IsolatedDeaths, int DeathsOnEnemySide, double EnemySideShare,
@@ -204,7 +210,11 @@ internal static class StoredReplayMappings
                 stored.Metrics?.Select(hero => hero is null
                         ? throw new InvalidDataException("A saved replay analysis has empty metrics.")
                         : ToDomain(hero))
-
+                    .ToList(),
+                stored.Heatmaps?.Select(heatmap => heatmap is null
+                        ? throw new InvalidDataException("A saved replay analysis has an empty heatmap.")
+                        : new HeroHeatmap(heatmap.HeroId, new PerGamePhase<IReadOnlyList<HeatCell>>(
+                            ToCells(heatmap.EarlyGame), ToCells(heatmap.MidGame), ToCells(heatmap.LateGame))))
                     .ToList());
         }
         catch (ArgumentException ex)
@@ -253,9 +263,24 @@ internal static class StoredReplayMappings
                 .ToList(),
             Metrics: analysis.Metrics?
                 .Select(ToStored)
-
+                .ToList(),
+            Heatmaps: analysis.Heatmaps?
+                .Select(heatmap => new StoredHeatmap(heatmap.HeroId, ToFlat(heatmap.Phases.EarlyGame),
+                    ToFlat(heatmap.Phases.MidGame), ToFlat(heatmap.Phases.LateGame)))
                 .ToList());
 
+    private static List<int> ToFlat(IReadOnlyList<HeatCell> cells) =>
+        cells.SelectMany(cell => new[] { cell.Column, cell.Row, cell.Samples }).ToList();
+
+    private static IReadOnlyList<HeatCell> ToCells(IReadOnlyList<int>? flat)
+    {
+        if (flat is null || flat.Count % 3 != 0)
+        {
+            throw new InvalidDataException("A saved heatmap phase is missing or not [column, row, samples] triples.");
+        }
+
+        return flat.Chunk(3).Select(cell => new HeatCell(cell[0], cell[1], cell[2])).ToList();
+    }
 
     // Shared with the comparison base (BaselineRepository): the same JSON for a hero's metrics.
     public static HeroMetrics ToDomain(StoredHeroMetrics hero) =>

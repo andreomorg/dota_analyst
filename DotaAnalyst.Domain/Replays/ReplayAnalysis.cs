@@ -20,7 +20,8 @@ public record ReplayAnalysis
         IReadOnlyList<DamageRow>? damage = null,
         IReadOnlyList<ItemPurchase>? purchases = null,
         IReadOnlyList<MapObjective>? objectives = null,
-        IReadOnlyList<HeroMetrics>? metrics = null)
+        IReadOnlyList<HeroMetrics>? metrics = null,
+        IReadOnlyList<HeroHeatmap>? heatmaps = null)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(matchId.Value, nameof(matchId));
         ArgumentOutOfRangeException.ThrowIfNegative(endsAtSeconds);
@@ -79,7 +80,18 @@ public record ReplayAnalysis
         }
 
         Metrics = metrics?.ToList();
+        if (heatmaps is not null && (heatmaps.Any(heatmap => heatmap is null)
+            || heatmaps.DistinctBy(heatmap => heatmap.HeroId).Count() != heatmaps.Count))
+        {
+            throw new ArgumentException("A replay analysis has an empty or repeated heatmap.", nameof(heatmaps));
+        }
+
+        Heatmaps = heatmaps?.ToList();
     }
+
+    // Where each hero spent its time alive (every match with positions, Turbo included); null for analyses made
+    // before heatmaps existed.
+    public IReadOnlyList<HeroHeatmap>? Heatmaps { get; }
 
     // The metrics of every hero (MatchMetricsCalculator); empty for a match without role queue (Turbo, unranked: no
     // metrics, by choice), null for analyses made before metrics existed.
@@ -107,7 +119,7 @@ public record ReplayAnalysis
     // (Analyses without damage were also read before deaths had assists.)
     public bool IsOutdated =>
         Timeline is null || Deaths is null || Wards is null || Damage is null || Purchases is null || Objectives is null
-        || Metrics is null || Metrics.Any(hero =>
+        || Heatmaps is null || Metrics is null || Metrics.Any(hero =>
             hero.TimeByRegion is null || hero.DeathsByRegion is null || hero.MovementSampleSegments is null
             || hero.TimeByRegionByPhase is null || hero.DeathsByRegionByPhase is null || hero.FightsNearby is null || hero.LaneDamageTaken is null || hero.TeamObserverUptime is null || hero.MinutesByRegion is null);
 

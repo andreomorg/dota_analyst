@@ -39,9 +39,30 @@ public class ReplayAnalysisTests
         var currentReplay = new ReplayAnalysis(
             MatchIdOf(10), ReplayAnalysis.LaningPhaseEndsAtSeconds, [Hero(31, Team.Radiant, Lane.Bottom)],
             timeline: Timeline(Hero(31, Team.Radiant, Lane.Bottom)), deaths: [], wards: [], damage: [], purchases: [],
-            objectives: [], metrics: [currentMetrics]);
+            objectives: [], metrics: [currentMetrics], heatmaps: []);
 
         Assert.False(currentReplay.IsOutdated);
+    }
+
+    [Fact]
+    public void IsOutdated_WhenHeatmapsAreMissing()
+    {
+        var replay = Analysis(10, Hero(31, Team.Radiant, Lane.Bottom));
+        var withoutHeatmaps = new ReplayAnalysis(
+            replay.MatchId, replay.EndsAtSeconds, replay.Players, replay.Timeline, replay.Deaths, replay.Wards,
+            replay.Damage, replay.Purchases, replay.Objectives, replay.Metrics);
+
+        Assert.False(replay.IsOutdated);
+        Assert.True(withoutHeatmaps.IsOutdated);
+    }
+
+    [Fact]
+    public void Heatmaps_EachHeroOnlyOnce()
+    {
+        var heatmap = new HeroHeatmap(31, new PerGamePhase<IReadOnlyList<HeatCell>>([], [], []));
+
+        Assert.Throws<ArgumentException>(() => new ReplayAnalysis(
+            MatchIdOf(10), 600, [Hero(31, Team.Radiant, Lane.Bottom)], heatmaps: [heatmap, heatmap]));
     }
 
     [Theory]

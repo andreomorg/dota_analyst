@@ -1,116 +1,85 @@
 import { formatNumber } from '../matches/format';
 import { HeroIcon } from '../heroes/HeroImage';
 import ItemIcon from '../items/ItemIcon';
+import { ResultChip, YouChip } from '../ui/Chips';
+import Kda from '../ui/Kda';
 
-function teamStatus(won) {
-    if (won === null || won === undefined) {
-        return null;
-    }
-    return won
-        ? { label: 'Vencedor', className: 'result-win' }
-        : { label: 'Perdedor', className: 'result-loss' };
-}
+// One team of the match (the Stitch "Tabela completa de jogadores"): a header with the result and the team's totals,
+// then one row per player. The table scrolls sideways inside its card on narrow screens.
 
-function ItemsCell({ items, itemIds, neutralItem, neutralItemId }) {
+// The final inventory as icons; the names are in the tooltip and for screen readers.
+function Items({ items, itemIds, neutralItem, neutralItemId }) {
     if (items.length === 0 && !neutralItem) {
         return '—';
     }
     return (
-        <span className="item-chip-list">
+        <span className="item-icons">
             {items.map((item, index) => (
-                <span key={`${item}-${index}`} className="item-chip">
-                    <ItemIcon itemId={itemIds?.[index]} />
-                    {item}
+                <span key={`${item}-${index}`} className="item-slot" title={item}>
+                    {itemIds?.[index] ? <ItemIcon itemId={itemIds[index]} /> : <span className="item-image-placeholder" aria-hidden="true" />}
+                    <span className="visually-hidden">{item}{index < items.length - 1 || neutralItem ? ', ' : ''}</span>
                 </span>
             ))}
             {neutralItem && (
-                <span className="item-chip neutral-item">
-                    <ItemIcon itemId={neutralItemId} />
-                    Neutro: {neutralItem}
+                <span className="item-slot item-neutral" title={`Neutro: ${neutralItem}`}>
+                    {neutralItemId ? <ItemIcon itemId={neutralItemId} /> : <span className="item-image-placeholder" aria-hidden="true" />}
+                    <span className="visually-hidden">neutro: {neutralItem}</span>
                 </span>
             )}
         </span>
     );
 }
 
-function PlayerCard({ player }) {
+// won: true/false for this team, or null when the winner is unknown. side: 'radiant' or 'dire'.
+function TeamTable({ name, side, players, won, score }) {
+    const netWorth = players.reduce((total, player) => total + player.netWorth, 0);
+
     return (
-        <article className={`team-player-card${player.isCurrentPlayer ? ' current-player' : ''}`}>
-            <div className="team-player-heading">
+        <section className={`card team-card team-${side}`} aria-label={`Time ${name}`}>
+            <div className="team-card-head">
                 <h3>
-                    <HeroIcon heroId={player.heroId} />
-                    {player.heroName}
-                    {player.isCurrentPlayer && <> <span className="you-badge">Você</span></>}
+                    <span className={`team-dot team-dot-${side}`} aria-hidden="true" />
+                    {name}
+                    <ResultChip won={won} winLabel="Vencedores" lossLabel="Derrotados" />
                 </h3>
-                <span className="hero-level">Nível {player.level}</span>
+                <p className="team-card-totals mono">
+                    {formatNumber(score)} abates · {formatNumber(Math.round(netWorth / 100) / 10)} mil de patrimônio
+                </p>
             </div>
-            <dl className="team-player-stats">
-                <div><dt>K / D / A</dt><dd>{player.kills} / {player.deaths} / {player.assists}</dd></div>
-                <div><dt>LH / DN</dt><dd>{formatNumber(player.lastHits)} / {formatNumber(player.denies)}</dd></div>
-                <div><dt>GPM / XPM</dt><dd>{formatNumber(player.goldPerMinute)} / {formatNumber(player.experiencePerMinute)}</dd></div>
-                <div><dt>Patrimônio</dt><dd>{formatNumber(player.netWorth)}</dd></div>
-                <div><dt>Dano a heróis</dt><dd>{formatNumber(player.heroDamage)}</dd></div>
-                <div className="team-player-items">
-                    <dt>Itens</dt>
-                    <dd>
-                        <ItemsCell
-                            items={player.items}
-                            itemIds={player.itemIds}
-                            neutralItem={player.neutralItem}
-                            neutralItemId={player.neutralItemId}
-                        />
-                    </dd>
-                </div>
-            </dl>
-        </article>
-    );
-}
-
-// won: true/false for this team, or null when the winner is unknown.
-function TeamTable({ name, players, won }) {
-    const status = teamStatus(won);
-
-    return (
-        <section className={`team ${won ? 'team-won' : ''}`}>
-            <h2>
-                {name}
-                {status && <span className={`team-status ${status.className}`}> · {status.label}</span>}
-            </h2>
-            <div className="table-scroll team-table-scroll">
-                <table className="team-table">
-                    <caption className="visually-hidden">
-                        Jogadores do time {name}{status ? ` (${status.label.toLowerCase()})` : ''}
-                    </caption>
+            <div className="table-scroll">
+                <table className="data-table team-table">
+                    <caption className="visually-hidden">Jogadores do time {name}</caption>
                     <thead>
                         <tr>
                             <th scope="col">Herói</th>
-                            <th scope="col">K / D / A</th>
-                            <th scope="col">LH / DN</th>
-                            <th scope="col">GPM / XPM</th>
-                            <th scope="col">Patrimônio</th>
-                            <th scope="col">Dano a heróis</th>
-                            <th scope="col">Itens</th>
+                            <th scope="col" className="num-col">Nível</th>
+                            <th scope="col" className="center-col">K / D / A</th>
+                            <th scope="col" className="num-col">Patrimônio</th>
+                            <th scope="col" className="num-col">LH / DN</th>
+                            <th scope="col" className="num-col">GPM / XPM</th>
+                            <th scope="col" className="num-col">Dano a heróis</th>
+                            <th scope="col">Itens finais</th>
                         </tr>
                     </thead>
                     <tbody>
                         {players.map((player, index) => (
                             // accountId is null for private profiles, so the position is part of the key.
-                            <tr key={`${index}-${player.heroId}`} className={player.isCurrentPlayer ? 'current-player' : undefined}>
+                            <tr key={`${index}-${player.heroId}`} className={player.isCurrentPlayer ? 'is-you' : undefined}>
                                 <th scope="row">
                                     <span className="hero-cell">
                                         <HeroIcon heroId={player.heroId} />
                                         {player.heroName}
+                                        {player.isCurrentPlayer && <YouChip />}
                                     </span>
-                                    {player.isCurrentPlayer && <>{' '}<span className="you-badge">Você</span></>}
-                                    <span className="hero-level"> · nível {player.level}</span>
                                 </th>
-                                <td>{player.kills} / {player.deaths} / {player.assists}</td>
-                                <td>{formatNumber(player.lastHits)} / {formatNumber(player.denies)}</td>
-                                <td>{formatNumber(player.goldPerMinute)} / {formatNumber(player.experiencePerMinute)}</td>
-                                <td>{formatNumber(player.netWorth)}</td>
-                                <td>{formatNumber(player.heroDamage)}</td>
-                                <td className="items-cell">
-                                    <ItemsCell
+                                <td className="num-col mono">{player.level}</td>
+                                <td className="center-col"><Kda kills={player.kills} deaths={player.deaths} assists={player.assists} /></td>
+                                <td className="num-col mono">{formatNumber(player.netWorth)}</td>
+                                <td className="num-col mono">{formatNumber(player.lastHits)} / {formatNumber(player.denies)}</td>
+                                <td className="num-col mono">{formatNumber(player.goldPerMinute)} / {formatNumber(player.experiencePerMinute)}</td>
+                                <td className="num-col mono">{formatNumber(player.heroDamage)}</td>
+                                <td>
+                                    <Items
                                         items={player.items}
                                         itemIds={player.itemIds}
                                         neutralItem={player.neutralItem}
@@ -121,11 +90,6 @@ function TeamTable({ name, players, won }) {
                         ))}
                     </tbody>
                 </table>
-            </div>
-            <div className="team-player-cards" aria-label={`Jogadores do time ${name}`}>
-                {players.map((player, index) => (
-                    <PlayerCard key={`${index}-${player.heroId}`} player={player} />
-                ))}
             </div>
         </section>
     );

@@ -268,7 +268,7 @@ public class GetMatchAnalysisHandlerTests
                 new WardPlacement(WardKind.Sentry, Team.Dire, 28, 100, 200, 700, 760, destroyed: true, 31),
                 new WardPlacement(WardKind.Observer, Team.Radiant, 31, -3000, 1500, -60, null, destroyed: false, null),
             ],
-            damage: [], purchases: [], objectives: [], metrics: []);
+            damage: [], purchases: [], objectives: [], metrics: [], heatmaps: []);
         var handler = CreateHandler(
             UnparsedMatchWithMe(), new FakeReplayAnalysisRepository(SavedReplayAnalysis.Ready(replay, Now)));
 
@@ -303,7 +303,36 @@ public class GetMatchAnalysisHandlerTests
         };
         return new ReplayAnalysis(
             MatchIdOf(10), ReplayAnalysis.LaningPhaseEndsAtSeconds, players, ReplayBuilder.Timeline(players), deaths,
-            wards: [], damage, purchases: [], objectives: [], metrics: []);
+            wards: [], damage, purchases: [], objectives: [], metrics: [], heatmaps: []);
+    }
+
+    [Fact]
+    public async Task Heatmaps_Ready_EveryHeroRadiantFirst_AsFlatTriples()
+    {
+        static HeroHeatmap Heatmap(int heroId, params HeatCell[] early) =>
+            new(heroId, new PerGamePhase<IReadOnlyList<HeatCell>>(early, [], [new HeatCell(16, 16, 3)]));
+        var players = new[]
+        {
+            ReplayBuilder.Hero(31, Team.Radiant, Lane.Bottom), ReplayBuilder.Hero(5, Team.Radiant, Lane.Bottom),
+            ReplayBuilder.Hero(28, Team.Dire, Lane.Bottom), ReplayBuilder.Hero(2, Team.Dire, Lane.Top),
+        };
+        var replay = new ReplayAnalysis(
+            MatchIdOf(10), ReplayAnalysis.LaningPhaseEndsAtSeconds, players, ReplayBuilder.Timeline(players), deaths: [],
+            wards: [], damage: [], purchases: [], objectives: [], metrics: [],
+            heatmaps: [Heatmap(28, new HeatCell(20, 5, 9)), Heatmap(31, new HeatCell(5, 25, 4), new HeatCell(6, 25, 1)), Heatmap(77)]);
+        var handler = CreateHandler(
+            TeamfightMatch(), new FakeReplayAnalysisRepository(SavedReplayAnalysis.Ready(replay, Now)));
+
+        var heatmaps = (await handler.HandleAsync(MatchIdOf(10), Me, CancellationToken.None))!.Heatmaps;
+
+        Assert.NotNull(heatmaps);
+        Assert.Equal((32, -9472, 9472, 2), (heatmaps.GridSize, heatmaps.MapMin, heatmaps.MapMax, heatmaps.SecondsPerSample));
+        // Hero 77 isn't in the match: left out.
+        Assert.Equal([(31, Team.Radiant, true), (28, Team.Dire, false)],
+            heatmaps.Heroes.Select(hero => (hero.HeroId, hero.Team, hero.IsCurrentPlayer)));
+        Assert.Equal([5, 25, 4, 6, 25, 1], heatmaps.Heroes[0].EarlyGame);
+        Assert.Equal([16, 16, 3], heatmaps.Heroes[0].LateGame);
+        Assert.Empty(heatmaps.Heroes[1].MidGame);
     }
 
     [Fact]
@@ -403,7 +432,7 @@ public class GetMatchAnalysisHandlerTests
                 new ItemPurchase(31, 1000, "recipe_black_king_bar"),
                 new ItemPurchase(31, 1003, "black_king_bar"), // logged when the parts came together
             ],
-            objectives: [], metrics: []);
+            objectives: [], metrics: [], heatmaps: []);
         var items = new[]
         {
             new Item(44, "Tango") { Details = new ItemDetails("tango", 90, [], isConsumable: true) },
@@ -437,7 +466,7 @@ public class GetMatchAnalysisHandlerTests
                 new MapObjective(ObjectiveKind.Roshan, 1300, Team.Radiant, 31, aegisHeroId: 31),
                 new MapObjective(ObjectiveKind.Tower, 680, Team.Dire, 28, Team.Radiant, towerTier: 1, lane: Lane.Bottom),
             ],
-            metrics: []);
+            metrics: [], heatmaps: []);
         var handler = CreateHandler(
             UnparsedMatchWithMe(), new FakeReplayAnalysisRepository(SavedReplayAnalysis.Ready(replay, Now)));
 
@@ -477,7 +506,8 @@ public class GetMatchAnalysisHandlerTests
                 HeroMetricsOf(31, Team.Radiant, role: 5, isolatedDeaths: 3, deaths: 5),
                 HeroMetricsOf(2, Team.Dire, role: 1),
                 HeroMetricsOf(28, Team.Dire, role: 5, isolatedDeaths: 1, deaths: 3),
-            ]);
+            ],
+            heatmaps: []);
         var handler = CreateHandler(
             UnparsedMatchWithMe(), new FakeReplayAnalysisRepository(SavedReplayAnalysis.Ready(replay, Now)));
 
@@ -505,7 +535,7 @@ public class GetMatchAnalysisHandlerTests
             [ReplayBuilder.Hero(31, Team.Radiant, Lane.Bottom), ReplayBuilder.Hero(28, Team.Dire, Lane.Bottom)],
             ReplayBuilder.Timeline([ReplayBuilder.Hero(31, Team.Radiant, Lane.Bottom), ReplayBuilder.Hero(28, Team.Dire, Lane.Bottom)]),
             deaths: [], wards: [], damage: [], purchases: [], objectives: [],
-            metrics: [HeroMetricsOf(31, Team.Radiant, role: 5, deaths: 2), HeroMetricsOf(28, Team.Dire, role: 5)]);
+            metrics: [HeroMetricsOf(31, Team.Radiant, role: 5, deaths: 2), HeroMetricsOf(28, Team.Dire, role: 5)], heatmaps: []);
 
     [Fact]
     public async Task SmartStats_ComparedWithTheBase_OfTheSameHeroAndRole()
@@ -555,7 +585,8 @@ public class GetMatchAnalysisHandlerTests
             [
                 HeroMetricsOf(31, Team.Radiant, role: 5) with { RoleInferred = true },
                 HeroMetricsOf(28, Team.Dire, role: 5) with { RoleInferred = true },
-            ]);
+            ],
+            heatmaps: []);
         var handler = CreateHandler(
             UnparsedMatchWithMe(), new FakeReplayAnalysisRepository(SavedReplayAnalysis.Ready(replay, Now)));
 

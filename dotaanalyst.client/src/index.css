@@ -1,84 +1,165 @@
+/* Design tokens of the Stitch design "Obsidian Telemetry" (export in work/, DESIGN.md): a dark, dense dashboard.
+   Green = good/won/Radiant-ish valence, red = bad/lost, violet = "you". The site has one (dark) theme: the design
+   is dark, and the game's minimap and hero art are too. */
 :root {
-  --text: #bac3c0;
-  --text-h: #dee2ec;
-  --bg: #0f141b;
-  --surface: #171c23;
-  --surface-raised: #1b2027;
-  --surface-high: #252a32;
-  --border: #30363d;
-  --code-bg: #252a32;
-  --accent: #75ff9e;
-  --accent-bg: rgba(117, 255, 158, 0.1);
-  --accent-border: rgba(117, 255, 158, 0.45);
-  --social-bg: #171c23;
-  --shadow: 0 10px 24px rgba(0, 0, 0, 0.24);
+    color-scheme: dark;
 
-  --sans: Inter, system-ui, 'Segoe UI', Roboto, sans-serif;
-  --heading: Inter, system-ui, 'Segoe UI', Roboto, sans-serif;
-  --mono: ui-monospace, Consolas, monospace;
+    /* Surfaces, from the canvas up. */
+    --bg: #0f141b;
+    --surface-lowest: #090f15;
+    --surface-low: #171c23;
+    --surface: #1b2027;
+    --surface-high: #252a32;
+    --surface-highest: #30353d;
+    --surface-bright: #343941;
 
-  font: 15px/1.5 var(--sans);
-  letter-spacing: 0;
-  color-scheme: dark;
-  color: var(--text);
-  background: var(--bg);
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+    /* Lines. */
+    --border: #30353d;
+    --border-strong: #484f58;
+    --divider: #252a32;
 
+    /* Text. */
+    --text-h: #dee2ec;
+    --text: #bacbb9;
+    --text-muted: #8b949e;
+
+    /* Valence. */
+    --primary: #75ff9e;
+    --primary-strong: #00e676;
+    --on-primary: #003918;
+    --primary-bg: rgba(0, 230, 118, 0.12);
+    --primary-border: rgba(117, 255, 158, 0.4);
+    --secondary: #ffb3ae;
+    --secondary-strong: #ff5252;
+    --secondary-bg: rgba(255, 82, 82, 0.12);
+    --secondary-border: rgba(255, 179, 174, 0.4);
+    --you: #c084fc;
+    --you-bg: rgba(192, 132, 252, 0.15);
+    --you-border: rgba(192, 132, 252, 0.5);
+    --tertiary-container: #debaff;
+    --on-tertiary-container: #7034a9;
+    --amber: #f1b343;
+
+    /* Old names still used by some components. */
+    --win: var(--primary);
+    --loss: var(--secondary);
+    --accent: var(--primary);
+    --accent-bg: var(--primary-bg);
+    --accent-border: var(--primary-border);
+
+    /* Charts. A blue/red diverging pair for leads; categorical slots in a fixed order, each series also has a
+       direct label, a legend and a table. */
+    --chart-ahead: #3987e5;
+    --chart-behind: #e66767;
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --series-4: #c98500;
+    --series-5: #d55181;
+    --chart-grid: #2b3038;
+    --chart-zero: #6b7480;
+
+    /* Marks on the game's minimap (DeathMap, WardMap, HeatmapSection). */
+    --map-mark-outline: #fff;
+    --map-mark-ink: #111;
+
+    --sans: 'Inter Variable', Inter, system-ui, 'Segoe UI', Roboto, sans-serif;
+    --mono: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+
+    --radius-sm: 4px;
+    --radius: 6px;
+    --radius-lg: 8px;
+    --page-width: 1126px;
+    --gutter: 16px;
+
+    font: 400 15px/1.5 var(--sans);
+    color: var(--text);
+    background: var(--bg);
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
 }
 
 body {
-  margin: 0;
-  min-width: 320px;
-  background: var(--bg);
+    margin: 0;
+    min-width: 320px;
+    background: var(--bg);
 }
 
 #root {
-  width: min(100%, 1126px);
-  max-width: 100%;
-  margin: 0 auto;
-  text-align: left;
-  min-height: 100svh;
-  display: flex;
-  flex-direction: column;
-  box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    min-height: 100svh;
 }
 
 h1,
-h2 {
-  font-family: var(--heading);
-  font-weight: 600;
-  color: var(--text-h);
+h2,
+h3 {
+    margin: 0;
+    color: var(--text-h);
+    font-weight: 600;
+    letter-spacing: -0.02em;
 }
 
 h1 {
-  font-size: clamp(1.75rem, 4vw, 2.5rem);
-  letter-spacing: -0.04em;
-  margin: 0 0 1rem;
+    font-size: clamp(1.75rem, 4vw, 2.25rem);
+    line-height: 1.2;
+    letter-spacing: -0.03em;
 }
+
 h2 {
-  font-size: 1.25rem;
-  line-height: 1.25;
-  letter-spacing: -0.02em;
-  margin: 0 0 0.75rem;
+    font-size: 1.25rem;
+    line-height: 1.3;
 }
+
+h3 {
+    font-size: 1rem;
+    line-height: 1.4;
+}
+
 p {
-  margin: 0;
+    margin: 0;
 }
 
-code,
-.counter {
-  font-family: var(--mono);
-  display: inline-flex;
-  border-radius: 4px;
-  color: var(--text-h);
+a {
+    color: var(--primary);
 }
 
-code {
-  font-size: 0.9rem;
-  line-height: 1.35;
-  padding: 4px 8px;
-  background: var(--code-bg);
+a:hover {
+    color: #a5ffbd;
+}
+
+button,
+input,
+select {
+    font: inherit;
+    color: inherit;
+}
+
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+summary:focus-visible,
+[tabindex]:focus-visible {
+    outline: 2px solid var(--you);
+    outline-offset: 2px;
+}
+
+table {
+    border-collapse: collapse;
+}
+
+/* Every number in a column lines up (the design: "never proportional digits for stats"). */
+.mono,
+.num {
+    font-family: var(--mono);
+    font-variant-numeric: tabular-nums;
 }

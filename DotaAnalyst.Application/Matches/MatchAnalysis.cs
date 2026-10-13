@@ -25,6 +25,7 @@ namespace DotaAnalyst.Application.Matches;
 /// <param name="Objectives">Towers, barracks and Ancients that fell and Roshan/Tormentor kills of both teams, read from the replay, in time order (the buildings of the base besides towers 4 left out); null unless replayStatus is ready.</param>
 /// <param name="SmartStats">Numbers that show where the player could improve (positioning, economy, vision), compared with the enemy of the same role and the match average, and what to improve; null unless replayStatus is ready and the player is in the match, and for matches without role queue (Turbo, unranked).</param>
 /// <param name="ItemBuild">The player's starting items and when each item of the build was ready (approximate: items sold or given away still count); null unless replayStatus is ready and the player is in the match, or when the item catalog is unavailable.</param>
+/// <param name="Heatmaps">Where each of the ten heroes spent its time alive, per game phase, read from the replay; null unless replayStatus is ready (and for replays read before heatmaps existed).</param>
 public record MatchAnalysis(
     long MatchId,
     int DurationSeconds,
@@ -45,7 +46,33 @@ public record MatchAnalysis(
     IReadOnlyList<FightSummary>? Fights = null,
     PlayerItemBuild? ItemBuild = null,
     IReadOnlyList<MapObjectiveSummary>? Objectives = null,
-    SmartStats? SmartStats = null);
+    SmartStats? SmartStats = null,
+    HeatmapSet? Heatmaps = null);
+
+/// <summary>Where each hero spent its time alive, as a grid over the map (column 0 = west edge, row 0 = north edge), per game phase.</summary>
+/// <param name="GridSize">Columns and rows of the grid.</param>
+/// <param name="MapMin">Map coordinate of the grid's west and south edges (the same square as the game's minimap image).</param>
+/// <param name="MapMax">Map coordinate of the grid's east and north edges.</param>
+/// <param name="SecondsPerSample">About how many seconds of game each sample stands for.</param>
+/// <param name="Heroes">One heatmap per hero, Radiant first.</param>
+public record HeatmapSet(int GridSize, int MapMin, int MapMax, int SecondsPerSample, IReadOnlyList<HeroHeatmapView> Heroes);
+
+/// <summary>The heatmap of one hero. Each phase is a flat list of [column, row, samples] triples, only for the cells the hero was in.</summary>
+/// <param name="HeroId">Hero, as OpenDota's hero ID.</param>
+/// <param name="HeroName">Hero name, or "Unknown hero".</param>
+/// <param name="Team">The hero's team.</param>
+/// <param name="IsCurrentPlayer">True for the hero of the player whose point of view the analysis uses.</param>
+/// <param name="EarlyGame">0-10 minutes.</param>
+/// <param name="MidGame">10-20 minutes.</param>
+/// <param name="LateGame">From 20 minutes on.</param>
+public record HeroHeatmapView(
+    int HeroId,
+    string HeroName,
+    Team Team,
+    bool IsCurrentPlayer,
+    IReadOnlyList<int> EarlyGame,
+    IReadOnlyList<int> MidGame,
+    IReadOnlyList<int> LateGame);
 
 /// <summary>One of the ten players of the match.</summary>
 /// <param name="AccountId">Dota account ID; null for players with an anonymous profile.</param>

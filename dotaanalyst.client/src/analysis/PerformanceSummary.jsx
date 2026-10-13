@@ -2,7 +2,9 @@ import { formatNumber, toPercent } from '../matches/format';
 import { HeroPortrait } from '../heroes/HeroImage';
 import Kda from '../ui/Kda';
 import SectionHead from '../ui/SectionHead';
-import { metricLabel, ratingLabel } from './metrics';
+import Standing from '../ui/Standing';
+import { standingDetail, standingOf } from '../ui/standingLevels';
+import { metricLabel } from './metrics';
 
 // "Seu desempenho" (the Stitch overview): who you played and how the lane went, and the match's big numbers; every
 // OpenDota percentile against other players of the same hero is in PerformanceMetrics (higher is always better; the
@@ -16,20 +18,25 @@ const OUTCOMES = {
     lost: { label: 'Perdeu a rota', className: 'text-loss' },
 };
 
-function ratingClass(percentile) {
-    if (percentile >= 0.7) {
-        return 'text-win';
+// Who had more of the lane's net worth at 10:00 (the same ±5 points the eye can tell on the bar).
+function laneBalance(share) {
+    if (share >= 0.55) {
+        return { label: 'Seu lado na frente', className: 'text-win', fill: 'fill-win' };
     }
-    return percentile <= 0.3 ? 'text-loss' : undefined;
+    return share <= 0.45
+        ? { label: 'Adversários na frente', className: 'text-loss', fill: 'fill-loss' }
+        : { label: 'Equilibrado', className: 'text-even', fill: 'fill-even' };
 }
 
+// Under a big number: the verdict against other players of the hero, in words.
 function Percentile({ metric, heroName }) {
     if (!metric) {
         return null;
     }
+    const level = standingOf(metric.percentile);
     return (
-        <span className={ratingClass(metric.percentile)}>
-            Melhor que {toPercent(metric.percentile)}% dos jogadores de {heroName}
+        <span className={`standing-inline tone-${level.tone}`} title={`Contra jogadores de ${heroName}`}>
+            <strong>{level.label}</strong> · {standingDetail(metric.percentile)}
         </span>
     );
 }
@@ -83,11 +90,13 @@ function LaneBox({ laning }) {
             {share !== null && (
                 <div className="meter">
                     <div className="meter-head">
-                        <span>Seu lado no patrimônio da rota</span>
-                        <span className={`mono ${share >= 0.5 ? 'text-win' : 'text-loss'}`}>{toPercent(share)}%</span>
+                        <span>Patrimônio da rota aos 10:00</span>
+                        <span className={laneBalance(share).className}>
+                            {laneBalance(share).label} · <span className="mono">{toPercent(share)}%</span> seu
+                        </span>
                     </div>
-                    <span className="meter-track" aria-hidden="true">
-                        <span className={`meter-fill ${share >= 0.5 ? 'fill-win' : 'fill-loss'}`} style={{ width: `${toPercent(share)}%` }} />
+                    <span className="meter-track meter-split" aria-hidden="true">
+                        <span className={`meter-fill ${laneBalance(share).fill}`} style={{ width: `${toPercent(share)}%` }} />
                     </span>
                 </div>
             )}
@@ -95,18 +104,12 @@ function LaneBox({ laning }) {
     );
 }
 
-function MetricRow({ metric }) {
-    const percent = toPercent(metric.percentile);
+function MetricRow({ metric, heroName }) {
     return (
         <li className="metric-row">
             <span className="metric-name">{metricLabel(metric.metric)}</span>
             <span className="metric-value mono">{formatNumber(metric.value)}</span>
-            {/* The bar is decorative; the text next to it carries the same information for screen readers. */}
-            <span className="meter-track" aria-hidden="true">
-                <span className={`meter-fill rating-${metric.rating}`} style={{ width: `${percent}%` }} />
-            </span>
-            <span className="metric-percentile mono">{percent}%</span>
-            <span className={`metric-rating rating-${metric.rating}`}>{ratingLabel(metric.rating)}</span>
+            <Standing share={metric.percentile} who={`jogadores de ${heroName}`} />
         </li>
     );
 }
@@ -192,11 +195,11 @@ export function PerformanceMetrics({ performance }) {
     return (
         <section className="section" aria-labelledby="percentiles-title">
             <SectionHead id="percentiles-title" title={`Comparado com outros jogadores de ${performance.heroName}`}>
-                <span>Percentil do OpenDota: em quantas partidas do herói você foi melhor</span>
+                <span>Pelo OpenDota, contra outras partidas do mesmo herói</span>
             </SectionHead>
             <div className="card">
                 <ul className="metric-list">
-                    {performance.metrics.map(item => <MetricRow key={item.metric} metric={item} />)}
+                    {performance.metrics.map(item => <MetricRow key={item.metric} metric={item} heroName={performance.heroName} />)}
                 </ul>
             </div>
         </section>

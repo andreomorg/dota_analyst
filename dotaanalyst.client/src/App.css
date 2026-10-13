@@ -29,11 +29,23 @@
     min-width: 0;
 }
 
+/* Side by side cards share the same height (the taller one sets it); inside, the last part (notes, "see as a table")
+   sits at the bottom so the two cards end on the same line. */
 .split {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 1rem;
-    align-items: start;
+    align-items: stretch;
+}
+
+.split > .card {
+    display: flex;
+    flex-direction: column;
+}
+
+.split > .card > .inline-details:last-child,
+.split > .card > .section-note:last-child {
+    margin-top: auto;
 }
 
 .split-5-7 {
@@ -1325,7 +1337,7 @@ details[open] > summary {
 .meter-fill.rating-strong { background: var(--primary-strong); }
 .fill-loss,
 .meter-fill.rating-weak { background: var(--secondary-strong); }
-.fill-neutral { background: var(--chart-ahead); }
+.fill-neutral { background: var(--you); }
 
 .stat-grid {
     display: grid;
@@ -1393,10 +1405,10 @@ details[open] > summary {
 
 .metric-row {
     display: grid;
-    grid-template-columns: minmax(0, 2fr) minmax(4rem, auto) minmax(80px, 3fr) 3rem 5.5rem;
+    grid-template-columns: minmax(0, 2fr) minmax(4rem, auto) minmax(13rem, 3fr);
     align-items: center;
-    gap: 0.75rem;
-    padding: 0.4rem 0;
+    gap: 0.75rem 1.25rem;
+    padding: 0.55rem 0;
     border-bottom: 1px solid var(--divider);
     font-size: 14px;
 }
@@ -1511,17 +1523,85 @@ details[open] > summary {
 
 .baseline-cell {
     display: grid;
-    gap: 0.2rem;
-    min-width: 9rem;
+    gap: 0.3rem;
+    min-width: 13rem;
 }
 
-.better-than {
-    display: grid;
-    grid-template-columns: minmax(40px, 1fr) auto;
-    align-items: center;
-    gap: 0.5rem;
+.baseline-typical {
+    color: var(--text);
     font-size: 12px;
 }
+
+.baseline-typical .mono {
+    color: var(--text-h);
+}
+
+/* ----- Standing (ui/Standing.jsx): a verdict in words, a five-step scale with a marker, "how many in 100" ----- */
+.standing {
+    display: grid;
+    gap: 0.25rem;
+    min-width: 11rem;
+}
+
+.standing-label {
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.standing-scale {
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 2px;
+    height: 6px;
+}
+
+.standing-step {
+    border-radius: 2px;
+    background: var(--surface-highest);
+}
+
+.standing-marker {
+    position: absolute;
+    top: -3px;
+    width: 4px;
+    height: 12px;
+    margin-left: -2px;
+    border-radius: 2px;
+    background: var(--text-h);
+    box-shadow: 0 0 0 2px var(--surface);
+}
+
+.standing-detail {
+    color: var(--text);
+    font-size: 12px;
+}
+
+/* The step the player is in takes the verdict's colour; the label too. */
+.tone-great { --tone: var(--primary-strong); }
+.tone-good { --tone: #7ee2a8; }
+.tone-even { --tone: var(--text-muted); }
+.tone-bad { --tone: #ff9c94; }
+.tone-awful { --tone: var(--secondary-strong); }
+
+.standing .standing-label,
+.standing-inline strong {
+    color: var(--tone);
+}
+
+.standing.tone-awful .step-awful,
+.standing.tone-bad .step-bad,
+.standing.tone-even .step-even,
+.standing.tone-good .step-good,
+.standing.tone-great .step-great {
+    background: var(--tone);
+}
+
+.standing-inline {
+    color: var(--text);
+}
+
+.fill-even { background: var(--text-muted); }
 
 /* ============ Overview shortcuts (one card per other tab) ============ */
 
@@ -2130,42 +2210,37 @@ details[open] > summary {
     fill: transparent;
 }
 
+/* Deaths: a dark disc with a ring in the design's colours (amber in the laning phase, crimson after, violet when
+   the Aegis brought the hero back) and the death's number in white. */
+.death-laning { --mark: var(--amber); }
+.death-later { --mark: var(--secondary-strong); }
+.death-aegis { --mark: var(--you); }
+
 .death-dot {
-    fill: var(--series);
-    stroke: var(--map-mark-outline);
-    stroke-width: 110;
+    fill: var(--surface-lowest);
+    stroke: var(--mark);
+    stroke-width: 120;
 }
 
 .death-marker {
     cursor: pointer;
 }
 
-.death-marker.is-reincarnated .death-dot {
-    fill: var(--map-mark-outline);
-    stroke: var(--series);
-    stroke-width: 130;
-    stroke-dasharray: 160 110;
+.death-marker.death-aegis .death-dot {
+    stroke-dasharray: 170 110;
 }
 
 .death-marker.is-selected .death-dot {
-    stroke: var(--map-mark-ink);
+    stroke: var(--map-mark-outline);
     stroke-width: 150;
 }
 
 .death-number {
     fill: #fff;
-    font-size: 500px;
+    font-family: var(--mono);
+    font-size: 470px;
     font-weight: 700;
     pointer-events: none;
-}
-
-.death-marker.is-reincarnated .death-number {
-    fill: var(--map-mark-ink);
-}
-
-.legend-swatch.reincarnated {
-    border: 2px dashed var(--text);
-    background: transparent;
 }
 
 .death-tooltip {
@@ -2173,24 +2248,24 @@ details[open] > summary {
     left: 0.75rem;
 }
 
-.team-mine { --team: var(--chart-ahead); }
-.team-theirs { --team: var(--chart-behind); }
+/* Wards: the game's icon in a ring of the team's colour (green = your team, crimson = the other). */
+.team-mine { --team: var(--primary-strong); }
+.team-theirs { --team: var(--secondary-strong); }
 
-.legend-swatch.team-mine,
-.legend-swatch.team-theirs {
-    background: var(--team);
+.ward-ring {
+    fill: var(--surface-lowest);
+    stroke: var(--team);
+    stroke-width: 100;
 }
 
-.ward-shape {
-    fill: var(--team);
-    stroke: var(--map-mark-outline);
-    stroke-width: 90;
+.ward-icon.is-destroyed {
+    opacity: 0.45;
+    filter: grayscale(1);
 }
 
 .ward-cross {
-    /* Ink on top of the whole shape (a cross in the outline colour would cut it in pieces). */
-    stroke: var(--map-mark-ink);
-    stroke-width: 100;
+    stroke: #fff;
+    stroke-width: 110;
     stroke-linecap: round;
 }
 
@@ -2198,27 +2273,39 @@ details[open] > summary {
     cursor: pointer;
 }
 
-.ward-marker.is-selected .ward-shape {
-    stroke: var(--map-mark-ink);
+.ward-marker.is-selected .ward-ring {
+    stroke: var(--map-mark-outline);
     stroke-width: 140;
 }
 
-.legend-shape {
+/* Legend marks: a ring like the map's, the ward icons, the cross. */
+.legend-ring {
     display: inline-block;
-    width: 12px;
-    height: 12px;
+    width: 13px;
+    height: 13px;
     margin-right: 0.35rem;
-    background: var(--text);
-    vertical-align: -1px;
+    border: 3px solid var(--mark, var(--team));
+    border-radius: 50%;
+    background: var(--surface-lowest);
+    vertical-align: -2px;
 }
 
-.legend-shape.observer { border-radius: 50%; }
-.legend-shape.sentry { transform: rotate(45deg) scale(0.85); }
+.legend-ring.death-aegis {
+    border-style: dashed;
+}
+
+.legend-icon {
+    width: 18px;
+    height: 18px;
+    margin-right: 0.35rem;
+    border-radius: 50%;
+    object-fit: cover;
+    vertical-align: -4px;
+}
 
 .legend-shape.destroyed {
-    width: auto;
-    height: auto;
-    background: none;
+    display: inline-block;
+    margin-right: 0.35rem;
     color: var(--text-h);
     font-weight: 700;
 }
@@ -2561,23 +2648,14 @@ details[open] > summary {
         border-top: 1px solid var(--surface-highest);
     }
 
+    /* Name and value on one line, the verdict below. */
     .metric-row {
-        grid-template-columns: minmax(0, 1fr) auto auto;
-        gap: 0.3rem 0.6rem;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 0.35rem 0.6rem;
     }
 
-    .metric-row .meter-track {
+    .metric-row .standing {
         grid-column: 1 / -1;
-        grid-row: 2;
-    }
-
-    .metric-rating {
-        grid-row: 1;
-        grid-column: 3;
-    }
-
-    .metric-percentile {
-        display: none;
     }
 
     .skeleton-tiles {

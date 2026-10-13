@@ -1,5 +1,9 @@
-import { formatDuration, formatNumber, toPercent } from '../matches/format';
+import { formatDuration, formatNumber } from '../matches/format';
 import SectionHead from '../ui/SectionHead';
+import Standing from '../ui/Standing';
+import { standingDetail, standingOf } from '../ui/standingLevels';
+
+const capitalize = text => text.charAt(0).toUpperCase() + text.slice(1);
 import { INSIGHT_TITLES, insightText, lifetime, percent, plain, ROLES } from './insights';
 import { metricLabel } from './metrics';
 
@@ -135,12 +139,12 @@ function StrongPoint({ performance }) {
             tone="win"
             icon="strong"
             title={isStrength ? 'Ponto forte' : 'Seu melhor número'}
-            text={`${metricLabel(best.metric)}: melhor que ${toPercent(best.percentile)}% dos jogadores de ${performance.heroName}.`}
-            detail={performance.strengths.length > 1
-                ? `Também acima da maioria: ${performance.strengths.slice(1, 3).map(metricLabel).join(' e ')}.`
-                : 'Comparado pelo OpenDota com outras partidas do mesmo herói.'}
-            footerLabel="Percentil"
-            footerValue={`${toPercent(best.percentile)}%`}
+            text={`${metricLabel(best.metric)}: ${standingOf(best.percentile).label.toLowerCase()}.`}
+            detail={`${capitalize(standingDetail(best.percentile, `jogadores de ${performance.heroName}`))}.${performance.strengths.length > 1
+                ? ` Também acima da maioria: ${performance.strengths.slice(1, 3).map(metricLabel).join(' e ')}.`
+                : ''}`}
+            footerLabel={`Contra jogadores de ${performance.heroName}`}
+            footerValue={standingOf(best.percentile).label}
         />
     );
 }
@@ -170,10 +174,10 @@ function AttentionPoint({ performance, smartStats }) {
             tone="loss"
             icon="warning"
             title="Ponto de atenção"
-            text={`${metricLabel(worst.metric)}: melhor que só ${toPercent(worst.percentile)}% dos jogadores de ${performance.heroName}.`}
-            detail="O número mais baixo da partida comparado com outros jogadores do mesmo herói."
-            footerLabel="Percentil"
-            footerValue={`${toPercent(worst.percentile)}%`}
+            text={`${metricLabel(worst.metric)}: ${standingOf(worst.percentile).label.toLowerCase()}.`}
+            detail={`${capitalize(standingDetail(worst.percentile, `jogadores de ${performance.heroName}`))}: o seu número mais fraco nesta partida.`}
+            footerLabel={`Contra jogadores de ${performance.heroName}`}
+            footerValue={standingOf(worst.percentile).label}
         />
     );
 }
@@ -244,11 +248,12 @@ function PhaseDeathTable({ player, counterpart, matchAverage, counterpartName })
     );
 }
 
+// lower: less is better (the API already turns the comparison around; the label tells the reader).
 const COMPARED = {
-    deathsPer30: { label: 'Mortes', format: plain, per30: true },
-    isolatedDeathsPer30: { label: 'Mortes sem aliado por perto', format: plain, per30: true },
-    enemyJungleDeathsPer30: { label: 'Mortes na selva inimiga', format: plain, per30: true },
-    aloneOnEnemySide: { label: 'Tempo sozinho no lado inimigo', format: percent },
+    deathsPer30: { label: 'Mortes', format: plain, per30: true, lower: true },
+    isolatedDeathsPer30: { label: 'Mortes sem aliado por perto', format: plain, per30: true, lower: true },
+    enemyJungleDeathsPer30: { label: 'Mortes na selva inimiga', format: plain, per30: true, lower: true },
+    aloneOnEnemySide: { label: 'Tempo sozinho no lado inimigo', format: percent, lower: true },
     netWorthAt10: { label: 'Patrimônio aos 10:00', format: plain },
     lastHitsAt10: { label: 'Last hits aos 10:00', format: plain },
     netWorthAt20: { label: 'Patrimônio aos 20:00', format: plain },
@@ -258,37 +263,18 @@ const COMPARED = {
     enemyWardsDestroyedPer30: { label: 'Wards inimigos destruídos', format: plain, per30: true },
     fightPresence: { label: 'Presença nas lutas do time', format: percent },
     killParticipation: { label: 'Participação em abates', format: percent },
-    quickRedeathsPer30: { label: 'Mortes logo depois de voltar', format: plain, per30: true },
+    quickRedeathsPer30: { label: 'Mortes logo depois de voltar', format: plain, per30: true, lower: true },
     laneDamageDealt: { label: 'Dano causado em heróis até 10:00', format: plain },
-    laneDamageTaken: { label: 'Dano recebido de heróis até 10:00', format: plain },
+    laneDamageTaken: { label: 'Dano recebido de heróis até 10:00', format: plain, lower: true },
     teamObserverUptime: { label: 'Tempo com observer do time', format: percent },
-    leadLostPerDeath: { label: 'Vantagem do time perdida por morte', format: value => formatNumber(Math.round(value)) },
-    firstBigItemSeconds: { label: 'Primeiro item grande', format: value => formatDuration(Math.round(value)) },
+    leadLostPerDeath: { label: 'Vantagem do time perdida por morte', format: value => formatNumber(Math.round(value)), lower: true },
+    firstBigItemSeconds: { label: 'Primeiro item grande', format: value => formatDuration(Math.round(value)), lower: true },
 };
 
 const SOURCES = { pro: 'Profissionais', highRank: 'Alto nível' };
 
-// The same limits as the OpenDota percentiles of the page (PerformanceEvaluator): the text says it, the colour helps.
-function betterThanClass(share) {
-    if (share >= 0.7) {
-        return 'text-win';
-    }
-    return share <= 0.3 ? 'text-loss' : undefined;
-}
-
-// A percentile bar with the share written next to it.
-function BetterThan({ share }) {
-    return (
-        <span className="better-than">
-            <span className="meter-track" aria-hidden="true">
-                <span className={`meter-fill ${share >= 0.5 ? 'fill-win' : 'fill-loss'}`} style={{ width: `${toPercent(share)}%` }} />
-            </span>
-            <span className={`mono ${betterThanClass(share) ?? ''}`}>melhor que {percent(share)}</span>
-        </span>
-    );
-}
-
-// The player against other players of the same hero and role, from the comparison base (pro and high-rank matches).
+// The player against other players of the same hero and role, from the comparison base (pro and high-rank matches):
+// for each metric, the player's value, the typical value (median) and how the player did, in words.
 function BaselineTable({ baselines, role, heroName, opponentHeroName }) {
     if (!baselines) {
         return null;
@@ -298,6 +284,7 @@ function BaselineTable({ baselines, role, heroName, opponentHeroName }) {
     const small = baselines.filter(baseline => baseline.metrics.length === 0);
     const metrics = Object.keys(COMPARED).filter(key => usable.some(baseline => baseline.metrics.some(m => m.metric === key)));
     const yours = key => usable.flatMap(baseline => baseline.metrics).find(m => m.metric === key)?.value;
+    const who = opponentHeroName ? `jogadores de ${heroName} contra ${opponentHeroName}` : `jogadores de ${heroName}`;
 
     return (
         <div className="card">
@@ -308,7 +295,7 @@ function BaselineTable({ baselines, role, heroName, opponentHeroName }) {
             </h3>
             {usable.length > 0 && (
                 <div className="table-scroll">
-                    <table className="data-table">
+                    <table className="data-table baseline-table">
                         <caption className="visually-hidden">
                             {opponentHeroName
                                 ? `Seus números de ${heroName} contra ${opponentHeroName} na rota`
@@ -321,7 +308,7 @@ function BaselineTable({ baselines, role, heroName, opponentHeroName }) {
                                 {usable.map(baseline => (
                                     <th key={baseline.source} scope="col">
                                         {SOURCES[baseline.source] ?? baseline.source}
-                                        <span className="th-sub">mediana · {baseline.matches} partidas</span>
+                                        <span className="th-sub">valor típico e como você ficou · {baseline.matches} partidas</span>
                                     </th>
                                 ))}
                             </tr>
@@ -329,7 +316,10 @@ function BaselineTable({ baselines, role, heroName, opponentHeroName }) {
                         <tbody>
                             {metrics.map(key => (
                                 <tr key={key}>
-                                    <th scope="row">{COMPARED[key].label}{COMPARED[key].per30 ? ' (por 30 min)' : ''}</th>
+                                    <th scope="row">
+                                        {COMPARED[key].label}{COMPARED[key].per30 ? ' (por 30 min)' : ''}
+                                        {COMPARED[key].lower && <span className="indicator-hint">menos é melhor</span>}
+                                    </th>
                                     <td className="num-col mono">{cell(yours(key), COMPARED[key].format)}</td>
                                     {usable.map(baseline => {
                                         const metric = baseline.metrics.find(m => m.metric === key);
@@ -338,8 +328,10 @@ function BaselineTable({ baselines, role, heroName, opponentHeroName }) {
                                                 {metric
                                                     ? (
                                                         <span className="baseline-cell">
-                                                            <span className="mono">{COMPARED[key].format(metric.median)}</span>
-                                                            <BetterThan share={metric.betterThan} />
+                                                            <span className="baseline-typical">
+                                                                Típico: <span className="mono">{COMPARED[key].format(metric.median)}</span>
+                                                            </span>
+                                                            <Standing share={metric.betterThan} />
                                                         </span>
                                                     )
                                                     : '—'}
@@ -361,9 +353,11 @@ function BaselineTable({ baselines, role, heroName, opponentHeroName }) {
                 </p>
             ))}
             <p className="section-note">
-                &quot;Melhor que&quot;: em quantas partidas da base você foi melhor (em mortes, dano recebido, vantagem perdida e tempo até o primeiro item grande, menos é melhor). Contagens
-                por 30 minutos de jogo, porque as partidas têm durações diferentes. Partidas dos últimos 60 dias; nas
-                profissionais a posição é deduzida pela rota e pelo patrimônio aos 10:00.
+                &quot;Típico&quot; é o valor do meio entre os {who} da base. &quot;À frente de 70 em cada 100&quot; quer dizer
+                que, em 100 partidas da base, você foi melhor que 70 (em mortes, dano recebido, vantagem perdida e tempo até
+                o primeiro item grande, menos é melhor). Contagens por 30 minutos de jogo, porque as partidas têm durações
+                diferentes. Partidas dos últimos 60 dias; nas profissionais a posição é deduzida pela rota e pelo
+                patrimônio aos 10:00.
             </p>
         </div>
     );

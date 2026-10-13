@@ -41,9 +41,9 @@ function DeathMap({ deaths }) {
                     <>
                         <p className="section-intro">{laning} na fase de rotas (até 10:00).</p>
                         <ul className="chart-legend">
-                            <li><span className="legend-swatch series-1" aria-hidden="true" /> Fase de rotas (até 10:00)</li>
-                            <li><span className="legend-swatch series-2" aria-hidden="true" /> Depois dos 10:00</li>
-                            <li><span className="legend-swatch reincarnated" aria-hidden="true" /> Voltou com Aegis</li>
+                            <li><span className="legend-ring death-laning" aria-hidden="true" /> Fase de rotas (até 10:00)</li>
+                            <li><span className="legend-ring death-later" aria-hidden="true" /> Depois dos 10:00</li>
+                            <li><span className="legend-ring death-aegis" aria-hidden="true" /> Voltou com Aegis</li>
                         </ul>
                         <div className="map-frame">
                             <svg viewBox={VIEW_BOX} role="img" aria-label={`Mapa com ${deaths.length} mortes; os detalhes estão na tabela abaixo.`}>
@@ -51,7 +51,7 @@ function DeathMap({ deaths }) {
                                 {deaths.map((death, index) => (
                                     <g
                                         key={`${death.seconds}-${index}`}
-                                        className={`death-marker ${death.inLaningPhase ? 'series-1' : 'series-2'}${death.reincarnated ? ' is-reincarnated' : ''}${selected === index ? ' is-selected' : ''}`}
+                                        className={`death-marker ${death.reincarnated ? 'death-aegis' : death.inLaningPhase ? 'death-laning' : 'death-later'}${selected === index ? ' is-selected' : ''}`}
                                         transform={`translate(${death.x},${svgY(death.y)})`}
                                         onPointerEnter={() => setSelected(index)}
                                         onPointerLeave={() => setSelected(null)}

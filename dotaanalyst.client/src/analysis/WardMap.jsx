@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { formatDuration } from '../matches/format';
 import { svgY, VIEW_BOX } from './mapGeometry';
 import GameMap from './GameMap';
@@ -25,15 +25,27 @@ function Filter({ label, options, value, onChange }) {
     );
 }
 
-function WardMark({ ward }) {
-    const size = 330;
+// The game's own ward icons (item images: 42 Observer, 43 Sentry).
+const ICONS = { observer: '/item-images/42.webp', sentry: '/item-images/43.webp' };
+
+// The ward's icon in a circle, with a ring in its team's colour; a destroyed ward is faded and crossed out.
+function WardMark({ ward, clipId }) {
+    const size = 340;
     return (
         <>
-            {ward.kind === 'sentry'
-                ? <rect className="ward-shape" x={-size} y={-size} width={2 * size} height={2 * size} transform="rotate(45)" />
-                : <circle className="ward-shape" r={size * 1.1} />}
+            <circle className="ward-ring" r={size + 60} />
+            <image
+                className={`ward-icon${ward.destroyed ? ' is-destroyed' : ''}`}
+                href={ICONS[ward.kind] ?? ICONS.observer}
+                x={-size}
+                y={-size}
+                width={2 * size}
+                height={2 * size}
+                preserveAspectRatio="xMidYMid slice"
+                clipPath={`url(#${clipId})`}
+            />
             {ward.destroyed && (
-                <path className="ward-cross" d={`M${-size * 0.6},${-size * 0.6}L${size * 0.6},${size * 0.6}M${size * 0.6},${-size * 0.6}L${-size * 0.6},${size * 0.6}`} />
+                <path className="ward-cross" d={`M${-size * 0.55},${-size * 0.55}L${size * 0.55},${size * 0.55}M${size * 0.55},${-size * 0.55}L${-size * 0.55},${size * 0.55}`} />
             )}
         </>
     );
@@ -52,6 +64,8 @@ function WardMap({ wards }) {
     const [team, setTeam] = useState('all');
     const [period, setPeriod] = useState('all');
     const [selected, setSelected] = useState(null);
+    // Letters and digits only: React's ids have characters a url(#…) reference may not take.
+    const clipId = `ward-clip-${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
     if (!wards || wards.length === 0) {
         return null;
     }
@@ -80,14 +94,19 @@ function WardMap({ wards }) {
                 <Filter label="Período" options={PERIODS} value={period} onChange={setPeriod} />
             </div>
             <ul className="chart-legend">
-                <li><span className="legend-swatch team-mine" aria-hidden="true" /> {teamLabels.mine}</li>
-                <li><span className="legend-swatch team-theirs" aria-hidden="true" /> {teamLabels.theirs}</li>
-                <li><span className="legend-shape observer" aria-hidden="true" /> Observer</li>
-                <li><span className="legend-shape sentry" aria-hidden="true" /> Sentry</li>
+                <li><span className="legend-ring team-mine" aria-hidden="true" /> {teamLabels.mine}</li>
+                <li><span className="legend-ring team-theirs" aria-hidden="true" /> {teamLabels.theirs}</li>
+                <li><img className="legend-icon" src={ICONS.observer} alt="" aria-hidden="true" /> Observer</li>
+                <li><img className="legend-icon" src={ICONS.sentry} alt="" aria-hidden="true" /> Sentry</li>
                 <li><span className="legend-shape destroyed" aria-hidden="true">×</span> Destruído</li>
             </ul>
             <div className="map-frame">
                 <svg viewBox={VIEW_BOX} role="img" aria-label={`Mapa com ${shown.length} wards; os detalhes estão na tabela abaixo.`}>
+                    <defs>
+                        <clipPath id={clipId} clipPathUnits="objectBoundingBox">
+                            <circle cx="0.5" cy="0.5" r="0.5" />
+                        </clipPath>
+                    </defs>
                     <GameMap />
                     {shown.map(({ ward, index }) => (
                         <g
@@ -99,7 +118,7 @@ function WardMap({ wards }) {
                             onClick={() => setSelected(selected === index ? null : index)}
                         >
                             <circle className="death-hit" r="600" />
-                            <WardMark ward={ward} />
+                            <WardMark ward={ward} clipId={clipId} />
                         </g>
                     ))}
                 </svg>

@@ -19,11 +19,14 @@ public enum CollectResult
     SourceUnavailable,
 }
 
-// The collector's settings (Infrastructure binds them from "Collector").
-public record BaselineCollectorSettings(int DailyLimit, IReadOnlyList<AccountId> FocusAccounts);
+// The collector's settings (Infrastructure binds them from "Collector"). TargetMatchesPerHero: high-rank matches the
+// base should have of each hero the focus accounts played recently, before pro matches come first again.
+public record BaselineCollectorSettings(int DailyLimit, IReadOnlyList<AccountId> FocusAccounts, int TargetMatchesPerHero = 10);
 
-// Use case: adds one match to the comparison base — pro matches first, then high-rank matches with the heroes the
-// focus accounts play. Each collected match gives the metrics of its ten heroes.
+// Use case: adds one match to the comparison base. While a hero of the focus accounts' recent matches has fewer
+// than TargetMatchesPerHero high-rank matches in the base, high-rank matches with those heroes come first (the
+// match of the hero with the fewest); otherwise pro matches first, then high-rank matches with any focus hero. Each
+// collected match gives the metrics of its ten heroes.
 public class CollectBaselineHandler(
     IBaselineMatchSource source,
     IBaselineRepository repository,
@@ -34,8 +37,6 @@ public class CollectBaselineHandler(
     TimeProvider timeProvider,
     ILogger<CollectBaselineHandler> logger)
 {
-    private static readonly BaselineSource[] Sources = [BaselineSource.Pro, BaselineSource.HighRank];
-
     public async Task<CollectResult> CollectNextAsync(CancellationToken cancellationToken)
     {
         var now = timeProvider.GetUtcNow();
@@ -45,12 +46,21 @@ public class CollectBaselineHandler(
         }
 
         var focusHeroes = await FocusHeroesAsync(cancellationToken);
-        foreach (var baselineSource in Sources)
+        // The same window the published base uses: older matches don't count.
+        var counts = focusHeroes.Count == 0
+            ? new Dictionary<int, int>()
+            : await repository.CountMatchesByHeroAsync(BaselineSource.HighRank, now - PublishBaselineHandler.Window, cancellationToken);
+        var needy = focusHeroes.Where(hero => counts.GetValueOrDefault(hero) < settings.TargetMatchesPerHero).ToHashSet();
+        (BaselineSource Source, IReadOnlySet<int> Heroes)[] plan = needy.Count > 0
+            ? [(BaselineSource.HighRank, needy), (BaselineSource.Pro, focusHeroes)]
+            : [(BaselineSource.Pro, focusHeroes), (BaselineSource.HighRank, focusHeroes)];
+
+        foreach (var (baselineSource, heroes) in plan)
         {
             IReadOnlyList<BaselineCandidate> candidates;
             try
             {
-                candidates = await source.GetCandidatesAsync(baselineSource, focusHeroes, cancellationToken);
+                candidates = await source.GetCandidatesAsync(baselineSource, heroes, cancellationToken);
             }
             catch (DataSourceUnavailableException ex)
             {
@@ -59,7 +69,18 @@ public class CollectBaselineHandler(
             }
 
             var known = await repository.FindKnownAsync(candidates.Select(candidate => candidate.MatchId).ToList(), cancellationToken);
-            if (candidates.FirstOrDefault(candidate => !known.Contains(candidate.MatchId.Value)) is { } next)
+            var fresh = candidates.Where(candidate => !known.Contains(candidate.MatchId.Value));
+            if (baselineSource == BaselineSource.HighRank && needy.Count > 0)
+            {
+                // The match of the needy hero with the fewest matches (OrderBy is stable: newest first on a tie).
+                fresh = fresh.OrderBy(candidate => (candidate.HeroIds ?? [])
+                    .Where(needy.Contains)
+                    .Select(hero => counts.GetValueOrDefault(hero))
+                    .DefaultIfEmpty(int.MaxValue)
+                    .Min());
+            }
+
+            if (fresh.FirstOrDefault() is { } next)
             {
                 return await CollectAsync(next, now, cancellationToken);
             }

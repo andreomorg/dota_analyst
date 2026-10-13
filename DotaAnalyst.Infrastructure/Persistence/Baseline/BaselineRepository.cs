@@ -79,6 +79,21 @@ public class BaselineRepository(
             return await db.BaselineMatches.CountAsync(match => match.Status == collected && match.TriedAt >= from, cancellationToken);
         });
 
+    public Task<IReadOnlyDictionary<int, int>> CountMatchesByHeroAsync(
+        BaselineSource source, DateTimeOffset since, CancellationToken cancellationToken) =>
+        storageGuard.RunAsync("counting the comparison base's matches per hero", async () =>
+        {
+            var name = SourceName(source);
+            var from = since.ToUniversalTime();
+            await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+            return (IReadOnlyDictionary<int, int>)await db.BaselineMetrics
+                .AsNoTracking()
+                .Where(row => row.Source == name && row.StartTime >= from)
+                .GroupBy(row => row.HeroId)
+                .Select(group => new { HeroId = group.Key, Count = group.Count() })
+                .ToDictionaryAsync(group => group.HeroId, group => group.Count, cancellationToken);
+        });
+
     public Task<IReadOnlyList<(int HeroId, int Role, BaselineSource Source)>> GetGroupsAsync(
         DateTimeOffset since, CancellationToken cancellationToken) =>
         storageGuard.RunAsync("listing the comparison base's heroes", async () =>
@@ -96,7 +111,8 @@ public class BaselineRepository(
                 .ToList();
         });
 
-    public Task<IReadOnlyList<BaselineSample>> GetSamplesAsync(        int heroId, int role, BaselineSource source, DateTimeOffset since, CancellationToken cancellationToken) =>
+    public Task<IReadOnlyList<BaselineSample>> GetSamplesAsync(
+        int heroId, int role, BaselineSource source, DateTimeOffset since, CancellationToken cancellationToken) =>
         storageGuard.RunAsync($"reading the comparison base of hero {heroId}", async () =>
         {
             var name = SourceName(source);

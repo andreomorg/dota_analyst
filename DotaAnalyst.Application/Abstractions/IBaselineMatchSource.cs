@@ -3,8 +3,9 @@ using DotaAnalyst.Domain.Matches;
 
 namespace DotaAnalyst.Application.Abstractions;
 
-// A match the collector could add to the comparison base.
-public record BaselineCandidate(MatchId MatchId, BaselineSource Source);
+// A match the collector could add to the comparison base; HeroIds = its heroes, when the list says them (high-rank
+// lists do), so the collector can pick the match of the hero that most needs data.
+public record BaselineCandidate(MatchId MatchId, BaselineSource Source, IReadOnlyList<int>? HeroIds = null);
 
 // Where candidate matches come from (OpenDota's lists of pro and high-rank public matches).
 public interface IBaselineMatchSource

@@ -38,6 +38,11 @@ public interface IBaselineRepository
     /// <exception cref="StorageUnavailableException">The database could not be read.</exception>
     Task<int> CountCollectedSinceAsync(DateTimeOffset since, CancellationToken cancellationToken);
 
+    // How many matches of each hero the base has from that source, in matches that started since then.
+    /// <exception cref="StorageUnavailableException">The database could not be read.</exception>
+    Task<IReadOnlyDictionary<int, int>> CountMatchesByHeroAsync(
+        BaselineSource source, DateTimeOffset since, CancellationToken cancellationToken);
+
     // Every hero/role/source the base has matches of since then.
     /// <exception cref="StorageUnavailableException">The database could not be read.</exception>
     Task<IReadOnlyList<(int HeroId, int Role, BaselineSource Source)>> GetGroupsAsync(DateTimeOffset since, CancellationToken cancellationToken);

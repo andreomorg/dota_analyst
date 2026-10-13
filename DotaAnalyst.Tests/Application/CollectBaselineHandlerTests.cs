@@ -80,26 +80,72 @@ public class CollectBaselineHandlerTests
         Assert.Equal(CollectResult.NothingNew, await handler.CollectNextAsync(CancellationToken.None));
     }
 
+    [Fact]
+    public async Task HeroesWithFewMatches_HighRankComesFirst_TheMatchOfTheHeroWithTheFewest()
+    {
+        // The focus account played heroes 31, 5 and 2 recently. The base has 10 of 31 (enough), 4 of 5, 1 of 2.
+        var repository = new FakeBaseline { Known = { 1 }, HighRankCounts = { [31] = 10, [5] = 4, [2] = 1 } };
+        var source = new FakeSource([1, 2], [])
+        {
+            HighRankHeroes = { [10] = [31, 7], [11] = [5, 8], [12] = [2, 9], [13] = [31, 2] },
+        };
+        var handler = CreateHandler(repository, new FakeParser(), source, recentHeroes: [31, 5, 2]);
+
+        await handler.CollectNextAsync(CancellationToken.None);
+
+        // Only the needy heroes are asked for, and match 12 (hero 2, 1 match) beats 11 (hero 5, 4) and the newer 10.
+        Assert.Equal(new HashSet<int> { 5, 2 }, source.AskedHeroes[BaselineSource.HighRank]);
+        var saved = Assert.Single(repository.Saved);
+        Assert.Equal((12L, BaselineSource.HighRank), (saved.MatchId.Value, saved.Source));
+    }
+
+    [Fact]
+    public async Task EveryHeroHasEnoughMatches_ProMatchesFirstAgain()
+    {
+        var repository = new FakeBaseline { HighRankCounts = { [31] = 10 } };
+        var source = new FakeSource([2], []) { HighRankHeroes = { [10] = [31] } };
+        var handler = CreateHandler(repository, new FakeParser(), source, recentHeroes: [31]);
+
+        await handler.CollectNextAsync(CancellationToken.None);
+
+        Assert.Equal(BaselineSource.Pro, Assert.Single(repository.Saved).Source);
+    }
+
     private static CollectBaselineHandler CreateHandler(
         FakeBaseline repository, FakeParser parser, long[] pro, long[]? highRank = null, bool withReplay = true) =>
+        CreateHandler(repository, parser, new FakeSource(pro, highRank ?? []), withReplay: withReplay);
+
+    private static CollectBaselineHandler CreateHandler(
+        FakeBaseline repository, FakeParser parser, FakeSource source, int[]? recentHeroes = null, bool withReplay = true) =>
         new(
-            new FakeSource(pro, highRank ?? []),
+            source,
             repository,
             new FakeAnalyzer(withReplay ? ReplayUrl : null),
             parser,
-            new FakeMatches(),
-            new BaselineCollectorSettings(300, []),
+            new FakeMatches(recentHeroes ?? []),
+            new BaselineCollectorSettings(300, recentHeroes is null ? [] : [FocusAccount]),
             new FixedTimeProvider(Now),
             NullLogger<CollectBaselineHandler>.Instance);
 
     private sealed class FakeSource(long[] pro, long[] highRank) : IBaselineMatchSource
     {
+        // High-rank matches with their heroes; the source returns those with a hero that was asked for.
+        public Dictionary<long, int[]> HighRankHeroes { get; } = [];
+
+        public Dictionary<BaselineSource, IReadOnlySet<int>> AskedHeroes { get; } = [];
+
         public Task<IReadOnlyList<BaselineCandidate>> GetCandidatesAsync(
-            BaselineSource source, IReadOnlySet<int> focusHeroes, CancellationToken cancellationToken) =>
-            Task.FromResult<IReadOnlyList<BaselineCandidate>>(
-                (source == BaselineSource.Pro ? pro : highRank)
-                    .Select(id => new BaselineCandidate(ReplayBuilder.MatchIdOf(id), source))
-                    .ToList());
+            BaselineSource source, IReadOnlySet<int> focusHeroes, CancellationToken cancellationToken)
+        {
+            AskedHeroes[source] = focusHeroes;
+            var candidates = source == BaselineSource.Pro
+                ? pro.Select(id => new BaselineCandidate(ReplayBuilder.MatchIdOf(id), source))
+                : highRank.Select(id => new BaselineCandidate(ReplayBuilder.MatchIdOf(id), source))
+                    .Concat(HighRankHeroes
+                        .Where(entry => entry.Value.Any(focusHeroes.Contains))
+                        .Select(entry => new BaselineCandidate(ReplayBuilder.MatchIdOf(entry.Key), source, entry.Value)));
+            return Task.FromResult<IReadOnlyList<BaselineCandidate>>(candidates.ToList());
+        }
     }
 
     private sealed class FakeBaseline : IBaselineRepository
@@ -121,6 +167,13 @@ public class CollectBaselineHandlerTests
 
         public Task<int> CountCollectedSinceAsync(DateTimeOffset since, CancellationToken cancellationToken) =>
             Task.FromResult(CollectedToday);
+
+        public Dictionary<int, int> HighRankCounts { get; } = [];
+
+        public Task<IReadOnlyDictionary<int, int>> CountMatchesByHeroAsync(
+            BaselineSource source, DateTimeOffset since, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyDictionary<int, int>>(
+                source == BaselineSource.HighRank ? HighRankCounts : new Dictionary<int, int>());
 
         public Task<IReadOnlyList<(int HeroId, int Role, BaselineSource Source)>> GetGroupsAsync(
             DateTimeOffset since, CancellationToken cancellationToken) =>
@@ -162,9 +215,15 @@ public class CollectBaselineHandlerTests
         }
     }
 
-    private sealed class FakeMatches : IMatchProvider
+    private static AccountId FocusAccount => AccountId.TryCreate(99517715, out var account) ? account : default;
+
+    // The focus account's recent matches, one per hero.
+    private sealed class FakeMatches(int[] heroes) : IMatchProvider
     {
         public Task<IReadOnlyList<PlayerMatch>> GetRecentMatchesAsync(AccountId accountId, CancellationToken cancellationToken) =>
-            Task.FromResult<IReadOnlyList<PlayerMatch>>([]);
+            Task.FromResult<IReadOnlyList<PlayerMatch>>(heroes
+                .Select((hero, index) => new PlayerMatch(
+                    index + 1, hero, Team.Radiant, Team.Radiant, new Kda(1, 1, 1), TimeSpan.FromMinutes(30), Now.AddDays(-1)))
+                .ToList());
     }
 }

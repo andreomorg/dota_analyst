@@ -14,6 +14,10 @@ public sealed class NoBaseline : IBaselineRepository
 
     public Task<int> CountCollectedSinceAsync(DateTimeOffset since, CancellationToken cancellationToken) => Task.FromResult(0);
 
+    public Task<IReadOnlyDictionary<int, int>> CountMatchesByHeroAsync(
+        BaselineSource source, DateTimeOffset since, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyDictionary<int, int>>(new Dictionary<int, int>());
+
     public Task<IReadOnlyList<(int HeroId, int Role, BaselineSource Source)>> GetGroupsAsync(
         DateTimeOffset since, CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyList<(int, int, BaselineSource)>>([]);

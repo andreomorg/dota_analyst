@@ -54,9 +54,11 @@ services:
       ReplayParser__ApiKey: "${REPLAY_PARSER_API_KEY}"
       ReplayParser__KeepDocuments: "true"
       Collector__Enabled: "true"
-      Collector__DailyLimit: "${COLLECTOR_DAILY_LIMIT:-300}"
+      Collector__DailyLimit: "${COLLECTOR_DAILY_LIMIT:-600}"
       # The account whose heroes the high-rank matches must have (0 = none: only pro matches).
       Collector__FocusAccountIds__0: "${COLLECTOR_FOCUS_ACCOUNT_ID:-0}"
+      # High-rank matches wanted of each hero of the account's last 20 matches; until then they come first.
+      Collector__TargetMatchesPerHero: "${COLLECTOR_TARGET_PER_HERO:-10}"
     depends_on:
       db:
         condition: service_healthy

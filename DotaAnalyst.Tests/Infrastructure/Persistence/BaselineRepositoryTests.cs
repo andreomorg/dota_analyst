@@ -81,6 +81,20 @@ public class BaselineRepositoryTests(PostgresFixture postgres) : IAsyncLifetime
     }
 
     [Fact]
+    public async Task CountByHero_OnlyThatSourceSinceThen()
+    {
+        var repository = CreateRepository();
+        await repository.SaveAsync(Collected(1, BaselineSource.HighRank, Now.AddDays(-1), Hero(31, 5, 3), Hero(1, 1, 2)), CancellationToken.None);
+        await repository.SaveAsync(Collected(2, BaselineSource.HighRank, Now.AddDays(-2), Hero(31, 4, 4)), CancellationToken.None);
+        await repository.SaveAsync(Collected(3, BaselineSource.Pro, Now.AddDays(-1), Hero(31, 5, 1)), CancellationToken.None);
+        await repository.SaveAsync(Collected(4, BaselineSource.HighRank, Now.AddDays(-90), Hero(31, 5, 1)), CancellationToken.None);
+
+        var counts = await repository.CountMatchesByHeroAsync(BaselineSource.HighRank, Now.AddDays(-60), CancellationToken.None);
+
+        Assert.Equal(new Dictionary<int, int> { [31] = 2, [1] = 1 }, counts);
+    }
+
+    [Fact]
     public async Task FinishedBase_ReplaceAllThenFind()
     {
         var store = new BaselineDistributionStore(postgres.DbContextFactory, new StorageGuard(TimeProvider.System));

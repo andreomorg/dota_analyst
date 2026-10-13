@@ -4,8 +4,9 @@ import Kda from '../ui/Kda';
 import SectionHead from '../ui/SectionHead';
 import { metricLabel, ratingLabel } from './metrics';
 
-// "Seu desempenho" (the Stitch overview): who you played and how the lane went, the match's big numbers, then every
-// OpenDota percentile against other players of the same hero (higher is always better; the API inverts deaths).
+// "Seu desempenho" (the Stitch overview): who you played and how the lane went, and the match's big numbers; every
+// OpenDota percentile against other players of the same hero is in PerformanceMetrics (higher is always better; the
+// API inverts deaths).
 
 const ROLES = { 1: 'Carry · posição 1', 2: 'Mid · posição 2', 3: 'Offlane · posição 3', 4: 'Suporte · posição 4', 5: 'Suporte · posição 5' };
 const LANES = { top: 'rota de cima', middle: 'rota do meio', bottom: 'rota de baixo', jungle: 'selva', roaming: 'roaming' };
@@ -179,15 +180,25 @@ function PerformanceSummary({ analysis }) {
                 )}
             </div>
 
-            <details className="card metric-details">
-                <summary>
-                    Todas as métricas comparadas com outros jogadores de {performance.heroName}
-                    <span className="summary-hint">percentil do OpenDota</span>
-                </summary>
+        </section>
+    );
+}
+
+// Every OpenDota percentile of the player against other players of the same hero (the "Dicas" tab).
+export function PerformanceMetrics({ performance }) {
+    if (!performance || performance.metrics.length === 0) {
+        return null;
+    }
+    return (
+        <section className="section" aria-labelledby="percentiles-title">
+            <SectionHead id="percentiles-title" title={`Comparado com outros jogadores de ${performance.heroName}`}>
+                <span>Percentil do OpenDota: em quantas partidas do herói você foi melhor</span>
+            </SectionHead>
+            <div className="card">
                 <ul className="metric-list">
                     {performance.metrics.map(item => <MetricRow key={item.metric} metric={item} />)}
                 </ul>
-            </details>
+            </div>
         </section>
     );
 }

@@ -58,7 +58,7 @@ public class OpenDotaBaselineMatchSource(OpenDotaClient openDotaClient, TimeProv
                 .Where(match => match.LobbyType == RankedLobby && match.GameMode == AllPickRanked
                     && match.NumRankTier >= MinRankedPlayers && Ready(match.StartTime, match.Duration)
                     && (match.RadiantTeam ?? []).Concat(match.DireTeam ?? []).Any(focusHeroes.Contains))
-                .Select(match => ToCandidate(match.MatchId, source))
+                .Select(match => ToCandidate(match.MatchId, source, [.. match.RadiantTeam ?? [], .. match.DireTeam ?? []]))
                 .OfType<BaselineCandidate>());
             if (candidates.Count > 0)
             {
@@ -95,6 +95,6 @@ public class OpenDotaBaselineMatchSource(OpenDotaClient openDotaClient, TimeProv
         return target > 0 && target < oldest.MatchId ? target : null;
     }
 
-    private static BaselineCandidate? ToCandidate(long matchId, BaselineSource source) =>
-        MatchId.TryCreate(matchId, out var id) ? new BaselineCandidate(id, source) : null;
+    private static BaselineCandidate? ToCandidate(long matchId, BaselineSource source, IReadOnlyList<int>? heroIds = null) =>
+        MatchId.TryCreate(matchId, out var id) ? new BaselineCandidate(id, source, heroIds) : null;
 }

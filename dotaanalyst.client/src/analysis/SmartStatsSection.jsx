@@ -404,84 +404,87 @@ function CounterpartTable({ smartStats }) {
     );
 }
 
-// performance, laning and smartStats come from the API. smartStats is null until the replay is read, without a
-// point-of-view player, and for matches without role queue: the highlight cards still show what there is.
-function SmartStatsSection({ performance, laning, smartStats }) {
-    if (!performance && !smartStats) {
+// The three highlight cards (strong point, point of attention, the lane): the top of the overview. performance,
+// laning and smartStats come from the API; each card shows only when it has something to say.
+export function HighlightCards({ performance, laning, smartStats }) {
+    if (!performance && !smartStats && !laning) {
         return null;
     }
-
-    // The first finding is already the "point of attention" card above: the list has the others.
-    const texts = smartStats
-        ? smartStats.insights.map(insight => ({ insight, text: insightText(insight, smartStats) })).filter(entry => entry.text).slice(1)
-        : [];
-    const hasPhaseMetrics = Boolean(
-        smartStats?.player.deathsByRegionByPhase
-        || smartStats?.counterpart.deathsByRegionByPhase
-        || smartStats?.matchAverage.deathsByRegionByPhase,
-    );
-
     return (
-        <section className="section" aria-labelledby="smart-stats-title">
-            <SectionHead id="smart-stats-title" title="Dicas e oportunidades de melhoria">
+        <section className="section" aria-labelledby="highlights-title">
+            <SectionHead id="highlights-title" title="Destaques da partida">
                 {smartStats && <span>Comparado com {smartStats.counterpartHeroName}, a mesma posição no time inimigo</span>}
             </SectionHead>
-
             <div className="highlight-grid">
                 <StrongPoint performance={performance} />
                 <AttentionPoint performance={performance} smartStats={smartStats} />
                 <LanePoint laning={laning} smartStats={smartStats} />
             </div>
+        </section>
+    );
+}
 
-            {smartStats && (
-                <>
-                    <h3 className="subsection-title">Como melhorar</h3>
-                    <p className="section-intro">
-                        Você jogou de {ROLES[smartStats.role] ?? `posição ${smartStats.role}`}. Cada dica compara você com{' '}
-                        {smartStats.counterpartHeroName} e com a média dos 10 jogadores.
-                    </p>
-                    {texts.length === 0
-                        ? (
-                            <p className="section-note">
-                                {smartStats.insights.length === 0
-                                    ? 'Nada se destacou como ponto a melhorar nesta partida.'
-                                    : 'Só o ponto de atenção acima se destacou nesta partida.'}
-                            </p>
-                        )
-                        : (
-                            <ol className="insight-list">
-                                {texts.map(({ insight, text }) => (
-                                    <li key={insight.kind} className="insight-item">
-                                        <strong>{INSIGHT_TITLES[insight.kind] ?? 'Dica'}</strong>
-                                        <span>{text}</span>
-                                    </li>
-                                ))}
-                            </ol>
-                        )}
+// The "Dicas" tab: every finding of the API, then the numbers next to the enemy of the same role, the match average
+// and other players of the same hero. smartStats is null until the replay is read, without a point-of-view player,
+// and for matches without role queue: then nothing shows.
+function SmartStatsSection({ performance, smartStats }) {
+    if (!smartStats) {
+        return null;
+    }
 
-                    <div className="stack">
-                        <BaselineTable baselines={smartStats.baselines} role={smartStats.role} heroName={performance?.heroName ?? 'seu herói'} />
-                        <CounterpartTable smartStats={smartStats} />
-                        {hasPhaseMetrics && (
-                            <details className="card">
-                                <summary>
-                                    Mortes por região e fase da partida
-                                    <span className="summary-hint">0–10, 10–20 e 20+ min</span>
-                                </summary>
-                                <PhaseDeathTable
-                                    player={smartStats.player.deathsByRegionByPhase}
-                                    counterpart={smartStats.counterpart.deathsByRegionByPhase}
-                                    matchAverage={smartStats.matchAverage.deathsByRegionByPhase}
-                                    counterpartName={smartStats.counterpartHeroName}
-                                />
-                                <p className="section-note">
-                                    Contagem de eventos de morte do replay por coordenada; a média considera os dez heróis da partida.
-                                </p>
-                            </details>
-                        )}
-                    </div>
-                </>
-            )}
+    const texts = smartStats.insights
+        .map(insight => ({ insight, text: insightText(insight, smartStats) }))
+        .filter(entry => entry.text);
+    const hasPhaseMetrics = Boolean(
+        smartStats.player.deathsByRegionByPhase
+        || smartStats.counterpart.deathsByRegionByPhase
+        || smartStats.matchAverage.deathsByRegionByPhase,
+    );
+
+    return (
+        <section className="section" aria-labelledby="smart-stats-title">
+            <SectionHead id="smart-stats-title" title="Como melhorar">
+                <span>Comparado com {smartStats.counterpartHeroName}, a mesma posição no time inimigo</span>
+            </SectionHead>
+
+            <p className="section-intro">
+                Você jogou de {ROLES[smartStats.role] ?? `posição ${smartStats.role}`}. Cada dica compara você com{' '}
+                {smartStats.counterpartHeroName} e com a média dos 10 jogadores; as mais importantes vêm primeiro.
+            </p>
+            {texts.length === 0
+                ? <p className="empty-state">Nada se destacou como ponto a melhorar nesta partida.</p>
+                : (
+                    <ol className="insight-list">
+                        {texts.map(({ insight, text }) => (
+                            <li key={insight.kind} className="insight-item">
+                                <strong>{INSIGHT_TITLES[insight.kind] ?? 'Dica'}</strong>
+                                <span>{text}</span>
+                            </li>
+                        ))}
+                    </ol>
+                )}
+
+            <div className="stack">
+                <BaselineTable baselines={smartStats.baselines} role={smartStats.role} heroName={performance?.heroName ?? 'seu herói'} />
+                <CounterpartTable smartStats={smartStats} />
+                {hasPhaseMetrics && (
+                    <details className="card">
+                        <summary>
+                            Mortes por região e fase da partida
+                            <span className="summary-hint">0–10, 10–20 e 20+ min</span>
+                        </summary>
+                        <PhaseDeathTable
+                            player={smartStats.player.deathsByRegionByPhase}
+                            counterpart={smartStats.counterpart.deathsByRegionByPhase}
+                            matchAverage={smartStats.matchAverage.deathsByRegionByPhase}
+                            counterpartName={smartStats.counterpartHeroName}
+                        />
+                        <p className="section-note">
+                            Contagem de eventos de morte do replay por coordenada; a média considera os dez heróis da partida.
+                        </p>
+                    </details>
+                )}
+            </div>
         </section>
     );
 }

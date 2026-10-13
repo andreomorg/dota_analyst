@@ -968,7 +968,7 @@
     color: var(--text-h);
 }
 
-.analysis-nav a[aria-current='true'] {
+.analysis-nav a[aria-current] {
     border-bottom-color: var(--primary);
     color: var(--primary);
     font-weight: 500;
@@ -1521,6 +1521,47 @@ details[open] > summary {
     align-items: center;
     gap: 0.5rem;
     font-size: 12px;
+}
+
+/* ============ Overview shortcuts (one card per other tab) ============ */
+
+.shortcut-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 0.75rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.shortcut {
+    position: relative;
+    display: grid;
+    gap: 0.2rem;
+    height: 100%;
+    padding-right: 2rem;
+    color: var(--text-h);
+    text-decoration: none;
+}
+
+.shortcut:hover {
+    border-color: var(--primary-border);
+    background: var(--surface-high);
+    color: var(--text-h);
+}
+
+.shortcut strong {
+    font-size: 17px;
+    font-weight: 600;
+}
+
+.shortcut-arrow {
+    position: absolute;
+    top: 50%;
+    right: 0.85rem;
+    transform: translateY(-50%);
+    color: var(--primary);
+    font-size: 18px;
 }
 
 /* ============ Item build timeline ============ */
@@ -2532,6 +2573,17 @@ details[open] > summary {
 
     .score-value {
         font-size: 28px;
+    }
+
+    /* The match band stays short on a phone, so the tabs show up sooner. */
+    .score-team-sub,
+    .perspective-aside,
+    .match-meta {
+        display: none;
+    }
+
+    .match-hero {
+        padding-bottom: 0.85rem;
     }
 
     .team-badge {

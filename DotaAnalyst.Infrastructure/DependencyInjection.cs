@@ -112,7 +112,8 @@ public static class DependencyInjection
             options.FocusAccountIds
                 .Select(id => AccountId.TryCreate(id, out var account) ? account : (AccountId?)null)
                 .OfType<AccountId>()
-                .ToList()));
+                .ToList(),
+            Math.Max(0, options.TargetMatchesPerHero)));
 
         if (!options.Enabled)
         {

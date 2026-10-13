@@ -11,8 +11,8 @@ import ItemBuildSection from './ItemBuildSection';
 import LaningSection, { ReplayStatusBanner } from './LaningSection';
 import MatchHeader from './MatchHeader';
 import ObjectivesSection from './ObjectivesSection';
-import PerformanceSummary from './PerformanceSummary';
-import SmartStatsSection from './SmartStatsSection';
+import PerformanceSummary, { PerformanceMetrics } from './PerformanceSummary';
+import SmartStatsSection, { HighlightCards } from './SmartStatsSection';
 import TeamTable from './TeamTable';
 import TimelineSection from './TimelineSection';
 import WardMap from './WardMap';
@@ -133,120 +133,205 @@ function MatchAnalysisPage() {
     );
 }
 
-// The section links under the match header; the one of the section on screen is highlighted (scroll spy).
-function SectionNav({ sections }) {
-    const [active, setActive] = useState(sections[0]?.id);
+// The tabs of the analysis, in priority order. Each is its own page (?tab=key in the URL, so a tab can be linked or
+// opened in a new tab); a tab without content for this match (replay not read yet, no point-of-view player) is
+// left out.
+function tabsOf(analysis) {
+    const ready = analysis.replayStatus === 'ready';
+    return [
+        { key: 'overview', label: 'Visão geral', visible: true },
+        { key: 'tips', label: 'Dicas', visible: Boolean(analysis.performance) || (ready && Boolean(analysis.smartStats)) },
+        { key: 'laning', label: 'Fase de rotas', visible: ready && Boolean(analysis.laning) },
+        { key: 'items', label: 'Itens', visible: ready && Boolean(analysis.itemBuild) },
+        { key: 'economy', label: 'Economia e objetivos', visible: ready && ((analysis.timeline?.seconds?.length ?? 0) > 1 || Boolean(analysis.objectives)) },
+        { key: 'fights', label: 'Lutas e dano', visible: ready && (Boolean(analysis.fights) || Boolean(analysis.damage)) },
+        { key: 'maps', label: 'Mapas', visible: ready && ((analysis.heatmaps?.heroes?.length ?? 0) > 0 || Boolean(analysis.deaths) || (analysis.wards?.length ?? 0) > 0) },
+        { key: 'players', label: 'Jogadores', visible: true },
+    ].filter(tab => tab.visible);
+}
+
+function useTabLink() {
+    const [searchParams] = useSearchParams();
+    // Keeps ?player= (whose point of view) and only changes the tab.
+    return key => {
+        const params = new URLSearchParams(searchParams);
+        if (key === 'overview') {
+            params.delete('tab');
+        } else {
+            params.set('tab', key);
+        }
+        const search = params.toString();
+        return { search: search ? `?${search}` : '' };
+    };
+}
+
+function TabNav({ tabs, active }) {
+    const tabLink = useTabLink();
     const barRef = useRef(null);
-    const ids = sections.map(section => section.id).join(',');
 
-    useEffect(() => {
-        const elements = ids.split(',').map(id => document.getElementById(id)).filter(Boolean);
-        if (elements.length === 0) {
-            return undefined;
-        }
-        // The last section whose heading has passed under the sticky bars (about 160 px from the top); at the very
-        // bottom of the page, the last section.
-        let frame = 0;
-        function update() {
-            frame = 0;
-            const atBottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4;
-            const passed = elements.filter(element => element.getBoundingClientRect().top <= 160);
-            const current = atBottom ? elements.at(-1) : passed.at(-1) ?? elements[0];
-            setActive(current.id);
-        }
-        function onScroll() {
-            if (!frame) {
-                frame = requestAnimationFrame(update);
-            }
-        }
-        update();
-        window.addEventListener('scroll', onScroll, { passive: true });
-        return () => {
-            window.removeEventListener('scroll', onScroll);
-            cancelAnimationFrame(frame);
-        };
-    }, [ids]);
-
-    // On a narrow screen the links scroll sideways: keep the active one in view.
+    // On a narrow screen the tabs scroll sideways: keep the active one in view.
     useEffect(() => {
         const bar = barRef.current;
-        const link = bar?.querySelector('[aria-current="true"]');
+        const link = bar?.querySelector('[aria-current="page"]');
         if (bar && link && (link.offsetLeft < bar.scrollLeft || link.offsetLeft + link.offsetWidth > bar.scrollLeft + bar.clientWidth)) {
             bar.scrollTo({ left: link.offsetLeft - 16 });
         }
     }, [active]);
 
     return (
-        <nav className="analysis-nav" aria-label="Seções da análise">
+        <nav className="analysis-nav" aria-label="Abas da análise" id="analysis-tabs">
             <div className="container analysis-nav-inner" ref={barRef}>
-                {sections.map(section => (
-                    <a
-                        key={section.id}
-                        href={`#${section.id}`}
-                        aria-current={active === section.id ? 'true' : undefined}
-                    >
-                        {section.label}
-                    </a>
+                {tabs.map(tab => (
+                    <Link key={tab.key} to={tabLink(tab.key)} aria-current={active === tab.key ? 'page' : undefined}>
+                        {tab.label}
+                    </Link>
                 ))}
             </div>
         </nav>
     );
 }
 
+// The overview's shortcuts: the key number of each other tab, linking to it.
+function Shortcuts({ analysis, tabs }) {
+    const tabLink = useTabLink();
+    const has = key => tabs.some(tab => tab.key === key);
+    const { laning, fights, itemBuild, deaths, smartStats, performance } = analysis;
+    const outcome = { won: 'Ganhou a rota', even: 'Rota empatada', lost: 'Perdeu a rota' }[laning?.outcome];
+    const won = fights?.filter(fight => fight.playersTeamWon === true).length;
+    const joined = fights?.filter(fight => fight.died || fight.kills > 0 || fight.assists > 0).length;
+    const lastItem = itemBuild?.items.at(-1);
+    const items = [
+        has('tips') && {
+            key: 'tips',
+            label: 'Dicas',
+            value: smartStats ? `${smartStats.insights.length} ${smartStats.insights.length === 1 ? 'dica' : 'dicas'}` : `${performance?.weaknesses.length ?? 0} pontos fracos`,
+            sub: smartStats ? `contra ${smartStats.counterpartHeroName} e outros jogadores do herói` : 'percentis do OpenDota',
+        },
+        has('laning') && {
+            key: 'laning',
+            label: 'Fase de rotas',
+            value: outcome ?? 'Sem disputa',
+            tone: { won: 'win', lost: 'loss' }[laning.outcome],
+            sub: `${laning.player.lastHits} ${laning.player.lastHits === 1 ? 'last hit' : 'last hits'} aos 10:00`,
+        },
+        has('items') && lastItem && {
+            key: 'items',
+            label: 'Itens',
+            value: `${itemBuild.items.length} itens`,
+            sub: `último: ${lastItem.name}`,
+        },
+        has('fights') && fights && {
+            key: 'fights',
+            label: 'Lutas',
+            value: `${won} de ${fights.length} vencidas`,
+            sub: `você participou de ${joined}`,
+        },
+        has('maps') && {
+            key: 'maps',
+            label: 'Mapas',
+            value: deaths ? `${deaths.length} ${deaths.length === 1 ? 'morte' : 'mortes'}` : 'Mapa de calor',
+            sub: 'mapa de calor, mortes e wards',
+        },
+    ].filter(Boolean);
+    if (items.length === 0) {
+        return null;
+    }
+
+    return (
+        <section className="section" aria-labelledby="shortcuts-title">
+            <SectionHead id="shortcuts-title" title="Mais detalhes" />
+            <ul className="shortcut-grid">
+                {items.map(item => (
+                    <li key={item.key}>
+                        <Link className="card shortcut" to={tabLink(item.key)}>
+                            <span className="stat-label">{item.label}</span>
+                            <strong className={item.tone ? `text-${item.tone}` : undefined}>{item.value}</strong>
+                            <span className="stat-sub">{item.sub}</span>
+                            <span className="shortcut-arrow" aria-hidden="true">→</span>
+                        </Link>
+                    </li>
+                ))}
+            </ul>
+        </section>
+    );
+}
+
 function AnalysisContent({ analysis, accountId, replayPollingStopped }) {
+    const [searchParams] = useSearchParams();
     const { performance } = analysis;
+    const tabs = tabsOf(analysis);
+    const requested = searchParams.get('tab') ?? 'overview';
+    // A tab this match doesn't have (or not yet: replay still being read) shows the overview.
+    const active = tabs.some(tab => tab.key === requested) ? requested : 'overview';
     const ready = analysis.replayStatus === 'ready';
     // null stays null for both teams: an unknown winner highlights nobody.
     const radiantWon = analysis.radiantWon ?? null;
     const direWon = radiantWon === null ? null : !radiantWon;
-    const hasMaps = ready && ((analysis.heatmaps?.heroes?.length ?? 0) > 0 || Boolean(analysis.deaths) || (analysis.wards?.length ?? 0) > 0);
-    const hasFights = ready && (Boolean(analysis.fights) || Boolean(analysis.damage));
-    const sections = [
-        { id: 'performance-title', label: 'Visão geral', visible: Boolean(performance) },
-        { id: 'smart-stats-title', label: 'Dicas', visible: Boolean(performance || analysis.smartStats) },
-        { id: 'laning-title', label: 'Fase de rotas', visible: ready && Boolean(analysis.laning) },
-        { id: 'item-build-title', label: 'Itens', visible: ready && Boolean(analysis.itemBuild) },
-        { id: 'timeline-title', label: 'Economia', visible: ready && (analysis.timeline?.seconds?.length ?? 0) > 1 },
-        { id: 'objectives-title', label: 'Objetivos', visible: ready && Boolean(analysis.objectives) },
-        { id: 'fights-damage-title', label: 'Lutas e dano', visible: hasFights },
-        { id: 'maps-title', label: 'Mapas', visible: hasMaps },
-        { id: 'teams-title', label: 'Os 10 jogadores', visible: true },
-    ].filter(section => section.visible);
+
+    // A new tab starts at its top (just under the match header when the page was scrolled past it).
+    useEffect(() => {
+        const nav = document.getElementById('analysis-tabs');
+        if (nav && window.scrollY > nav.offsetTop - 64) {
+            window.scrollTo({ top: nav.offsetTop - 64 });
+        }
+    }, [active]);
 
     return (
         <>
             <MatchHeader analysis={analysis} />
-            <SectionNav sections={sections} />
+            <TabNav tabs={tabs} active={active} />
 
             <div className="container analysis-sections">
-                {!analysis.isParsed && (
-                    <p className="notice">
-                        O OpenDota ainda não processou o replay desta partida: os percentis de desempenho podem faltar.
-                    </p>
-                )}
-
                 <ReplayStatusBanner replayStatus={analysis.replayStatus} pollingStopped={replayPollingStopped} />
 
-                {performance
-                    ? <PerformanceSummary analysis={analysis} />
-                    : (
-                        <p className="notice">
-                            O jogador {accountId} não aparece nesta partida, por isso não há análise de desempenho.
-                            Abra a partida pela lista de partidas desse jogador.
-                        </p>
-                    )}
+                {active === 'overview' && (
+                    <>
+                        {!analysis.isParsed && (
+                            <p className="notice">
+                                O OpenDota ainda não processou o replay desta partida: os percentis de desempenho podem faltar.
+                            </p>
+                        )}
+                        {!performance && (
+                            <p className="notice">
+                                O jogador {accountId} não aparece nesta partida, por isso não há análise de desempenho.
+                                Abra a partida pela lista de partidas desse jogador.
+                            </p>
+                        )}
+                        <HighlightCards
+                            performance={performance}
+                            laning={ready ? analysis.laning : null}
+                            smartStats={ready ? analysis.smartStats : null}
+                        />
+                        {performance && <PerformanceSummary analysis={analysis} />}
+                        {ready && <TimelineSection timeline={analysis.timeline} objectives={analysis.objectives} charts="lead" />}
+                        <Shortcuts analysis={analysis} tabs={tabs} />
+                    </>
+                )}
 
-                <SmartStatsSection performance={performance} laning={analysis.laning} smartStats={ready ? analysis.smartStats : null} />
+                {active === 'tips' && (
+                    <>
+                        <SmartStatsSection performance={performance} smartStats={ready ? analysis.smartStats : null} />
+                        <PerformanceMetrics performance={performance} />
+                    </>
+                )}
 
-                {ready && <LaningSection laning={analysis.laning} />}
+                {active === 'laning' && (
+                    <>
+                        <LaningSection laning={analysis.laning} />
+                        <TimelineSection timeline={analysis.timeline} objectives={analysis.objectives} charts="lane" />
+                    </>
+                )}
 
-                {ready && <ItemBuildSection itemBuild={analysis.itemBuild} />}
+                {active === 'items' && <ItemBuildSection itemBuild={analysis.itemBuild} />}
 
-                {ready && <TimelineSection timeline={analysis.timeline} objectives={analysis.objectives} />}
+                {active === 'economy' && (
+                    <>
+                        <TimelineSection timeline={analysis.timeline} objectives={analysis.objectives} />
+                        <ObjectivesSection objectives={analysis.objectives} />
+                    </>
+                )}
 
-                {ready && <ObjectivesSection objectives={analysis.objectives} />}
-
-                {hasFights && (
+                {active === 'fights' && (
                     <section className="section" aria-labelledby="fights-damage-title">
                         <SectionHead id="fights-damage-title" title="Lutas e dano" />
                         <div className="split split-5-7">
@@ -256,7 +341,7 @@ function AnalysisContent({ analysis, accountId, replayPollingStopped }) {
                     </section>
                 )}
 
-                {hasMaps && (
+                {active === 'maps' && (
                     <section className="section" aria-labelledby="maps-title">
                         <SectionHead id="maps-title" title="Mapas da partida">
                             <span>No minimapa do jogo, com as posições do replay</span>
@@ -276,16 +361,19 @@ function AnalysisContent({ analysis, accountId, replayPollingStopped }) {
                     </section>
                 )}
 
-                <section className="section" aria-labelledby="teams-title">
-                    <SectionHead id="teams-title" title="Os 10 jogadores" />
-                    <div className="stack">
-                        <TeamTable name="Radiant" side="radiant" players={analysis.radiant} won={radiantWon} score={analysis.radiantScore} />
-                        <TeamTable name="Dire" side="dire" players={analysis.dire} won={direWon} score={analysis.direScore} />
-                    </div>
-                </section>
+                {active === 'players' && (
+                    <section className="section" aria-labelledby="teams-title">
+                        <SectionHead id="teams-title" title="Os 10 jogadores" />
+                        <div className="stack">
+                            <TeamTable name="Radiant" side="radiant" players={analysis.radiant} won={radiantWon} score={analysis.radiantScore} />
+                            <TeamTable name="Dire" side="dire" players={analysis.dire} won={direWon} score={analysis.direScore} />
+                        </div>
+                    </section>
+                )}
             </div>
         </>
     );
 }
 
 export default MatchAnalysisPage;
+

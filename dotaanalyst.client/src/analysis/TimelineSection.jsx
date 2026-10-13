@@ -338,18 +338,25 @@ function TimelineTable({ timeline, metric, teamName }) {
     );
 }
 
+const TITLES = {
+    all: 'Vantagem de patrimônio e experiência',
+    lead: 'Como a partida andou',
+    lane: 'Patrimônio e experiência na sua rota',
+};
+
 // timeline comes from the API (null until the replay is read; absent on older responses: then nothing shows).
-// objectives (null/absent on older responses) are marked under the lead chart.
-function TimelineSection({ timeline, objectives }) {
+// objectives (null/absent on older responses) are marked under the lead chart. charts: 'all' (both charts and the
+// table), 'lead' (only the team's lead, for the overview) or 'lane' (only the player's lane, for the laning tab).
+function TimelineSection({ timeline, objectives, charts = 'all' }) {
     const [metric, setMetric] = useState('netWorth');
-    if (!timeline || timeline.seconds.length < 2) {
+    if (!timeline || timeline.seconds.length < 2 || (charts === 'lane' && timeline.lane.length === 0)) {
         return null;
     }
 
     const teamName = timeline.perspective === 'dire' ? 'Dire' : 'Radiant';
     return (
-        <section className="section" aria-labelledby="timeline-title">
-            <SectionHead id="timeline-title" title="Vantagem de patrimônio e experiência">
+        <section className="section" aria-labelledby={`timeline-title-${charts}`}>
+            <SectionHead id={`timeline-title-${charts}`} title={TITLES[charts]}>
                 <div className="segmented" role="group" aria-label="Medida dos gráficos">
                     {Object.entries(METRICS).map(([key, { label }]) => (
                         <button key={key} type="button" aria-pressed={metric === key} onClick={() => setMetric(key)}>
@@ -359,9 +366,11 @@ function TimelineSection({ timeline, objectives }) {
                 </div>
             </SectionHead>
             <div className="card">
-                <LeadChart timeline={timeline} metric={metric} teamName={teamName} objectives={objectives ?? []} />
-                {timeline.lane.length > 0 && <LaneChart timeline={timeline} metric={metric} />}
-                <TimelineTable timeline={timeline} metric={metric} teamName={teamName} />
+                {charts !== 'lane' && (
+                    <LeadChart timeline={timeline} metric={metric} teamName={teamName} objectives={objectives ?? []} />
+                )}
+                {charts !== 'lead' && timeline.lane.length > 0 && <LaneChart timeline={timeline} metric={metric} />}
+                {charts === 'all' && <TimelineTable timeline={timeline} metric={metric} teamName={teamName} />}
             </div>
         </section>
     );

@@ -29,6 +29,7 @@ public class OpenDotaBaselineMatchSourceTests
         var candidates = await CreateSource(page).GetCandidatesAsync(BaselineSource.HighRank, new HashSet<int> { 31 }, CancellationToken.None);
 
         Assert.Equal([1L], candidates.Select(candidate => candidate.MatchId.Value));
+        Assert.Equal([31, 2, 3], candidates[0].HeroIds);
     }
 
     [Fact]

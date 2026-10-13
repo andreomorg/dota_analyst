@@ -13,4 +13,7 @@ public class BaselineCollectorOptions
 
     // Accounts whose recently played heroes the high-rank matches must have (the project owner's).
     public long[] FocusAccountIds { get; set; } = [];
+
+    // High-rank matches the base should have of each of those heroes; until then their matches come first.
+    public int TargetMatchesPerHero { get; set; } = 10;
 }

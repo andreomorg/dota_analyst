@@ -34,4 +34,7 @@ public record HeroMetrics(
     // Positioning by map region (MapRegions): share (0..1) of the time alive from 0:00 in each region, and deaths in
     // each. Null for metrics computed before the regions existed.
     PerRegion<double>? TimeByRegion = null,
-    PerRegion<int>? DeathsByRegion = null);
+    PerRegion<int>? DeathsByRegion = null,
+    // The match had no role queue (pro matches): Role came from RoleInference. Good for the comparison base, not for
+    // the player's own analysis.
+    bool RoleInferred = false);

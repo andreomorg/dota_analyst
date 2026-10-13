@@ -17,6 +17,7 @@ public class GetMatchAnalysisHandler(
     IReplayParseQueue replayParseQueue,
     IHeroCatalog heroCatalog,
     IItemCatalog itemCatalog,
+    IBaselineProvider baselineProvider,
     TimeProvider timeProvider,
     ILogger<GetMatchAnalysisHandler> logger)
 {
@@ -80,14 +81,30 @@ public class GetMatchAnalysisHandler(
                 : null,
             Objectives: replay?.Objectives is { } objectives ? ToObjectives(objectives, currentPlayer, names) : null,
             SmartStats: replay?.Metrics is { } metrics && currentPlayer is not null
-                ? ToSmartStats(metrics, currentPlayer, names)
+                ? await WithBaselinesAsync(ToSmartStats(metrics, currentPlayer, names), metrics, currentPlayer, match, cancellationToken)
                 : null);
     }
 
-    // Null without metrics for the player or an enemy of the same role (a match without role queue has none).
+    // The player's metrics against other players of the same hero and role (pro and high-rank matches), from the
+    // comparison base (IBaselineProvider): an extra, the analysis comes without it when it can't be reached.
+    private async Task<SmartStats?> WithBaselinesAsync(
+        SmartStats? stats, IReadOnlyList<HeroMetrics> metrics, MatchPlayer player, MatchDetails match,
+        CancellationToken cancellationToken)
+    {
+        if (stats is null || metrics.FirstOrDefault(hero => hero.HeroId == player.HeroId) is not { } mine)
+        {
+            return stats;
+        }
+
+        var baselines = await baselineProvider.CompareAsync(mine, (int)match.Duration.TotalSeconds, cancellationToken);
+        return baselines is null ? stats : stats with { Baselines = baselines };
+    }
+
+    // Null without metrics for the player or an enemy of the same role, and for a match without role queue (its
+    // roles are only inferred: good for the comparison base, not to judge the player's own match — Turbo is left out).
     private static SmartStats? ToSmartStats(IReadOnlyList<HeroMetrics> metrics, MatchPlayer player, NameLookup names)
     {
-        if (metrics.FirstOrDefault(hero => hero.HeroId == player.HeroId) is not { } mine
+        if (metrics.FirstOrDefault(hero => hero.HeroId == player.HeroId) is not { RoleInferred: false } mine
             || metrics.FirstOrDefault(hero => hero.Team != mine.Team && hero.Role == mine.Role) is not { } counterpart)
         {
             return null;

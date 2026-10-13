@@ -33,6 +33,20 @@ public class OpenDotaClient(HttpClient httpClient)
         return GetJsonAsync<OpenDotaMatch>($"matches/{matchId}", notFoundAsNull: true, cancellationToken);
     }
 
+    // GET proMatches: the latest league matches (100), newest first.
+    public async Task<IReadOnlyList<OpenDotaProMatch>> GetProMatchesAsync(CancellationToken cancellationToken)
+    {
+        return await GetJsonAsync<List<OpenDotaProMatch>>("proMatches", notFoundAsNull: false, cancellationToken) ?? [];
+    }
+
+    // GET publicMatches: 100 public matches of the highest ranks, newest first; lessThanMatchId pages to older ones.
+    public async Task<IReadOnlyList<OpenDotaPublicMatch>> GetHighRankPublicMatchesAsync(
+        long? lessThanMatchId, CancellationToken cancellationToken)
+    {
+        var path = lessThanMatchId is { } id ? $"publicMatches?min_rank=80&less_than_match_id={id}" : "publicMatches?min_rank=80";
+        return await GetJsonAsync<List<OpenDotaPublicMatch>>(path, notFoundAsNull: false, cancellationToken) ?? [];
+    }
+
     // GET constants/item_ids: { "1": "blink", ... } (item ID -> item key).
     public async Task<IReadOnlyDictionary<int, string>> GetItemIdsAsync(CancellationToken cancellationToken)
     {

@@ -1,8 +1,12 @@
 using DotaAnalyst.Application.Abstractions;
+using DotaAnalyst.Application.Baseline;
+using DotaAnalyst.Domain.Players;
+using DotaAnalyst.Infrastructure.Baseline;
 using DotaAnalyst.Infrastructure.Caching;
 using DotaAnalyst.Infrastructure.Catalogs;
 using DotaAnalyst.Infrastructure.OpenDota;
 using DotaAnalyst.Infrastructure.Persistence;
+using DotaAnalyst.Infrastructure.Persistence.Baseline;
 using DotaAnalyst.Infrastructure.Persistence.Catalogs;
 using DotaAnalyst.Infrastructure.Persistence.Matches;
 using DotaAnalyst.Infrastructure.Persistence.Players;
@@ -28,7 +32,8 @@ public static class DependencyInjection
         AddOpenDota(services, configuration);
         AddSteamProfiles(services, configuration);
         var hasDatabase = AddDatabase(services, configuration);
-        AddReplayParsing(services, configuration, hasDatabase);
+        var parsesReplays = AddReplayParsing(services, configuration, hasDatabase);
+        AddBaselineCollector(services, configuration, hasDatabase && parsesReplays);
 
         return services;
     }
@@ -37,7 +42,8 @@ public static class DependencyInjection
     // when both its address and the database exist: without the database a result could never be kept, so the
     // same replay would be parsed on every visit. Off, analyses say replayStatus "unavailable". An invalid address
     // also turns it off (with a warning) instead of stopping the app: the rest of the site doesn't need the parser.
-    private static void AddReplayParsing(IServiceCollection services, IConfiguration configuration, bool hasDatabase)
+    // Returns whether replay parsing is on.
+    private static bool AddReplayParsing(IServiceCollection services, IConfiguration configuration, bool hasDatabase)
     {
         var section = configuration.GetSection(ReplayParserOptions.SectionName);
         var baseUrl = section[nameof(ReplayParserOptions.BaseUrl)];
@@ -52,7 +58,7 @@ public static class DependencyInjection
             services.AddSingleton<IReplayParseQueue, DisabledReplayParseQueue>();
             services.AddHostedService(provider => new ReplayParsingStartupWarning(
                 $"Replay parsing is off: {offReason}", provider.GetRequiredService<ILogger<ReplayParsingStartupWarning>>()));
-            return;
+            return false;
         }
 
         // Allowed (a parser run locally without REPLAY_PARSER_API_KEY accepts it), but in production it is a mistake:
@@ -88,6 +94,41 @@ public static class DependencyInjection
             .RemoveAllLoggers();
 
         AddReplayParseQueue(services);
+        return true;
+    }
+
+    // The collector of the comparison base (pro and high-rank matches). Off unless Collector:Enabled — it runs on the
+    // project owner's machine, next to the replay parser, writing to the production database; never on Render. It
+    // also needs a database and replay parsing.
+    private static void AddBaselineCollector(IServiceCollection services, IConfiguration configuration, bool canCollect)
+    {
+        var section = configuration.GetSection(BaselineCollectorOptions.SectionName);
+        var options = section.Get<BaselineCollectorOptions>() ?? new BaselineCollectorOptions();
+        // Where the finished base is mirrored for production (Neon); empty = only the local site gets it.
+        services.AddSingleton<IBaselineMirror>(provider => new BaselineMirror(
+            configuration.GetConnectionString(BaselineMirror.ConnectionStringName), provider.GetRequiredService<TimeProvider>()));
+        services.AddSingleton(new BaselineCollectorSettings(
+            options.DailyLimit,
+            options.FocusAccountIds
+                .Select(id => AccountId.TryCreate(id, out var account) ? account : (AccountId?)null)
+                .OfType<AccountId>()
+                .ToList()));
+
+        if (!options.Enabled)
+        {
+            return;
+        }
+
+        if (!canCollect)
+        {
+            services.AddHostedService(provider => new ReplayParsingStartupWarning(
+                "Collector:Enabled is set, but the collector needs a database and replay parsing: it is off",
+                provider.GetRequiredService<ILogger<ReplayParsingStartupWarning>>()));
+            return;
+        }
+
+        services.AddHostedService<BaselineCollectorService>();
+        services.AddHostedService<BaselinePublisherService>();
     }
 
     // Absolute http(s), ending with '/': without it "v1/match" would replace the last segment of the path.
@@ -165,6 +206,7 @@ public static class DependencyInjection
         services.AddScoped<IReplayAnalyzer, OpenDotaReplayAnalyzer>();
         services.AddScoped<IHeroCatalog, OpenDotaHeroCatalog>();
         services.AddScoped<IItemCatalog, OpenDotaItemCatalog>();
+        services.AddScoped<IBaselineMatchSource, OpenDotaBaselineMatchSource>();
         services.AddSingleton<CatalogLoadLocks>();
     }
 
@@ -187,6 +229,8 @@ public static class DependencyInjection
             services.AddSingleton<IPlayerSearchRepository>(provider => provider.GetRequiredService<NoDatabase>());
             services.AddSingleton<ICatalogStore>(provider => provider.GetRequiredService<NoDatabase>());
             services.AddSingleton<IReplayAnalysisRepository, NoReplayAnalyses>();
+            services.AddSingleton<IBaselineRepository, NoBaseline>();
+            services.AddSingleton<IBaselineDistributionStore, NoBaselineDistributions>();
             return false;
         }
 
@@ -204,6 +248,10 @@ public static class DependencyInjection
         services.AddScoped<IReplayAnalysisRepository, ReplayAnalysisRepository>();
         // Replay parsing only runs with a database (see AddReplayParsing), so only this one is needed.
         services.AddScoped<IReplayDocumentArchive, ReplayDocumentArchive>();
+        // The comparison base: raw (written by the collector, on its machine only) and finished (read by every analysis;
+        // in production a mirror published from the collector's machine).
+        services.AddScoped<IBaselineRepository, BaselineRepository>();
+        services.AddScoped<IBaselineDistributionStore, BaselineDistributionStore>();
 
         // Keys that encrypt cookies (the future Steam login). Kept in the database, so a deploy or a restart of
         // the container doesn't throw them away and log everyone out. The fixed application name keeps the keys

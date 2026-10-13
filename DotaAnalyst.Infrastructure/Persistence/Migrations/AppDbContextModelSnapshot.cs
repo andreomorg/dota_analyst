@@ -22,6 +22,121 @@ namespace DotaAnalyst.Infrastructure.Persistence.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("DotaAnalyst.Infrastructure.Persistence.Baseline.BaselineDistributionRecord", b =>
+                {
+                    b.Property<int>("HeroId")
+                        .HasColumnType("integer")
+                        .HasColumnName("hero_id");
+
+                    b.Property<int>("Role")
+                        .HasColumnType("integer")
+                        .HasColumnName("role");
+
+                    b.Property<string>("Source")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("source");
+
+                    b.Property<string>("Distributions")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("distributions");
+
+                    b.Property<int>("Matches")
+                        .HasColumnType("integer")
+                        .HasColumnName("matches");
+
+                    b.Property<DateTimeOffset>("PublishedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("published_at");
+
+                    b.HasKey("HeroId", "Role", "Source")
+                        .HasName("pk_baseline_distributions");
+
+                    b.ToTable("baseline_distributions", (string)null);
+                });
+
+            modelBuilder.Entity("DotaAnalyst.Infrastructure.Persistence.Baseline.BaselineMatchRecord", b =>
+                {
+                    b.Property<long>("MatchId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("match_id");
+
+                    b.Property<int>("DurationSeconds")
+                        .HasColumnType("integer")
+                        .HasColumnName("duration_seconds");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("source");
+
+                    b.Property<DateTimeOffset>("StartTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("start_time");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("status");
+
+                    b.Property<DateTimeOffset>("TriedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("tried_at");
+
+                    b.HasKey("MatchId")
+                        .HasName("pk_baseline_matches");
+
+                    b.HasIndex("Status", "TriedAt")
+                        .HasDatabaseName("ix_baseline_matches_status_tried_at");
+
+                    b.ToTable("baseline_matches", (string)null);
+                });
+
+            modelBuilder.Entity("DotaAnalyst.Infrastructure.Persistence.Baseline.BaselineMetricsRecord", b =>
+                {
+                    b.Property<long>("MatchId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("match_id");
+
+                    b.Property<int>("HeroId")
+                        .HasColumnType("integer")
+                        .HasColumnName("hero_id");
+
+                    b.Property<int>("DurationSeconds")
+                        .HasColumnType("integer")
+                        .HasColumnName("duration_seconds");
+
+                    b.Property<string>("Metrics")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("metrics");
+
+                    b.Property<int>("Role")
+                        .HasColumnType("integer")
+                        .HasColumnName("role");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("source");
+
+                    b.Property<DateTimeOffset>("StartTime")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("start_time");
+
+                    b.HasKey("MatchId", "HeroId")
+                        .HasName("pk_baseline_metrics");
+
+                    b.HasIndex("HeroId", "Role", "Source", "StartTime")
+                        .HasDatabaseName("ix_baseline_metrics_hero_id_role_source_start_time");
+
+                    b.ToTable("baseline_metrics", (string)null);
+                });
+
             modelBuilder.Entity("DotaAnalyst.Infrastructure.Persistence.Catalogs.CatalogEntryRecord", b =>
                 {
                     b.Property<string>("Catalog")

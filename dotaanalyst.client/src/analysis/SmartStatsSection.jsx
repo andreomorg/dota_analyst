@@ -132,6 +132,103 @@ function RegionChart({ player, counterpart, counterpartName }) {
     );
 }
 
+const COMPARED = {
+    deathsPer30: { label: 'Mortes', format: plain, per30: true },
+    isolatedDeathsPer30: { label: 'Mortes sem aliado por perto', format: plain, per30: true },
+    enemyJungleDeathsPer30: { label: 'Mortes na selva inimiga', format: plain, per30: true },
+    aloneOnEnemySide: { label: 'Tempo sozinho no lado inimigo', format: percent },
+    netWorthAt10: { label: 'Patrimônio aos 10:00', format: plain },
+    lastHitsAt10: { label: 'Last hits aos 10:00', format: plain },
+    netWorthAt20: { label: 'Patrimônio aos 20:00', format: plain },
+    observersPer30: { label: 'Observers colocados', format: plain, per30: true },
+    sentriesPer30: { label: 'Sentries colocados', format: plain, per30: true },
+    observerLifetime: { label: 'Vida média dos observers', format: lifetime },
+    enemyWardsDestroyedPer30: { label: 'Wards inimigos destruídos', format: plain, per30: true },
+};
+
+const SOURCES = { pro: 'Profissionais', highRank: 'Alto nível' };
+
+// The same limits as the OpenDota percentiles of the page (PerformanceEvaluator): the text says it, the colour helps.
+function betterThanClass(share) {
+    if (share >= 0.7) {
+        return 'result-win';
+    }
+    return share <= 0.3 ? 'result-loss' : undefined;
+}
+
+// The player against other players of the same hero and role, from the comparison base (pro and high-rank matches).
+function BaselineTable({ baselines, role }) {
+    if (!baselines) {
+        return null;
+    }
+
+    const usable = baselines.filter(baseline => baseline.metrics.length > 0);
+    const small = baselines.filter(baseline => baseline.metrics.length === 0);
+    const metrics = Object.keys(COMPARED).filter(key => usable.some(baseline => baseline.metrics.some(m => m.metric === key)));
+    const yours = key => usable.flatMap(baseline => baseline.metrics).find(m => m.metric === key)?.value;
+
+    return (
+        <div className="baseline-comparison">
+            <h3>Comparado com outros jogadores do mesmo herói como {ROLES[role] ?? `posição ${role}`}</h3>
+            {usable.length > 0 && (
+                <div className="table-scroll">
+                    <table className="smart-stats-table">
+                        <caption className="visually-hidden">Seus números contra os de outros jogadores do mesmo herói e posição</caption>
+                        <thead>
+                            <tr>
+                                <th scope="col">Métrica</th>
+                                <th scope="col">Você</th>
+                                {usable.map(baseline => (
+                                    <th key={baseline.source} scope="col">
+                                        {SOURCES[baseline.source] ?? baseline.source} (mediana, {baseline.matches} partidas)
+                                    </th>
+                                ))}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {metrics.map(key => (
+                                <tr key={key}>
+                                    <th scope="row">{COMPARED[key].label}{COMPARED[key].per30 ? ' (por 30 min)' : ''}</th>
+                                    <td>{cell(yours(key), COMPARED[key].format)}</td>
+                                    {usable.map(baseline => {
+                                        const metric = baseline.metrics.find(m => m.metric === key);
+                                        return (
+                                            <td key={baseline.source}>
+                                                {metric
+                                                    ? (
+                                                        <>
+                                                            {COMPARED[key].format(metric.median)}{' · '}
+                                                            <span className={betterThanClass(metric.betterThan)}>
+                                                                melhor que {percent(metric.betterThan)}
+                                                            </span>
+                                                        </>
+                                                    )
+                                                    : '—'}
+                                            </td>
+                                        );
+                                    })}
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            )}
+            {small.map(baseline => (
+                <p key={baseline.source} className="laning-note">
+                    {SOURCES[baseline.source] ?? baseline.source}: a base ainda tem {baseline.matches}{' '}
+                    {baseline.matches === 1 ? 'partida' : 'partidas'} deste herói nesta posição (são precisas 10 para comparar).
+                    Ela cresce sozinha com o coletor.
+                </p>
+            ))}
+            <p className="laning-note">
+                &quot;Melhor que&quot;: em quantas partidas da base você foi melhor (em mortes, menos é melhor). Contagens
+                por 30 minutos de jogo, porque as partidas têm durações diferentes. Partidas dos últimos 60 dias; nas
+                profissionais a posição é deduzida pela rota e pelo patrimônio aos 10:00.
+            </p>
+        </div>
+    );
+}
+
 // smartStats comes from the API (null until the replay is read, without a point-of-view player, or for a match
 // without role queue: then nothing shows).
 function SmartStatsSection({ smartStats }) {
@@ -157,6 +254,8 @@ function SmartStatsSection({ smartStats }) {
                         {texts.map(text => <li key={text}>{text}</li>)}
                     </ul>
                 )}
+
+            <BaselineTable baselines={smartStats.baselines} role={smartStats.role} />
 
             <RegionChart
                 player={player.timeByRegion}

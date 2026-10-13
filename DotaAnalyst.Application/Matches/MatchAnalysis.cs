@@ -317,6 +317,7 @@ public record MapObjectiveSummary(
 /// <param name="Player">The player's numbers.</param>
 /// <param name="Counterpart">The numbers of the enemy of the same role.</param>
 /// <param name="MatchAverage">The average of the ten heroes.</param>
+/// <param name="Baselines">The player against other players of the same hero and role: pro matches and high-rank public matches of the last 60 days (one entry per source, even when empty); null when the comparison base could not be read.</param>
 /// <param name="Insights">What to improve (positioning, then economy, then vision); empty when nothing stands out.</param>
 public record SmartStats(
     int Role,
@@ -325,7 +326,8 @@ public record SmartStats(
     MetricsSummary Player,
     MetricsSummary Counterpart,
     MetricsSummary MatchAverage,
-    IReadOnlyList<InsightSummary> Insights);
+    IReadOnlyList<InsightSummary> Insights,
+    IReadOnlyList<BaselineComparisonSummary>? Baselines = null);
 
 /// <summary>A hero's numbers (or the match average) for the smart stats.</summary>
 /// <param name="Deaths">Deaths (Aegis deaths included).</param>
@@ -380,3 +382,17 @@ public record InsightSummary(InsightKind Kind, double Value, double? Counterpart
 public record RegionValues(
     double OwnBase, double EnemyBase, double TopLane, double MiddleLane, double BottomLane, double River, double OwnJungle,
     double EnemyJungle);
+
+/// <summary>The player against one comparison base (same hero and role).</summary>
+/// <param name="Source">pro (league matches; roles inferred from the laning) or highRank (public ranked matches of the highest ranks).</param>
+/// <param name="Matches">How many matches of the hero in that role the base has.</param>
+/// <param name="Metrics">The metrics with enough matches to compare (at least 10); empty while the base is small.</param>
+public record BaselineComparisonSummary(BaselineSource Source, int Matches, IReadOnlyList<MetricComparisonSummary> Metrics);
+
+/// <summary>One metric of the player against the base.</summary>
+/// <param name="Metric">The metric; counts are per 30 minutes of game (deathsPer30, observersPer30...).</param>
+/// <param name="Value">The player's value.</param>
+/// <param name="Median">The base's median.</param>
+/// <param name="BetterThan">Share (0..1) of the base's matches the player did better than (ties count half; for deaths, fewer is better).</param>
+/// <param name="SampleSize">How many of the base's matches have the metric.</param>
+public record MetricComparisonSummary(ComparedMetric Metric, double Value, double Median, double BetterThan, int SampleSize);

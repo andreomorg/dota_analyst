@@ -260,13 +260,15 @@ public class ReplayParserClientTests
     }
 
     [Fact]
-    public async Task Parse_WithoutRoleQueue_HasNoMetrics()
+    public async Task Parse_WithoutRoleQueue_InfersTheRoles()
     {
+        // The default document has no roles (a pro match): the bottom-lane Radiant hero is the 1, the Dire jungler
+        // takes the first role left.
         var analysis = await CreateClient(new FakeParser(Json(HttpStatusCode.OK, MatchJson(), "application/json")))
             .ParseAsync(Match, ReplayUrl, CancellationToken.None);
 
-        Assert.NotNull(analysis.Metrics);
-        Assert.Empty(analysis.Metrics);
+        Assert.All(analysis.Metrics!, hero => Assert.True(hero.RoleInferred));
+        Assert.Equal((1, 1), (analysis.Metrics!.Single(hero => hero.HeroId == 31).Role, analysis.Metrics!.Single(hero => hero.HeroId == 28).Role));
         Assert.False(analysis.IsOutdated);
     }
 

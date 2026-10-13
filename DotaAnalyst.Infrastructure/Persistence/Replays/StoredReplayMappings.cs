@@ -37,7 +37,9 @@ internal sealed record StoredHeroMetrics(
     int EnemyWardsDestroyed,
     // Added in sprint 19 (null in older rows: the analysis is then outdated and parsed again).
     IReadOnlyDictionary<MapRegion, double>? TimeByRegion = null,
-    IReadOnlyDictionary<MapRegion, int>? DeathsByRegion = null);
+    IReadOnlyDictionary<MapRegion, int>? DeathsByRegion = null,
+    // Added in sprint 20 (false in older rows: they all came from role queue).
+    bool RoleInferred = false);
 
 internal sealed record StoredMapObjective(
     ObjectiveKind Kind, int Seconds, Team TakenBy, int? KillerHeroId, Team? Owner, int? TowerTier, Lane? Lane,
@@ -81,7 +83,8 @@ internal static class StoredReplayMappings
     public const string Expired = "expired";
 
     // Enums as text ("radiant", "bottom"): readable in the database and safe if enum values are reordered.
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
+    // Also used by the comparison base (BaselineRepository), so a hero's metrics are the same JSON everywhere.
+    internal static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
     {
         Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase, allowIntegerValues: false) },
     };
@@ -177,13 +180,8 @@ internal static class StoredReplayMappings
                     .ToList(),
                 stored.Metrics?.Select(hero => hero is null
                         ? throw new InvalidDataException("A saved replay analysis has empty metrics.")
-                        : new HeroMetrics(hero.HeroId, hero.Team, hero.Role, hero.Deaths, hero.IsolatedDeaths,
-                            hero.DeathsOnEnemySide, hero.EnemySideShare, hero.AloneOnEnemySideShare, hero.NetWorthAt10,
-                            hero.NetWorthAt20, hero.LastHitsAt10, hero.NetWorthShare, hero.ObserversPlaced,
-                            hero.SentriesPlaced, hero.ObserverAverageLifetimeSeconds, hero.WardsLostToEnemy,
-                            hero.EnemyWardsDestroyed,
-                            hero.TimeByRegion is { } time ? PerRegion<double>.Of(time.GetValueOrDefault) : null,
-                            hero.DeathsByRegion is { } deaths ? PerRegion<int>.Of(deaths.GetValueOrDefault) : null))
+                        : ToDomain(hero))
+
                     .ToList());
         }
         catch (ArgumentException ex)
@@ -231,14 +229,29 @@ internal static class StoredReplayMappings
                     objective.Denied, objective.AegisHeroId))
                 .ToList(),
             Metrics: analysis.Metrics?
-                .Select(hero => new StoredHeroMetrics(hero.HeroId, hero.Team, hero.Role, hero.Deaths, hero.IsolatedDeaths,
-                    hero.DeathsOnEnemySide, hero.EnemySideShare, hero.AloneOnEnemySideShare, hero.NetWorthAt10,
-                    hero.NetWorthAt20, hero.LastHitsAt10, hero.NetWorthShare, hero.ObserversPlaced, hero.SentriesPlaced,
-                    hero.ObserverAverageLifetimeSeconds, hero.WardsLostToEnemy, hero.EnemyWardsDestroyed,
-                    hero.TimeByRegion is { } time ? ByRegion(time) : null,
-                    hero.DeathsByRegion is { } deaths ? ByRegion(deaths) : null))
+                .Select(ToStored)
+
                 .ToList());
 
+
+    // Shared with the comparison base (BaselineRepository): the same JSON for a hero's metrics.
+    public static HeroMetrics ToDomain(StoredHeroMetrics hero) =>
+        new(hero.HeroId, hero.Team, hero.Role, hero.Deaths, hero.IsolatedDeaths, hero.DeathsOnEnemySide,
+            hero.EnemySideShare, hero.AloneOnEnemySideShare, hero.NetWorthAt10, hero.NetWorthAt20, hero.LastHitsAt10,
+            hero.NetWorthShare, hero.ObserversPlaced, hero.SentriesPlaced, hero.ObserverAverageLifetimeSeconds,
+            hero.WardsLostToEnemy, hero.EnemyWardsDestroyed,
+            hero.TimeByRegion is { } time ? PerRegion<double>.Of(time.GetValueOrDefault) : null,
+            hero.DeathsByRegion is { } deaths ? PerRegion<int>.Of(deaths.GetValueOrDefault) : null,
+            hero.RoleInferred);
+
+    public static StoredHeroMetrics ToStored(HeroMetrics hero) =>
+        new(hero.HeroId, hero.Team, hero.Role, hero.Deaths, hero.IsolatedDeaths, hero.DeathsOnEnemySide,
+            hero.EnemySideShare, hero.AloneOnEnemySideShare, hero.NetWorthAt10, hero.NetWorthAt20, hero.LastHitsAt10,
+            hero.NetWorthShare, hero.ObserversPlaced, hero.SentriesPlaced, hero.ObserverAverageLifetimeSeconds,
+            hero.WardsLostToEnemy, hero.EnemyWardsDestroyed,
+            hero.TimeByRegion is { } time ? ByRegion(time) : null,
+            hero.DeathsByRegion is { } deaths ? ByRegion(deaths) : null,
+            hero.RoleInferred);
     // Saved as { "OwnBase": 0.1, ... }: readable in the database and safe if a region is added later.
     private static Dictionary<MapRegion, T> ByRegion<T>(PerRegion<T> values) =>
         Enum.GetValues<MapRegion>().ToDictionary(region => region, region => values[region]);

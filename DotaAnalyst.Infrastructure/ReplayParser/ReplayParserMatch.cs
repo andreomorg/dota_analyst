@@ -208,11 +208,14 @@ internal static class ReplayParserMappings
                 HeroOfPlayer(entry.Player ?? throw Missing("positions.player"))!.Value,
                 Required(entry.Samples, "positions.samples").Select(ToPositionSample).ToList()))
             .ToList();
-        // Every player needs a role, or the match has no role queue (Turbo, unranked): no metrics then.
-        var roles = players.All(player => player.Role is not null)
+        // Role queue when every player has a role; otherwise (pro matches, Turbo, unranked) the roles are inferred,
+        // and the metrics say so (they then only feed the comparison base, never the player's own analysis).
+        var queueRoles = players.All(player => player.Role is not null)
             ? players.ToDictionary(player => player.HeroId!.Value, player => player.Role!.Value)
             : null;
-        var metrics = MatchMetricsCalculator.Calculate(laningStats, timeline, deaths, wards, positions, roles) ?? [];
+        var metrics = MatchMetricsCalculator.Calculate(
+            laningStats, timeline, deaths, wards, positions, queueRoles ?? RoleInference.Infer(laningStats),
+            rolesInferred: queueRoles is null) ?? [];
 
         return new ReplayAnalysis(
             matchId, endsAt, laningStats, timeline, deaths, wards, damage, purchases, mapObjectives, metrics);

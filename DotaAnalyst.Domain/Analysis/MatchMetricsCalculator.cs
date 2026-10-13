@@ -25,7 +25,8 @@ public static class MatchMetricsCalculator
         IReadOnlyList<HeroDeath> deaths,
         IReadOnlyList<WardPlacement> wards,
         IReadOnlyList<HeroPositions> positions,
-        IReadOnlyDictionary<int, int>? roles)
+        IReadOnlyDictionary<int, int>? roles,
+        bool rolesInferred = false)
     {
         if (roles is null || players.Any(player => roles.GetValueOrDefault(player.HeroId) is < 1 or > 5))
         {
@@ -84,7 +85,8 @@ public static class MatchMetricsCalculator
                 WardsLostToEnemy: placed.Count(ward => ward.Destroyed),
                 EnemyWardsDestroyed: wards.Count(ward => ward.Team != player.Team && ward.DestroyedByHeroId == player.HeroId),
                 TimeByRegion: PerRegion<double>.Of(region => Share(timeRegions.GetValueOrDefault(region), samples.Count)),
-                DeathsByRegion: PerRegion<int>.Of(region => deathRegions.GetValueOrDefault(region)));
+                DeathsByRegion: PerRegion<int>.Of(region => deathRegions.GetValueOrDefault(region)),
+                RoleInferred: rolesInferred);
         }).ToList();
     }
 

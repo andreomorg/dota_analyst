@@ -1,3 +1,4 @@
+using DotaAnalyst.Infrastructure.Persistence.Baseline;
 using DotaAnalyst.Infrastructure.Persistence.Catalogs;
 using DotaAnalyst.Infrastructure.Persistence.Matches;
 using DotaAnalyst.Infrastructure.Persistence.Players;
@@ -20,6 +21,14 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<ReplayAnalysisRecord> ReplayAnalyses => Set<ReplayAnalysisRecord>();
 
     public DbSet<ReplayDocumentRecord> ReplayDocuments => Set<ReplayDocumentRecord>();
+
+    // The comparison base (collector): matches tried and the metrics of their heroes.
+    public DbSet<BaselineMatchRecord> BaselineMatches => Set<BaselineMatchRecord>();
+
+    public DbSet<BaselineMetricsRecord> BaselineMetrics => Set<BaselineMetricsRecord>();
+
+    // The finished comparison base (what the sites read; production's copy is a mirror of the collector's machine).
+    public DbSet<BaselineDistributionRecord> BaselineDistributions => Set<BaselineDistributionRecord>();
 
     // ASP.NET Core Data Protection keys (they encrypt the future login cookie), so they survive restarts.
     public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();

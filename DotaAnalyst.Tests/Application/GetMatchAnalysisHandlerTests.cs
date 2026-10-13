@@ -1,3 +1,4 @@
+using DotaAnalyst.Application.Baseline;
 using DotaAnalyst.Application.Abstractions;
 using DotaAnalyst.Application.Matches;
 using DotaAnalyst.Domain.Analysis;
@@ -462,6 +463,69 @@ public class GetMatchAnalysisHandlerTests
         Assert.Equal([new InsightSummary(InsightKind.IsolatedDeaths, 3, 1)], stats.Insights);
     }
 
+    private static ReplayAnalysis SupportDuel() =>
+        new(
+            MatchIdOf(10), ReplayAnalysis.LaningPhaseEndsAtSeconds,
+            [ReplayBuilder.Hero(31, Team.Radiant, Lane.Bottom), ReplayBuilder.Hero(28, Team.Dire, Lane.Bottom)],
+            ReplayBuilder.Timeline([ReplayBuilder.Hero(31, Team.Radiant, Lane.Bottom), ReplayBuilder.Hero(28, Team.Dire, Lane.Bottom)]),
+            deaths: [], wards: [], damage: [], purchases: [], objectives: [],
+            metrics: [HeroMetricsOf(31, Team.Radiant, role: 5, deaths: 2), HeroMetricsOf(28, Team.Dire, role: 5)]);
+
+    [Fact]
+    public async Task SmartStats_ComparedWithTheBase_OfTheSameHeroAndRole()
+    {
+        // Ten pro Lich supports with 1..10 deaths in 30-minute matches; the player's match lasts 1725 s.
+        var pro = Enumerable.Range(1, 10)
+            .Select(deaths => new BaselineSample(HeroMetricsOf(31, Team.Dire, role: 5, deaths: deaths), 1800))
+            .ToList();
+        var handler = CreateHandler(
+            new FakeReplayAnalyzer(UnparsedMatchWithMe()),
+            replays: new FakeReplayAnalysisRepository(SavedReplayAnalysis.Ready(SupportDuel(), Now)),
+            baseline: new FakeDistributions(BaselineSource.Pro, pro.Count, BaselineComparer.Distribute(pro)));
+
+        var baselines = (await handler.HandleAsync(MatchIdOf(10), Me, CancellationToken.None))!.SmartStats!.Baselines;
+
+        Assert.NotNull(baselines);
+        Assert.Equal([BaselineSource.Pro, BaselineSource.HighRank], baselines.Select(baseline => baseline.Source));
+        var deaths = Assert.Single(baselines[0].Metrics, metric => metric.Metric == ComparedMetric.DeathsPer30);
+        Assert.Equal(5.5, deaths.Median);
+        Assert.True(deaths.BetterThan > 0.7); // ~2.1 deaths per 30 min against 1..10
+        Assert.Equal(0, baselines[1].Matches);
+        Assert.Empty(baselines[1].Metrics);
+    }
+
+    [Fact]
+    public async Task SmartStats_BaseUnreadable_ComesWithoutIt()
+    {
+        var handler = CreateHandler(
+            new FakeReplayAnalyzer(UnparsedMatchWithMe()),
+            replays: new FakeReplayAnalysisRepository(SavedReplayAnalysis.Ready(SupportDuel(), Now)),
+            baseline: new FakeDistributions { Fail = true });
+
+        var stats = (await handler.HandleAsync(MatchIdOf(10), Me, CancellationToken.None))!.SmartStats;
+
+        Assert.NotNull(stats);
+        Assert.Null(stats.Baselines);
+    }
+
+    [Fact]
+    public async Task SmartStats_WithInferredRoles_IsNull()
+    {
+        var players = new[] { ReplayBuilder.Hero(31, Team.Radiant, Lane.Bottom), ReplayBuilder.Hero(28, Team.Dire, Lane.Bottom) };
+        var replay = new ReplayAnalysis(
+            MatchIdOf(10), ReplayAnalysis.LaningPhaseEndsAtSeconds, players, ReplayBuilder.Timeline(players), deaths: [],
+            wards: [], damage: [], purchases: [], objectives: [],
+            metrics:
+            [
+                HeroMetricsOf(31, Team.Radiant, role: 5) with { RoleInferred = true },
+                HeroMetricsOf(28, Team.Dire, role: 5) with { RoleInferred = true },
+            ]);
+        var handler = CreateHandler(
+            UnparsedMatchWithMe(), new FakeReplayAnalysisRepository(SavedReplayAnalysis.Ready(replay, Now)));
+
+        Assert.Null((await handler.HandleAsync(MatchIdOf(10), Me, CancellationToken.None))!.SmartStats);
+    }
+
     [Fact]
     public async Task SmartStats_WithoutRoleQueue_IsNull()
     {
@@ -751,7 +815,8 @@ public class GetMatchAnalysisHandlerTests
         FakeReplayAnalysisRepository? replays = null,
         FakeReplayParseQueue? queue = null,
         TimeProvider? clock = null,
-        FakeItemCatalog? items = null) =>
+        FakeItemCatalog? items = null,
+        FakeDistributions? baseline = null) =>
         new(
             analyzer,
             repository ?? new FakeMatchRepository(),
@@ -760,6 +825,7 @@ public class GetMatchAnalysisHandlerTests
             new FakeHeroCatalog(new Hero(31, "Lich")),
             // Names only by default (no details: no item build).
             items ?? new FakeItemCatalog(new Item(1, "Blink Dagger"), new Item(2, "Trusty Shovel")),
+            new DistributionBaselineProvider(baseline ?? new FakeDistributions(), NullLogger<DistributionBaselineProvider>.Instance),
             clock ?? new FixedTimeProvider(Now),
             NullLogger<GetMatchAnalysisHandler>.Instance);
 
@@ -852,5 +918,20 @@ public class GetMatchAnalysisHandlerTests
     {
         public Task<IReadOnlyDictionary<int, Item>> GetItemsAsync(CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlyDictionary<int, Item>>(items.ToDictionary(item => item.Id));
+    }
+
+    // The finished comparison base: these distributions for any hero/role of the given source.
+    private class FakeDistributions(BaselineSource? source = null, int matches = 0, IReadOnlyList<MetricDistribution>? distributions = null)
+        : IBaselineDistributionStore
+    {
+        public bool Fail { get; init; }
+
+        public Task<BaselineDistributionSet?> FindAsync(int heroId, int role, BaselineSource requested, CancellationToken cancellationToken) =>
+            Fail
+                ? throw new StorageUnavailableException("The database is down.")
+                : Task.FromResult(requested == source ? new BaselineDistributionSet(heroId, role, requested, matches, distributions ?? []) : null);
+
+        public Task ReplaceAllAsync(IReadOnlyList<BaselineDistributionSet> sets, DateTimeOffset publishedAt, CancellationToken cancellationToken) =>
+            Task.CompletedTask;
     }
 }

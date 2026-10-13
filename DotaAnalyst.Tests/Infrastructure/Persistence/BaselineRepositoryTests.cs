@@ -1,0 +1,102 @@
+using DotaAnalyst.Application.Abstractions;
+using DotaAnalyst.Domain.Analysis;
+using DotaAnalyst.Domain.Matches;
+using DotaAnalyst.Infrastructure.Persistence;
+using DotaAnalyst.Infrastructure.Persistence.Baseline;
+using DotaAnalyst.Tests.Domain;
+using Microsoft.Extensions.Logging.Abstractions;
+
+namespace DotaAnalyst.Tests.Infrastructure.Persistence;
+
+[Collection(PostgresCollection.Name)]
+public class BaselineRepositoryTests(PostgresFixture postgres) : IAsyncLifetime
+{
+    private static readonly DateTimeOffset Now = new(2026, 10, 13, 12, 0, 0, TimeSpan.Zero);
+
+    public Task InitializeAsync() => postgres.ResetAsync();
+
+    public Task DisposeAsync() => Task.CompletedTask;
+
+    private static HeroMetrics Hero(int heroId, int role, int deaths) =>
+        new(heroId, Team.Radiant, role, deaths, 1, 0, 0.2, 0.05, 3000, 7000, 40, 0.25, 0, 0, null, 0, 0,
+            PerRegion<double>.Of(_ => 0.125), PerRegion<int>.Of(region => region == MapRegion.River ? 1 : 0), RoleInferred: true);
+
+    private static BaselineMatch Collected(long matchId, BaselineSource source, DateTimeOffset start, params HeroMetrics[] heroes) =>
+        new(ReplayBuilder.MatchIdOf(matchId), source, start, 2100, BaselineMatchStatus.Collected, heroes, Now);
+
+    [Fact]
+    public async Task SaveThenRead_SamplesByHeroRoleSourceAndTime()
+    {
+        var repository = CreateRepository();
+        await repository.SaveAsync(Collected(1, BaselineSource.Pro, Now.AddDays(-1), Hero(31, 5, 3), Hero(1, 1, 2)), CancellationToken.None);
+        await repository.SaveAsync(Collected(2, BaselineSource.HighRank, Now.AddDays(-1), Hero(31, 5, 4)), CancellationToken.None);
+        await repository.SaveAsync(Collected(3, BaselineSource.Pro, Now.AddDays(-90), Hero(31, 5, 9)), CancellationToken.None);
+
+        var samples = await repository.GetSamplesAsync(31, 5, BaselineSource.Pro, Now.AddDays(-60), CancellationToken.None);
+
+        var sample = Assert.Single(samples);
+        Assert.Equal(Hero(31, 5, 3), sample.Metrics);
+        Assert.Equal(2100, sample.MatchSeconds);
+    }
+
+    [Fact]
+    public async Task KnownMatches_AndTheDailyCount_OnlyCountCollected()
+    {
+        var repository = CreateRepository();
+        await repository.SaveAsync(Collected(1, BaselineSource.Pro, Now, Hero(31, 5, 3)), CancellationToken.None);
+        await repository.SaveAsync(
+            new BaselineMatch(ReplayBuilder.MatchIdOf(2), BaselineSource.Pro, Now, 0, BaselineMatchStatus.NoReplay, [], Now),
+            CancellationToken.None);
+
+        var known = await repository.FindKnownAsync([ReplayBuilder.MatchIdOf(1), ReplayBuilder.MatchIdOf(2), ReplayBuilder.MatchIdOf(3)], CancellationToken.None);
+
+        Assert.Equal([1L, 2L], known.Order());
+        Assert.Equal(1, await repository.CountCollectedSinceAsync(Now.AddDays(-1), CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task SavingAgain_ReplacesTheEarlierTry()
+    {
+        var repository = CreateRepository();
+        await repository.SaveAsync(Collected(1, BaselineSource.Pro, Now, Hero(31, 5, 3)), CancellationToken.None);
+        await repository.SaveAsync(Collected(1, BaselineSource.Pro, Now, Hero(31, 5, 6)), CancellationToken.None);
+
+        var sample = Assert.Single(await repository.GetSamplesAsync(31, 5, BaselineSource.Pro, Now.AddDays(-1), CancellationToken.None));
+        Assert.Equal(6, sample.Metrics.Deaths);
+    }
+
+    [Fact]
+    public async Task Groups_ListEveryHeroRoleAndSourceSinceThen()
+    {
+        var repository = CreateRepository();
+        await repository.SaveAsync(Collected(1, BaselineSource.Pro, Now.AddDays(-1), Hero(31, 5, 3), Hero(1, 1, 2)), CancellationToken.None);
+        await repository.SaveAsync(Collected(2, BaselineSource.HighRank, Now.AddDays(-1), Hero(31, 5, 4)), CancellationToken.None);
+        await repository.SaveAsync(Collected(3, BaselineSource.Pro, Now.AddDays(-90), Hero(9, 4, 1)), CancellationToken.None);
+
+        var groups = await repository.GetGroupsAsync(Now.AddDays(-60), CancellationToken.None);
+
+        Assert.Equal(
+            [(1, 1, BaselineSource.Pro), (31, 5, BaselineSource.Pro), (31, 5, BaselineSource.HighRank)],
+            groups.OrderBy(group => group.HeroId).ThenBy(group => group.Source));
+    }
+
+    [Fact]
+    public async Task FinishedBase_ReplaceAllThenFind()
+    {
+        var store = new BaselineDistributionStore(postgres.DbContextFactory, new StorageGuard(TimeProvider.System));
+        var distributions = BaselineComparer.Distribute(
+            Enumerable.Range(1, 10).Select(i => new BaselineSample(Hero(31, 5, i), 1800)).ToList());
+        await store.ReplaceAllAsync([new(31, 5, BaselineSource.Pro, 99, [])], Now, CancellationToken.None);
+
+        await store.ReplaceAllAsync([new(31, 5, BaselineSource.Pro, 10, distributions)], Now, CancellationToken.None);
+
+        var set = await store.FindAsync(31, 5, BaselineSource.Pro, CancellationToken.None);
+        Assert.NotNull(set);
+        Assert.Equal(10, set.Matches);
+        Assert.Equal(distributions, set.Distributions);
+        Assert.Null(await store.FindAsync(31, 5, BaselineSource.HighRank, CancellationToken.None));
+    }
+
+    private BaselineRepository CreateRepository() =>
+        new(postgres.DbContextFactory, new StorageGuard(TimeProvider.System), NullLogger<BaselineRepository>.Instance);
+}

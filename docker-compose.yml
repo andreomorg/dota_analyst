@@ -32,6 +32,34 @@ services:
       start_period: 10s
     restart: unless-stopped
 
+  # Collector of the comparison base (pro and high-rank matches): all the heavy work happens on this machine. It
+  # parses matches with the replay parser here, keeps the raw base in the LOCAL database, and every hour publishes
+  # only the finished base (each hero/role's distributions, a few MB) to the local site and to the production mirror
+  # (Neon). The API's image with Collector__Enabled, no port. Only with the "collector" profile: COMPOSE_PROFILES in
+  # .env, or "docker compose up -d collector". OpenDota is called from this machine's IP (not the site's quota).
+  collector:
+    image: dotaanalyst-api
+    profiles: [collector]
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      # The raw base: the same local database as the "api" service (which migrates it).
+      ConnectionStrings__Database: "Host=db;Port=5432;Database=dotaanalyst;Username=dotaanalyst;Timeout=5;Password=${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the .env file (see .env.example)}"
+      Database__MigrateOnStartup: "false"
+      # The production mirror (Neon) for the finished base, in .NET format; empty = only the local site gets it.
+      # Neon's schema is migrated by the Render deploy, never from here.
+      ConnectionStrings__Mirror: "${MIRROR_DATABASE:-}"
+      ReplayParser__BaseUrl: "http://replay-parser:8081/"
+      ReplayParser__ApiKey: "${REPLAY_PARSER_API_KEY}"
+      Collector__Enabled: "true"
+      Collector__DailyLimit: "${COLLECTOR_DAILY_LIMIT:-300}"
+      # The account whose heroes the high-rank matches must have (0 = none: only pro matches).
+      Collector__FocusAccountIds__0: "${COLLECTOR_FOCUS_ACCOUNT_ID:-0}"
+    depends_on:
+      db:
+        condition: service_healthy
+      replay-parser:
+        condition: service_healthy
+    restart: unless-stopped
   db:
     image: postgres:17-alpine
     environment:

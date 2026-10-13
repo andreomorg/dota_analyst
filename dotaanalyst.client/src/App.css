@@ -853,6 +853,49 @@ a:focus-visible {
     margin: 0.5rem auto 0;
 }
 
+/* ----- Objectives: marks under the lead chart (TimelineSection) and ObjectivesSection ----- */
+.objective-mark.ahead { fill: var(--chart-ahead); }
+.objective-mark.behind { fill: var(--chart-behind); }
+.objective-mark.neutral { fill: var(--text); vertical-align: -2px; margin-right: 0.3rem; }
+
+.objective-mark path,
+.objective-mark rect,
+.objective-mark circle {
+    stroke: var(--bg);
+    stroke-width: 1;
+}
+
+/* Tormentor: hollow, so it differs from Roshan by shape, not only by size. */
+.objective-mark .objective-hollow {
+    fill: var(--bg);
+    stroke: currentColor;
+    stroke-width: 2;
+}
+
+.objective-mark.ahead .objective-hollow { stroke: var(--chart-ahead); }
+.objective-mark.behind .objective-hollow { stroke: var(--chart-behind); }
+.objective-mark.neutral .objective-hollow { stroke: var(--text); }
+
+.legend-swatch.objective-ahead { background: var(--chart-ahead); }
+.legend-swatch.objective-behind { background: var(--chart-behind); }
+
+.objective-legend {
+    justify-content: center;
+    margin-top: 0.25rem;
+}
+
+.objectives-section {
+    margin: 1.5rem 0;
+}
+
+.objective-facts {
+    margin-bottom: 0.75rem;
+}
+
+.objectives-table {
+    margin: 0.5rem auto 0;
+}
+
 /* ----- Item build (ItemBuildSection) ----- */
 .item-build {
     margin: 1.5rem 0;

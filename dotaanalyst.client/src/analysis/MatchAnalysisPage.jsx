@@ -8,6 +8,7 @@ import FightsSection from './FightsSection';
 import ItemBuildSection from './ItemBuildSection';
 import LaningSection from './LaningSection';
 import MatchHeader from './MatchHeader';
+import ObjectivesSection from './ObjectivesSection';
 import PerformanceSummary from './PerformanceSummary';
 import TeamTable from './TeamTable';
 import TimelineSection from './TimelineSection';
@@ -135,7 +136,11 @@ function AnalysisContent({ analysis, accountId, replayPollingStopped }) {
 
             {analysis.replayStatus === 'ready' && <ItemBuildSection itemBuild={analysis.itemBuild} />}
 
-            {analysis.replayStatus === 'ready' && <TimelineSection timeline={analysis.timeline} />}
+            {analysis.replayStatus === 'ready' && (
+                <TimelineSection timeline={analysis.timeline} objectives={analysis.objectives} />
+            )}
+
+            {analysis.replayStatus === 'ready' && <ObjectivesSection objectives={analysis.objectives} />}
 
             {analysis.replayStatus === 'ready' && (
                 <FightsSection fights={analysis.fights} isRadiant={performance ? performance.isRadiant : null} />

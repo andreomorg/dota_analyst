@@ -1,5 +1,6 @@
 import { useId, useLayoutEffect, useRef, useState } from 'react';
 import { formatDuration, formatNumber, formatSignedNumber } from '../matches/format';
+import { KIND_LABELS, objectiveFullName, teamName as objectivesTeamName } from './objectives';
 
 // Two charts from the replay's timeline (net worth or experience, picked with one toggle — never two scales on one
 // chart): the perspective team's lead over the other team, and the player against the heroes of their lane.
@@ -71,8 +72,9 @@ function nearestPoint(event, svg, seconds, x) {
     return best;
 }
 
-function TimeAxis({ seconds, x }) {
-    const bottom = HEIGHT - MARGIN.bottom;
+// offset: extra room between the plot and the minute labels (the objectives strip of the lead chart).
+function TimeAxis({ seconds, x, offset = 0 }) {
+    const bottom = HEIGHT - MARGIN.bottom + offset;
     return (
         <g className="chart-axis" aria-hidden="true">
             {minuteTicks(seconds[seconds.length - 1]).map(second => (
@@ -92,12 +94,39 @@ function Tooltip({ point, x, width, children }) {
     return <div className="chart-tooltip" style={style}>{children}</div>;
 }
 
-function LeadChart({ timeline, metric, teamName }) {
+// One mark per objective, in a strip under the plot: the shape tells the kind, the color whether the chart's team
+// took it (the lead's own blue/red). Centered on (0, 0); size in pixels.
+function ObjectiveMark({ kind }) {
+    switch (kind) {
+        case 'tower':
+            return <path d="M0,-5L5,4L-5,4Z" />;
+        case 'barracks':
+            return <rect x="-4" y="-4" width="8" height="8" />;
+        case 'ancient':
+            return <path d="M0,-6L6,0L0,6L-6,0Z" />;
+        case 'tormentor':
+            return <circle r="4" className="objective-hollow" />;
+        default:
+            return <circle r="4.5" />;
+    }
+}
+
+const OBJECTIVE_STRIP = 22;
+
+// The objectives between the previous point and this one (what happened in that minute).
+function objectivesAt(objectives, seconds, point) {
+    const from = point > 0 ? seconds[point - 1] : -Infinity;
+    return objectives.filter(objective => objective.seconds > from && objective.seconds <= seconds[point]);
+}
+
+function LeadChart({ timeline, metric, teamName, objectives }) {
     const [ref, width] = useWidth();
     const [point, setPoint] = useState(null);
     const clipId = useId();
     const { seconds } = timeline;
     const lead = timeline[METRICS[metric].lead];
+    const strip = objectives.length > 0 ? OBJECTIVE_STRIP : 0;
+    const stripY = HEIGHT - MARGIN.bottom + 12;
 
     const extent = Math.max(1000, ...lead.map(Math.abs));
     const { x, y } = scales(seconds, width, -extent, extent);
@@ -111,9 +140,9 @@ function LeadChart({ timeline, metric, teamName }) {
             <figcaption>Vantagem de {METRICS[metric].label.toLowerCase()} do {teamName}</figcaption>
             <svg
                 width={width}
-                height={HEIGHT}
+                height={HEIGHT + strip}
                 role="img"
-                aria-label={`Vantagem de ${METRICS[metric].label.toLowerCase()} do ${teamName} ao longo da partida; no fim, ${formatSignedNumber(last)}.`}
+                aria-label={`Vantagem de ${METRICS[metric].label.toLowerCase()} do ${teamName} ao longo da partida; no fim, ${formatSignedNumber(last)}.${objectives.length > 0 ? ' Os objetivos estão marcados abaixo do gráfico e listados na seção Objetivos.' : ''}`}
                 onPointerMove={event => setPoint(nearestPoint(event, event.currentTarget, seconds, x))}
                 onPointerLeave={() => setPoint(null)}
             >
@@ -129,7 +158,20 @@ function LeadChart({ timeline, metric, teamName }) {
                         </g>
                     ))}
                 </g>
-                <TimeAxis seconds={seconds} x={x} />
+                <TimeAxis seconds={seconds} x={x} offset={strip} />
+                {objectives.length > 0 && (
+                    <g aria-hidden="true">
+                        {objectives.map((objective, index) => (
+                            <g
+                                key={`${objective.seconds}-${index}`}
+                                className={`objective-mark ${objective.takenBy === timeline.perspective ? 'ahead' : 'behind'}`}
+                                transform={`translate(${x(Math.min(objective.seconds, seconds[seconds.length - 1]))},${stripY})`}
+                            >
+                                <ObjectiveMark kind={objective.kind} />
+                            </g>
+                        ))}
+                    </g>
+                )}
                 <path className="lead-area ahead" d={area} clipPath={`url(#${clipId}-above)`} />
                 <path className="lead-area behind" d={area} clipPath={`url(#${clipId}-below)`} />
                 <path className="lead-line ahead" d={line} clipPath={`url(#${clipId}-above)`} />
@@ -149,10 +191,34 @@ function LeadChart({ timeline, metric, teamName }) {
                     <>
                         <strong>{formatDuration(seconds[point])}</strong>
                         <span>{lead[point] >= 0 ? 'À frente' : 'Atrás'}: {formatSignedNumber(lead[point])}</span>
+                        {objectivesAt(objectives, seconds, point).map((objective, index) => (
+                            <span key={index}>
+                                {formatDuration(objective.seconds)} {objectiveFullName(objective)}
+                                {objective.kind === 'roshan' || objective.kind === 'tormentor' ? ` (${objectivesTeamName(objective.takenBy)})` : ''}
+                            </span>
+                        ))}
                     </>
                 )}
             </Tooltip>
+            {objectives.length > 0 && <ObjectiveLegend teamName={teamName} />}
         </figure>
+    );
+}
+
+function ObjectiveLegend({ teamName }) {
+    return (
+        <ul className="chart-legend objective-legend">
+            {['tower', 'barracks', 'ancient', 'roshan', 'tormentor'].map(kind => (
+                <li key={kind}>
+                    <svg width="14" height="14" viewBox="-7 -7 14 14" aria-hidden="true" className="objective-mark neutral">
+                        <ObjectiveMark kind={kind} />
+                    </svg>
+                    {KIND_LABELS[kind]}
+                </li>
+            ))}
+            <li><span className="legend-swatch objective-ahead" aria-hidden="true" /> Conquistado pelo {teamName}</li>
+            <li><span className="legend-swatch objective-behind" aria-hidden="true" /> Contra o {teamName}</li>
+        </ul>
     );
 }
 
@@ -272,7 +338,8 @@ function TimelineTable({ timeline, metric, teamName }) {
 }
 
 // timeline comes from the API (null until the replay is read; absent on older responses: then nothing shows).
-function TimelineSection({ timeline }) {
+// objectives (null/absent on older responses) are marked under the lead chart.
+function TimelineSection({ timeline, objectives }) {
     const [metric, setMetric] = useState('netWorth');
     if (!timeline || timeline.seconds.length < 2) {
         return null;
@@ -291,7 +358,7 @@ function TimelineSection({ timeline }) {
                     ))}
                 </div>
             </div>
-            <LeadChart timeline={timeline} metric={metric} teamName={teamName} />
+            <LeadChart timeline={timeline} metric={metric} teamName={teamName} objectives={objectives ?? []} />
             {timeline.lane.length > 0 && <LaneChart timeline={timeline} metric={metric} />}
             <TimelineTable timeline={timeline} metric={metric} teamName={teamName} />
         </section>

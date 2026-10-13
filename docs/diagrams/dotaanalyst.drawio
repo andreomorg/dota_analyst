@@ -1,131 +1,45 @@
 <mxfile host="65bd71144e">
-    <diagram id="arquitetura" name="1. Arquitetura">
-        <mxGraphModel dx="1146" dy="1262" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1120" pageHeight="1100" math="0" shadow="0">
-            <root>
-                <mxCell id="0"/>
-                <mxCell id="1" parent="0"/>
-                <mxCell id="local" parent="1" style="swimlane;startSize=30;fillColor=#e8f5e9;strokeColor=#82b366;html=1;" value="Máquina do dono do projeto (docker compose) — processamento pesado" vertex="1">
-                    <mxGeometry height="420" width="560" x="20" y="20" as="geometry"/>
-                </mxCell>
-                <mxCell id="parser" parent="local" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" value="&lt;b&gt;replay-parser&lt;/b&gt; (Go)&lt;br&gt;lê os replays .dem" vertex="1">
-                    <mxGeometry height="60" width="160" x="30" y="60" as="geometry"/>
-                </mxCell>
-                <mxCell id="collector" parent="local" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" value="&lt;b&gt;collector&lt;/b&gt;&lt;br&gt;coleta partidas pro/alto nível&lt;br&gt;publica de hora em hora" vertex="1">
-                    <mxGeometry height="70" width="160" x="30" y="200" as="geometry"/>
-                </mxCell>
-                <mxCell id="localapi" parent="local" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" value="&lt;b&gt;api&lt;/b&gt; (C# + React)&lt;br&gt;localhost:8080" vertex="1">
-                    <mxGeometry height="60" width="160" x="340" y="60" as="geometry"/>
-                </mxCell>
-                <mxCell id="localdb" parent="local" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;size=12;fillColor=#fff2cc;strokeColor=#d6b656;" value="PostgreSQL local&lt;br&gt;dados brutos + prontos" vertex="1">
-                    <mxGeometry height="80" width="140" x="350" y="200" as="geometry"/>
-                </mxCell>
-                <mxCell id="ngrok" parent="local" style="rounded=1;whiteSpace=wrap;html=1;dashed=1;" value="tunnel (ngrok)&lt;br&gt;só conexão de saída" vertex="1">
-                    <mxGeometry height="60" width="160" x="30" y="330" as="geometry"/>
-                </mxCell>
-                <mxCell id="e4" edge="1" parent="local" source="ngrok" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;dashed=1;" target="parser">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="e5" edge="1" parent="local" source="collector" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" target="parser" value="parse">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="e6" edge="1" parent="local" source="collector" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" target="localdb" value="bruto">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="e8" edge="1" parent="local" source="localapi" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" target="localdb">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="e9" edge="1" parent="local" source="localapi" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" target="parser">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="cloud" parent="1" style="swimlane;startSize=30;fillColor=#dae8fc;strokeColor=#6c8ebf;html=1;" value="Nuvem — produção mínima" vertex="1">
-                    <mxGeometry height="420" width="300" x="660" y="20" as="geometry"/>
-                </mxCell>
-                <mxCell id="render" parent="cloud" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="&lt;b&gt;Render&lt;/b&gt;&lt;br&gt;API + React&lt;br&gt;dotaanalyst.onrender.com" vertex="1">
-                    <mxGeometry height="70" width="180" x="60" y="60" as="geometry"/>
-                </mxCell>
-                <mxCell id="neon" parent="cloud" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;size=12;fillColor=#fff2cc;strokeColor=#d6b656;" value="Neon (PostgreSQL)&lt;br&gt;só dados refinados" vertex="1">
-                    <mxGeometry height="80" width="140" x="80" y="250" as="geometry"/>
-                </mxCell>
-                <mxCell id="e2" edge="1" parent="cloud" source="render" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" target="neon" value="lê / grava dados do site">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="user" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;" value="Jogador (navegador)" vertex="1">
-                    <mxGeometry height="60" width="30" x="1040" y="70" as="geometry"/>
-                </mxCell>
-                <mxCell id="ext" parent="1" style="swimlane;startSize=30;fillColor=#f5f5f5;html=1;" value="Serviços externos" vertex="1">
-                    <mxGeometry height="110" width="940" x="20" y="500" as="geometry"/>
-                </mxCell>
-                <mxCell id="od" parent="ext" style="rounded=1;whiteSpace=wrap;html=1;" value="OpenDota API" vertex="1">
-                    <mxGeometry height="50" width="160" x="60" y="40" as="geometry"/>
-                </mxCell>
-                <mxCell id="valve" parent="ext" style="rounded=1;whiteSpace=wrap;html=1;" value="Valve (replays)" vertex="1">
-                    <mxGeometry height="50" width="160" x="380" y="40" as="geometry"/>
-                </mxCell>
-                <mxCell id="steam" parent="ext" style="rounded=1;whiteSpace=wrap;html=1;" value="Steam (login OpenID)" vertex="1">
-                    <mxGeometry height="50" width="160" x="700" y="40" as="geometry"/>
-                </mxCell>
-                <mxCell id="e1" edge="1" parent="1" source="user" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" target="render" value="HTTPS">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="e3" edge="1" parent="1" source="render" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;dashed=1;" target="ngrok" value="POST /v1/match">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="e7" edge="1" parent="1" source="collector" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#d79b00;strokeWidth=2;" target="neon" value="espelho (só o pronto)">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="e10" edge="1" parent="1" source="parser" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" target="valve" value="download">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="e11" edge="1" parent="1" source="render" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" target="od" value="partidas">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="e12" edge="1" parent="1" source="render" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" target="steam" value="login">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-            </root>
-        </mxGraphModel>
-    </diagram>
-    <diagram id="camadas" name="2. Camadas DDD">
-        <mxGraphModel dx="950" dy="891" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="900" pageHeight="1100" math="0" shadow="0">
-            <root>
-                <mxCell id="0"/>
-                <mxCell id="1" parent="0"/>
-                <mxCell id="server" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="&lt;b&gt;DotaAnalyst.Server&lt;/b&gt;&lt;br&gt;controllers /api/v1, login Steam, Program.cs&lt;br&gt;&lt;i&gt;só valida, chama caso de uso, traduz para HTTP&lt;/i&gt;" vertex="1">
-                    <mxGeometry height="80" width="320" x="220" y="40" as="geometry"/>
-                </mxCell>
-                <mxCell id="infra" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" value="&lt;b&gt;DotaAnalyst.Infrastructure&lt;/b&gt;&lt;br&gt;OpenDota, Steam, PostgreSQL/EF Core,&lt;br&gt;cliente do parser Go, coletor, cache" vertex="1">
-                    <mxGeometry height="80" width="300" x="600" y="180" as="geometry"/>
-                </mxCell>
-                <mxCell id="app" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" value="&lt;b&gt;DotaAnalyst.Application&lt;/b&gt;&lt;br&gt;casos de uso (handlers), DTOs,&lt;br&gt;interfaces do que vem de fora (Abstractions)" vertex="1">
-                    <mxGeometry height="80" width="320" x="220" y="320" as="geometry"/>
-                </mxCell>
-                <mxCell id="domain" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" value="&lt;b&gt;DotaAnalyst.Domain&lt;/b&gt;&lt;br&gt;regras do Dota: entidades, value objects,&lt;br&gt;domain services (métricas, lutas, regiões...)&lt;br&gt;&lt;i&gt;não referencia nada&lt;/i&gt;" vertex="1">
-                    <mxGeometry height="90" width="320" x="220" y="460" as="geometry"/>
-                </mxCell>
-                <mxCell id="react" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;" value="dotaanalyst.client&lt;br&gt;React 19 + Vite" vertex="1">
-                    <mxGeometry height="60" width="160" y="50" as="geometry"/>
-                </mxCell>
-                <mxCell id="a1" edge="1" parent="1" source="server" style="edgeStyle=orthogonalEdgeStyle;html=1;" target="app" value="usa">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="a2" edge="1" parent="1" source="server" style="edgeStyle=orthogonalEdgeStyle;html=1;dashed=1;" target="infra" value="registra (DI)">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="a3" edge="1" parent="1" source="infra" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;endFill=0;dashed=1;" target="app" value="implementa interfaces">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="a4" edge="1" parent="1" source="app" style="edgeStyle=orthogonalEdgeStyle;html=1;" target="domain" value="usa">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="a5" edge="1" parent="1" source="react" style="edgeStyle=orthogonalEdgeStyle;html=1;" target="server" value="só fala com a API (/api)">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="note" parent="1" style="shape=note;whiteSpace=wrap;html=1;size=14;fillColor=#fff9e6;" value="Dependências só apontam para dentro:&lt;br&gt;Server → Application → Domain&lt;br&gt;Infrastructure → Application" vertex="1">
-                    <mxGeometry height="80" width="260" x="620" y="460" as="geometry"/>
-                </mxCell>
-            </root>
-        </mxGraphModel>
-    </diagram>
+    <diagram id="arquitetura" name="1. Arquitetura"><mxGraphModel dx="1500" dy="760" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1500" pageHeight="680" math="0" shadow="0"><root><mxCell id="0"/><mxCell id="1" parent="0"/>
+<mxCell id="local" value="Máquina do dono do projeto · processamento local" style="swimlane;startSize=34;rounded=1;fillColor=#f3faf4;strokeColor=#82b366;strokeWidth=2;fontStyle=1;html=1;" vertex="1" parent="1"><mxGeometry x="30" y="80" width="480" height="420" as="geometry"/></mxCell>
+<mxCell id="parser" value="&lt;b&gt;Replay parser&lt;/b&gt;&lt;br&gt;Go · lê replays .dem" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;strokeWidth=2;" vertex="1" parent="local"><mxGeometry x="40" y="60" width="160" height="60" as="geometry"/></mxCell>
+<mxCell id="collector" value="&lt;b&gt;Coletor&lt;/b&gt;&lt;br&gt;partidas profissionais e alto nível" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;strokeWidth=2;" vertex="1" parent="local"><mxGeometry x="40" y="200" width="160" height="70" as="geometry"/></mxCell>
+<mxCell id="localapi" value="&lt;b&gt;API + React&lt;/b&gt;&lt;br&gt;localhost:8080" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;strokeWidth=2;" vertex="1" parent="local"><mxGeometry x="285" y="60" width="160" height="60" as="geometry"/></mxCell>
+<mxCell id="localdb" value="PostgreSQL local&lt;br&gt;dados brutos e refinados" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;size=12;fillColor=#fff2cc;strokeColor=#d6b656;strokeWidth=2;" vertex="1" parent="local"><mxGeometry x="285" y="200" width="150" height="80" as="geometry"/></mxCell>
+<mxCell id="ngrok" value="Túnel ngrok&lt;br&gt;conexão de saída" style="rounded=1;whiteSpace=wrap;html=1;dashed=1;fillColor=#ffffff;strokeColor=#6c8ebf;strokeWidth=2;" vertex="1" parent="local"><mxGeometry x="285" y="340" width="150" height="60" as="geometry"/></mxCell>
+<mxCell id="cloud" value="Produção na nuvem" style="swimlane;startSize=34;rounded=1;fillColor=#f2f7ff;strokeColor=#6c8ebf;strokeWidth=2;fontStyle=1;html=1;" vertex="1" parent="1"><mxGeometry x="600" y="80" width="320" height="420" as="geometry"/></mxCell>
+<mxCell id="render" value="&lt;b&gt;Render&lt;/b&gt;&lt;br&gt;API + React" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;strokeWidth=2;" vertex="1" parent="cloud"><mxGeometry x="60" y="60" width="180" height="70" as="geometry"/></mxCell>
+<mxCell id="neon" value="Neon · PostgreSQL&lt;br&gt;somente dados refinados" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;size=12;fillColor=#fff2cc;strokeColor=#d6b656;strokeWidth=2;" vertex="1" parent="cloud"><mxGeometry x="80" y="240" width="140" height="80" as="geometry"/></mxCell>
+<mxCell id="ext" value="Serviços externos" style="swimlane;startSize=34;rounded=1;fillColor=#f8f9fb;strokeColor=#9aa7b5;strokeWidth=2;fontStyle=1;html=1;" vertex="1" parent="1"><mxGeometry x="1050" y="80" width="280" height="420" as="geometry"/></mxCell>
+<mxCell id="od" value="OpenDota API" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#9aa7b5;strokeWidth=2;" vertex="1" parent="ext"><mxGeometry x="40" y="60" width="200" height="60" as="geometry"/></mxCell>
+<mxCell id="valve" value="Valve · replays" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#9aa7b5;strokeWidth=2;" vertex="1" parent="ext"><mxGeometry x="40" y="200" width="200" height="60" as="geometry"/></mxCell>
+<mxCell id="steam" value="Steam OpenID" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#9aa7b5;strokeWidth=2;" vertex="1" parent="ext"><mxGeometry x="40" y="340" width="200" height="60" as="geometry"/></mxCell>
+<mxCell id="user" value="Jogador" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="1360" y="120" width="30" height="60" as="geometry"/></mxCell>
+<mxCell id="e4" value="" edge="1" parent="local" source="ngrok" target="parser" style="edgeStyle=orthogonalEdgeStyle;rounded=1;dashed=1;strokeWidth=2;html=1;"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="260" y="370"/><mxPoint x="15" y="370"/><mxPoint x="15" y="90"/><mxPoint x="40" y="90"/></Array></mxGeometry></mxCell>
+<mxCell id="e5" value="parseia" edge="1" parent="local" source="collector" target="parser" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;html=1;labelBackgroundColor=#ffffff;"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e6" value="" edge="1" parent="local" source="collector" target="localdb" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;html=1;labelBackgroundColor=#ffffff;"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e8" value="lê / grava" edge="1" parent="local" source="localapi" target="localdb" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;html=1;labelBackgroundColor=#ffffff;"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e9" value="solicita análise" edge="1" parent="local" source="localapi" target="parser" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;html=1;labelBackgroundColor=#ffffff;"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e1" value="HTTPS" edge="1" parent="1" source="user" target="render" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;html=1;labelBackgroundColor=#ffffff;exitX=0.5;exitY=0;entryX=0;entryY=0.5;"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="1375" y="20"/><mxPoint x="560" y="20"/><mxPoint x="560" y="175"/></Array></mxGeometry></mxCell>
+<mxCell id="e2" value="lê / grava" edge="1" parent="cloud" source="render" target="neon" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;html=1;labelBackgroundColor=#ffffff;"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e3" value="API de replay" edge="1" parent="1" source="render" target="ngrok" style="edgeStyle=orthogonalEdgeStyle;rounded=1;dashed=1;strokeWidth=2;html=1;labelBackgroundColor=#ffffff;"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="920" y="175"/><mxPoint x="920" y="550"/><mxPoint x="390" y="550"/><mxPoint x="390" y="480"/></Array></mxGeometry></mxCell>
+<mxCell id="e7" value="publica base pronta" edge="1" parent="1" source="collector" target="neon" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#d79b00;strokeWidth=2;html=1;labelBackgroundColor=#ffffff;"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="150" y="540"/><mxPoint x="880" y="540"/><mxPoint x="880" y="400"/></Array></mxGeometry></mxCell>
+<mxCell id="e10" value="baixa replay" edge="1" parent="1" source="parser" target="valve" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;html=1;labelBackgroundColor=#ffffff;"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="150" y="45"/><mxPoint x="1000" y="45"/><mxPoint x="1000" y="310"/></Array></mxGeometry></mxCell>
+<mxCell id="e11" value="partidas" edge="1" parent="1" source="render" target="od" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;html=1;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;entryX=0;entryY=0.5;"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="960" y="175"/></Array></mxGeometry></mxCell>
+<mxCell id="e12" value="login" edge="1" parent="1" source="render" target="steam" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;html=1;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;entryX=0;entryY=0.5;"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="970" y="175"/><mxPoint x="970" y="450"/><mxPoint x="1090" y="450"/></Array></mxGeometry></mxCell>
+</root></mxGraphModel></diagram>
+    <diagram id="camadas" name="2. Camadas DDD"><mxGraphModel dx="1020" dy="700" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1020" pageHeight="700" math="0" shadow="0"><root><mxCell id="0"/><mxCell id="1" parent="0"/>
+<mxCell id="react" value="&lt;b&gt;React client&lt;/b&gt;&lt;br&gt;React 19 + Vite" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#9aa7b5;strokeWidth=2;" vertex="1" parent="1"><mxGeometry x="40" y="70" width="170" height="70" as="geometry"/></mxCell>
+<mxCell id="server" value="&lt;b&gt;DotaAnalyst.Server&lt;/b&gt;&lt;br&gt;Controllers · Steam login · Program.cs&lt;br&gt;Valida entrada e traduz para HTTP" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;strokeWidth=2;" vertex="1" parent="1"><mxGeometry x="300" y="70" width="360" height="80" as="geometry"/></mxCell>
+<mxCell id="app" value="&lt;b&gt;DotaAnalyst.Application&lt;/b&gt;&lt;br&gt;Casos de uso · DTOs · interfaces" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;strokeWidth=2;" vertex="1" parent="1"><mxGeometry x="300" y="260" width="360" height="80" as="geometry"/></mxCell>
+<mxCell id="domain" value="&lt;b&gt;DotaAnalyst.Domain&lt;/b&gt;&lt;br&gt;Regras do Dota · entidades · métricas · lutas" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;strokeWidth=2;" vertex="1" parent="1"><mxGeometry x="300" y="450" width="360" height="80" as="geometry"/></mxCell>
+<mxCell id="infra" value="&lt;b&gt;DotaAnalyst.Infrastructure&lt;/b&gt;&lt;br&gt;OpenDota · Steam · PostgreSQL / EF Core&lt;br&gt;Parser Go · cache · coletor" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;strokeWidth=2;" vertex="1" parent="1"><mxGeometry x="850" y="260" width="230" height="90" as="geometry"/></mxCell>
+<mxCell id="note" value="Dependências apontam para dentro&lt;br&gt;Server → Application → Domain&lt;br&gt;Infrastructure → Application" style="shape=note;whiteSpace=wrap;html=1;size=14;fillColor=#fff9e6;strokeColor=#d6b656;strokeWidth=2;" vertex="1" parent="1"><mxGeometry x="750" y="450" width="250" height="90" as="geometry"/></mxCell>
+<mxCell id="a5" value="HTTP · /api" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;html=1;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="react" target="server"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="a1" value="usa" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;html=1;labelBackgroundColor=#ffffff;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="server" target="app"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="a4" value="usa" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;html=1;labelBackgroundColor=#ffffff;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="app" target="domain"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="a2" value="registra no DI" style="edgeStyle=orthogonalEdgeStyle;rounded=1;dashed=1;strokeWidth=2;html=1;labelBackgroundColor=#ffffff;exitX=1;exitY=0.4;entryX=0;entryY=0.3;" edge="1" parent="1" source="server" target="infra"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="700" y="102"/><mxPoint x="700" y="287"/></Array></mxGeometry></mxCell>
+<mxCell id="a3" value="implementa interfaces" style="edgeStyle=orthogonalEdgeStyle;rounded=1;dashed=1;strokeWidth=2;endArrow=block;endFill=0;html=1;labelBackgroundColor=#ffffff;exitX=0;exitY=0.7;entryX=1;entryY=0.5;" edge="1" parent="1" source="infra" target="app"><mxGeometry relative="1" as="geometry"/></mxCell>
+</root></mxGraphModel></diagram>
     <diagram id="analise" name="3. Fluxo da análise">
         <mxGraphModel dx="1093" dy="1025" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1120" pageHeight="700" math="0" shadow="0">
             <root>
@@ -230,65 +144,25 @@
             </root>
         </mxGraphModel>
     </diagram>
-    <diagram id="base" name="4. Base de comparação">
-        <mxGraphModel dx="874" dy="820" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="960" pageHeight="1100" math="0" shadow="0">
-            <root>
-                <mxCell id="0"/>
-                <mxCell id="1" parent="0"/>
-                <mxCell id="b1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;" value="OpenDota&lt;br&gt;/proMatches, /publicMatches" vertex="1">
-                    <mxGeometry height="60" width="170" x="40" y="40" as="geometry"/>
-                </mxCell>
-                <mxCell id="b2" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" value="CollectBaselineHandler&lt;br&gt;1 partida por vez, até 300/dia" vertex="1">
-                    <mxGeometry height="60" width="200" x="280" y="40" as="geometry"/>
-                </mxCell>
-                <mxCell id="b3" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" value="Parser Go&lt;br&gt;+ RoleInference (pro)" vertex="1">
-                    <mxGeometry height="60" width="170" x="560" y="40" as="geometry"/>
-                </mxCell>
-                <mxCell id="b4" parent="1" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;size=12;fillColor=#fff2cc;strokeColor=#d6b656;" value="baseline_matches&lt;br&gt;baseline_metrics&lt;br&gt;(bruto, LOCAL)" vertex="1">
-                    <mxGeometry height="90" width="140" x="310" y="170" as="geometry"/>
-                </mxCell>
-                <mxCell id="b5" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" value="PublishBaselineHandler (a cada hora)&lt;br&gt;BaselineComparer.Distribute:&lt;br&gt;percentis 0..100 por herói × posição × métrica" vertex="1">
-                    <mxGeometry height="80" width="240" x="260" y="320" as="geometry"/>
-                </mxCell>
-                <mxCell id="b6" parent="1" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;size=12;fillColor=#fff2cc;strokeColor=#d6b656;" value="baseline_distributions&lt;br&gt;(local)" vertex="1">
-                    <mxGeometry height="80" width="140" x="100" y="460" as="geometry"/>
-                </mxCell>
-                <mxCell id="b7" parent="1" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;size=12;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="baseline_distributions&lt;br&gt;(Neon, espelho)" vertex="1">
-                    <mxGeometry height="80" width="140" x="520" y="460" as="geometry"/>
-                </mxCell>
-                <mxCell id="b8" parent="1" style="rounded=1;whiteSpace=wrap;html=1;" value="site local&lt;br&gt;localhost:8080" vertex="1">
-                    <mxGeometry height="50" width="140" x="100" y="600" as="geometry"/>
-                </mxCell>
-                <mxCell id="b9" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="produção (Render)&lt;br&gt;DistributionBaselineProvider" vertex="1">
-                    <mxGeometry height="50" width="180" x="500" y="600" as="geometry"/>
-                </mxCell>
-                <mxCell id="c1" edge="1" parent="1" source="b1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" target="b2" value="candidatas">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="c2" edge="1" parent="1" source="b2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" target="b3" value="métricas dos 10 heróis">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="c3" edge="1" parent="1" source="b2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" target="b4" value="grava">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="c4" edge="1" parent="1" source="b4" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" target="b5" value="lê">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="c5" edge="1" parent="1" source="b5" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" target="b6">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="c6" edge="1" parent="1" source="b5" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#d79b00;strokeWidth=2;" target="b7" value="poucos KB">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="c7" edge="1" parent="1" source="b8" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" target="b6" value="lê">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="c8" edge="1" parent="1" source="b9" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" target="b7" value="lê">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-            </root>
-        </mxGraphModel>
-    </diagram>
+    <diagram id="base" name="4. Base de comparação"><mxGraphModel dx="1040" dy="820" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1040" pageHeight="760" math="0" shadow="0"><root><mxCell id="0"/><mxCell id="1" parent="0"/>
+<mxCell id="b1" value="OpenDota&lt;br&gt;/proMatches · /publicMatches" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#9aa7b5;strokeWidth=2;" vertex="1" parent="1"><mxGeometry x="40" y="50" width="190" height="70" as="geometry"/></mxCell>
+<mxCell id="b2" value="&lt;b&gt;CollectBaselineHandler&lt;/b&gt;&lt;br&gt;1 partida por vez · até 300/dia" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;strokeWidth=2;" vertex="1" parent="1"><mxGeometry x="340" y="50" width="230" height="70" as="geometry"/></mxCell>
+<mxCell id="b3" value="Parser Go&lt;br&gt;+ RoleInference (profissionais)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;strokeWidth=2;" vertex="1" parent="1"><mxGeometry x="710" y="50" width="210" height="70" as="geometry"/></mxCell>
+<mxCell id="b4" value="baseline_matches&lt;br&gt;baseline_metrics&lt;br&gt;(bruto · local)" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;size=12;fillColor=#fff2cc;strokeColor=#d6b656;strokeWidth=2;" vertex="1" parent="1"><mxGeometry x="380" y="190" width="150" height="100" as="geometry"/></mxCell>
+<mxCell id="b5" value="&lt;b&gt;PublishBaselineHandler&lt;/b&gt; · de hora em hora&lt;br&gt;Calcula percentis por herói, posição e métrica" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;strokeWidth=2;" vertex="1" parent="1"><mxGeometry x="330" y="350" width="260" height="90" as="geometry"/></mxCell>
+<mxCell id="b6" value="baseline_distributions&lt;br&gt;(local)" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;size=12;fillColor=#fff2cc;strokeColor=#d6b656;strokeWidth=2;" vertex="1" parent="1"><mxGeometry x="130" y="510" width="160" height="90" as="geometry"/></mxCell>
+<mxCell id="b7" value="baseline_distributions&lt;br&gt;(Neon · espelho)" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;size=12;fillColor=#dae8fc;strokeColor=#6c8ebf;strokeWidth=2;" vertex="1" parent="1"><mxGeometry x="620" y="510" width="160" height="90" as="geometry"/></mxCell>
+<mxCell id="b8" value="Site local&lt;br&gt;localhost:8080" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#9aa7b5;strokeWidth=2;" vertex="1" parent="1"><mxGeometry x="130" y="650" width="160" height="60" as="geometry"/></mxCell>
+<mxCell id="b9" value="Produção · Render&lt;br&gt;DistributionBaselineProvider" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;strokeWidth=2;" vertex="1" parent="1"><mxGeometry x="610" y="650" width="180" height="60" as="geometry"/></mxCell>
+<mxCell id="c1" value="candidatas" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;html=1;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="b1" target="b2"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="c2" value="métricas dos 10 heróis" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;html=1;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="b2" target="b3"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="c3" value="grava" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;html=1;labelBackgroundColor=#ffffff;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="b2" target="b4"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="c4" value="lê" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;html=1;labelBackgroundColor=#ffffff;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="b4" target="b5"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="c5" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;html=1;exitX=0.2;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="b5" target="b6"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="c6" value="espelha · KB" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#d79b00;strokeWidth=2;html=1;labelBackgroundColor=#ffffff;exitX=0.8;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="b5" target="b7"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="c7" value="lê" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;html=1;labelBackgroundColor=#ffffff;exitX=0.5;exitY=0;entryX=0.5;entryY=1;" edge="1" parent="1" source="b8" target="b6"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="c8" value="lê" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeWidth=2;html=1;labelBackgroundColor=#ffffff;exitX=0.5;exitY=0;entryX=0.5;entryY=1;" edge="1" parent="1" source="b9" target="b7"><mxGeometry relative="1" as="geometry"/></mxCell>
+</root></mxGraphModel></diagram>
     <diagram id="login" name="5. Login Steam">
         <mxGraphModel dx="874" dy="820" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
             <root>
@@ -348,51 +222,19 @@
             </root>
         </mxGraphModel>
     </diagram>
-    <diagram id="banco" name="6. Banco de dados">
-        <mxGraphModel dx="950" dy="891" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
-            <root>
-                <mxCell id="0"/>
-                <mxCell id="1" parent="0"/>
-                <mxCell id="both" parent="1" style="swimlane;startSize=30;fillColor=#dae8fc;strokeColor=#6c8ebf;html=1;" value="Local e Neon (dado refinado)" vertex="1">
-                    <mxGeometry height="380" width="560" x="20" y="20" as="geometry"/>
-                </mxCell>
-                <mxCell id="d1" parent="both" style="rounded=0;whiteSpace=wrap;html=1;align=left;spacingLeft=6;" value="&lt;b&gt;matches&lt;/b&gt;&lt;br&gt;match_id (PK)&lt;br&gt;details jsonb, replay_url, saved_at" vertex="1">
-                    <mxGeometry height="70" width="240" x="20" y="50" as="geometry"/>
-                </mxCell>
-                <mxCell id="d2" parent="both" style="rounded=0;whiteSpace=wrap;html=1;align=left;spacingLeft=6;" value="&lt;b&gt;replay_analyses&lt;/b&gt;&lt;br&gt;match_id (PK), status&lt;br&gt;data jsonb (métricas, mortes, wards...)" vertex="1">
-                    <mxGeometry height="70" width="250" x="290" y="50" as="geometry"/>
-                </mxCell>
-                <mxCell id="d3" parent="both" style="rounded=0;whiteSpace=wrap;html=1;align=left;spacingLeft=6;" value="&lt;b&gt;catalog_entries&lt;/b&gt;&lt;br&gt;catalog + id (PK), name&lt;br&gt;details jsonb (itens)" vertex="1">
-                    <mxGeometry height="70" width="240" x="20" y="150" as="geometry"/>
-                </mxCell>
-                <mxCell id="d4" parent="both" style="rounded=0;whiteSpace=wrap;html=1;align=left;spacingLeft=6;" value="&lt;b&gt;baseline_distributions&lt;/b&gt;&lt;br&gt;hero_id + role + source (PK)&lt;br&gt;matches, distributions jsonb" vertex="1">
-                    <mxGeometry height="70" width="250" x="290" y="150" as="geometry"/>
-                </mxCell>
-                <mxCell id="d5" parent="both" style="rounded=0;whiteSpace=wrap;html=1;align=left;spacingLeft=6;" value="&lt;b&gt;player_searches&lt;/b&gt;&lt;br&gt;account_id (PK), contagem" vertex="1">
-                    <mxGeometry height="60" width="240" x="20" y="250" as="geometry"/>
-                </mxCell>
-                <mxCell id="d6" parent="both" style="rounded=0;whiteSpace=wrap;html=1;align=left;spacingLeft=6;" value="&lt;b&gt;data_protection_keys&lt;/b&gt;&lt;br&gt;chaves do cookie de login" vertex="1">
-                    <mxGeometry height="60" width="250" x="290" y="250" as="geometry"/>
-                </mxCell>
-                <mxCell id="local" parent="1" style="swimlane;startSize=30;fillColor=#e8f5e9;strokeColor=#82b366;html=1;" value="Só no banco local (bruto / pesado)" vertex="1">
-                    <mxGeometry height="380" width="300" x="620" y="20" as="geometry"/>
-                </mxCell>
-                <mxCell id="d7" parent="local" style="rounded=0;whiteSpace=wrap;html=1;align=left;spacingLeft=6;" value="&lt;b&gt;replay_documents&lt;/b&gt;&lt;br&gt;match_id (PK), document jsonb&lt;br&gt;~130 KB por partida" vertex="1">
-                    <mxGeometry height="70" width="260" x="20" y="50" as="geometry"/>
-                </mxCell>
-                <mxCell id="d8" parent="local" style="rounded=0;whiteSpace=wrap;html=1;align=left;spacingLeft=6;" value="&lt;b&gt;baseline_matches&lt;/b&gt;&lt;br&gt;match_id (PK), source, status, tried_at" vertex="1">
-                    <mxGeometry height="70" width="260" x="20" y="150" as="geometry"/>
-                </mxCell>
-                <mxCell id="d9" parent="local" style="rounded=0;whiteSpace=wrap;html=1;align=left;spacingLeft=6;" value="&lt;b&gt;baseline_metrics&lt;/b&gt;&lt;br&gt;match_id + hero_id (PK), role, source&lt;br&gt;metrics jsonb" vertex="1">
-                    <mxGeometry height="70" width="260" x="20" y="250" as="geometry"/>
-                </mxCell>
-                <mxCell id="r1" edge="1" parent="local" source="d8" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=ERmany;startArrow=ERone;" target="d9" value="1 → 10 heróis">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-                <mxCell id="r2" edge="1" parent="1" source="d9" style="edgeStyle=orthogonalEdgeStyle;html=1;dashed=1;strokeColor=#d79b00;" target="d4" value="publica (resumo)">
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>
-            </root>
-        </mxGraphModel>
-    </diagram>
+    <diagram id="banco" name="6. Banco de dados"><mxGraphModel dx="1000" dy="760" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1000" pageHeight="760" math="0" shadow="0"><root><mxCell id="0"/><mxCell id="1" parent="0"/>
+<mxCell id="both" value="Local e Neon · dados refinados" style="swimlane;startSize=34;rounded=1;fillColor=#f2f7ff;strokeColor=#6c8ebf;strokeWidth=2;fontStyle=1;html=1;" vertex="1" parent="1"><mxGeometry x="20" y="20" width="560" height="380" as="geometry"/></mxCell>
+<mxCell id="d1" value="&lt;b&gt;matches&lt;/b&gt;&lt;br&gt;match_id (PK)&lt;br&gt;details jsonb · replay_url · saved_at" style="rounded=1;whiteSpace=wrap;html=1;align=left;spacingLeft=8;fillColor=#ffffff;strokeColor=#9aa7b5;strokeWidth=1.5;" vertex="1" parent="both"><mxGeometry x="20" y="50" width="240" height="70" as="geometry"/></mxCell>
+<mxCell id="d2" value="&lt;b&gt;replay_analyses&lt;/b&gt;&lt;br&gt;match_id (PK) · status&lt;br&gt;data jsonb (métricas, mortes, wards…)" style="rounded=1;whiteSpace=wrap;html=1;align=left;spacingLeft=8;fillColor=#ffffff;strokeColor=#9aa7b5;strokeWidth=1.5;" vertex="1" parent="both"><mxGeometry x="290" y="50" width="250" height="70" as="geometry"/></mxCell>
+<mxCell id="d3" value="&lt;b&gt;catalog_entries&lt;/b&gt;&lt;br&gt;catalog + id (PK) · name&lt;br&gt;details jsonb (itens)" style="rounded=1;whiteSpace=wrap;html=1;align=left;spacingLeft=8;fillColor=#ffffff;strokeColor=#9aa7b5;strokeWidth=1.5;" vertex="1" parent="both"><mxGeometry x="20" y="150" width="240" height="70" as="geometry"/></mxCell>
+<mxCell id="d4" value="&lt;b&gt;baseline_distributions&lt;/b&gt;&lt;br&gt;hero_id + role + source (PK)&lt;br&gt;matches · distributions jsonb" style="rounded=1;whiteSpace=wrap;html=1;align=left;spacingLeft=8;fillColor=#ffffff;strokeColor=#9aa7b5;strokeWidth=1.5;" vertex="1" parent="both"><mxGeometry x="290" y="150" width="250" height="70" as="geometry"/></mxCell>
+<mxCell id="d5" value="&lt;b&gt;player_searches&lt;/b&gt;&lt;br&gt;account_id (PK) · contagem" style="rounded=1;whiteSpace=wrap;html=1;align=left;spacingLeft=8;fillColor=#ffffff;strokeColor=#9aa7b5;strokeWidth=1.5;" vertex="1" parent="both"><mxGeometry x="20" y="250" width="240" height="60" as="geometry"/></mxCell>
+<mxCell id="d6" value="&lt;b&gt;data_protection_keys&lt;/b&gt;&lt;br&gt;chaves do cookie de login" style="rounded=1;whiteSpace=wrap;html=1;align=left;spacingLeft=8;fillColor=#ffffff;strokeColor=#9aa7b5;strokeWidth=1.5;" vertex="1" parent="both"><mxGeometry x="290" y="250" width="250" height="60" as="geometry"/></mxCell>
+<mxCell id="local" value="Somente no banco local · bruto / pesado" style="swimlane;startSize=34;rounded=1;fillColor=#f3faf4;strokeColor=#82b366;strokeWidth=2;fontStyle=1;html=1;" vertex="1" parent="1"><mxGeometry x="620" y="20" width="300" height="380" as="geometry"/></mxCell>
+<mxCell id="d7" value="&lt;b&gt;replay_documents&lt;/b&gt;&lt;br&gt;match_id (PK) · document jsonb&lt;br&gt;~130 KB por partida" style="rounded=1;whiteSpace=wrap;html=1;align=left;spacingLeft=8;fillColor=#ffffff;strokeColor=#9aa7b5;strokeWidth=1.5;" vertex="1" parent="local"><mxGeometry x="20" y="50" width="260" height="70" as="geometry"/></mxCell>
+<mxCell id="d8" value="&lt;b&gt;baseline_matches&lt;/b&gt;&lt;br&gt;match_id (PK) · source · status · tried_at" style="rounded=1;whiteSpace=wrap;html=1;align=left;spacingLeft=8;fillColor=#ffffff;strokeColor=#9aa7b5;strokeWidth=1.5;" vertex="1" parent="local"><mxGeometry x="20" y="150" width="260" height="70" as="geometry"/></mxCell>
+<mxCell id="d9" value="&lt;b&gt;baseline_metrics&lt;/b&gt;&lt;br&gt;match_id + hero_id (PK) · role · source&lt;br&gt;metrics jsonb" style="rounded=1;whiteSpace=wrap;html=1;align=left;spacingLeft=8;fillColor=#ffffff;strokeColor=#9aa7b5;strokeWidth=1.5;" vertex="1" parent="local"><mxGeometry x="20" y="250" width="260" height="70" as="geometry"/></mxCell>
+<mxCell id="r1" value="1 partida → 10 heróis" style="edgeStyle=orthogonalEdgeStyle;rounded=1;strokeColor=#526579;strokeWidth=2;html=1;endArrow=classic;labelBackgroundColor=#ffffff;" edge="1" parent="local" source="d8" target="d9"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="publish-note" value="Publicação do resumo: baseline_metrics → baseline_distributions (local + Neon)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff9e6;strokeColor=#d6b656;strokeWidth=2;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="140" y="430" width="700" height="60" as="geometry"/></mxCell>
+</root></mxGraphModel></diagram>
 </mxfile>

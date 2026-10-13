@@ -86,14 +86,22 @@ public class GetMatchAnalysisHandler(
             Heatmaps: replay?.Heatmaps is { } heatmaps ? ToHeatmaps(heatmaps, match, currentPlayer, names) : null);
     }
 
-    // The parser samples positions every 2 s (replay-parser: timelines.positions).
-    private const int HeatmapSecondsPerSample = 2;
-
     private static HeatmapSet ToHeatmaps(
         IReadOnlyList<HeroHeatmap> heatmaps, MatchDetails match, MatchPlayer? player, NameLookup names)
     {
         static IReadOnlyList<int> Flat(IReadOnlyList<HeatCell> cells) =>
             cells.SelectMany(cell => new[] { cell.Column, cell.Row, cell.Samples }).ToList();
+
+        static PositionIndicatorsView? View(PositionIndicators? indicators) => indicators is null
+            ? null
+            : new PositionIndicatorsView(indicators.AliveSeconds, indicators.Advance, indicators.Coverage,
+                indicators.Concentration, indicators.EnemySide, indicators.NearAlly, indicators.Grouped);
+
+        static PhaseIndicators IndicatorsOf(HeroHeatmap heatmap, Team team) => new(
+            View(HeatmapIndicators.Calculate(heatmap, team)),
+            View(HeatmapIndicators.Calculate(heatmap, team, GamePhase.EarlyGame)),
+            View(HeatmapIndicators.Calculate(heatmap, team, GamePhase.MidGame)),
+            View(HeatmapIndicators.Calculate(heatmap, team, GamePhase.LateGame)));
 
         var heroes = heatmaps
             .Select(heatmap => (heatmap, hero: match.Players.FirstOrDefault(candidate => candidate.HeroId == heatmap.HeroId)))
@@ -106,9 +114,41 @@ public class GetMatchAnalysisHandler(
                 IsCurrentPlayer: player is not null && entry.heatmap.HeroId == player.HeroId,
                 EarlyGame: Flat(entry.heatmap.Phases.EarlyGame),
                 MidGame: Flat(entry.heatmap.Phases.MidGame),
-                LateGame: Flat(entry.heatmap.Phases.LateGame)))
+                LateGame: Flat(entry.heatmap.Phases.LateGame),
+                Indicators: IndicatorsOf(entry.heatmap, entry.hero.Team)))
             .ToList();
-        return new HeatmapSet(HeroHeatmap.GridSize, HeroHeatmap.MapMin, HeroHeatmap.MapMax, HeatmapSecondsPerSample, heroes);
+
+        // The average of the heroes that have the period (each indicator over the heroes that have it).
+        static PositionIndicatorsView? Average(IReadOnlyList<PositionIndicatorsView?> all)
+        {
+            var present = all.OfType<PositionIndicatorsView>().ToList();
+            if (present.Count == 0)
+            {
+                return null;
+            }
+
+            double? Mean(Func<PositionIndicatorsView, double?> value) =>
+                present.Select(value).OfType<double>().DefaultIfEmpty(double.NaN).Average() is var mean && double.IsNaN(mean)
+                    ? null
+                    : mean;
+            return new PositionIndicatorsView(
+                (int)Math.Round(present.Average(view => view.AliveSeconds)),
+                Mean(view => view.Advance)!.Value,
+                Mean(view => view.Coverage)!.Value,
+                Mean(view => view.Concentration)!.Value,
+                Mean(view => view.EnemySide)!.Value,
+                Mean(view => view.NearAlly),
+                Mean(view => view.Grouped));
+        }
+
+        var indicators = heroes.Select(hero => hero.Indicators!).ToList();
+        var matchAverage = new PhaseIndicators(
+            Average(indicators.Select(phases => phases.All).ToList()),
+            Average(indicators.Select(phases => phases.EarlyGame).ToList()),
+            Average(indicators.Select(phases => phases.MidGame).ToList()),
+            Average(indicators.Select(phases => phases.LateGame).ToList()));
+        return new HeatmapSet(
+            HeroHeatmap.GridSize, HeroHeatmap.MapMin, HeroHeatmap.MapMax, HeatmapIndicators.SecondsPerSample, heroes, matchAverage);
     }
 
     // The player's metrics against other players of the same hero and role (pro and high-rank matches), from the

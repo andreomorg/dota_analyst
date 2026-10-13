@@ -34,7 +34,11 @@ internal sealed record StoredReplayAnalysis(
 
 // Each phase as a flat list [column, row, samples, column, row, samples, ...]: a match's heatmaps are about 30
 // lists of a few hundred cells, and objects per cell would triple the size of the row.
-internal sealed record StoredHeatmap(int HeroId, IReadOnlyList<int> EarlyGame, IReadOnlyList<int> MidGame, IReadOnlyList<int> LateGame);
+// Proximity: [near, grouped] of the early, mid and late game, flat (6 numbers); absent in rows saved before it was
+// counted (the analysis is then outdated and parsed again).
+internal sealed record StoredHeatmap(
+    int HeroId, IReadOnlyList<int> EarlyGame, IReadOnlyList<int> MidGame, IReadOnlyList<int> LateGame,
+    IReadOnlyList<int>? Proximity = null);
 
 internal sealed record StoredHeroMetrics(
     int HeroId, Team Team, int Role, int Deaths, int IsolatedDeaths, int DeathsOnEnemySide, double EnemySideShare,
@@ -214,7 +218,8 @@ internal static class StoredReplayMappings
                 stored.Heatmaps?.Select(heatmap => heatmap is null
                         ? throw new InvalidDataException("A saved replay analysis has an empty heatmap.")
                         : new HeroHeatmap(heatmap.HeroId, new PerGamePhase<IReadOnlyList<HeatCell>>(
-                            ToCells(heatmap.EarlyGame), ToCells(heatmap.MidGame), ToCells(heatmap.LateGame))))
+                            ToCells(heatmap.EarlyGame), ToCells(heatmap.MidGame), ToCells(heatmap.LateGame)),
+                            ToProximity(heatmap.Proximity)))
                     .ToList());
         }
         catch (ArgumentException ex)
@@ -266,8 +271,20 @@ internal static class StoredReplayMappings
                 .ToList(),
             Heatmaps: analysis.Heatmaps?
                 .Select(heatmap => new StoredHeatmap(heatmap.HeroId, ToFlat(heatmap.Phases.EarlyGame),
-                    ToFlat(heatmap.Phases.MidGame), ToFlat(heatmap.Phases.LateGame)))
+                    ToFlat(heatmap.Phases.MidGame), ToFlat(heatmap.Phases.LateGame),
+                    heatmap.Proximity is { } proximity
+                        ? [proximity.EarlyGame.NearAlly, proximity.EarlyGame.Grouped, proximity.MidGame.NearAlly,
+                            proximity.MidGame.Grouped, proximity.LateGame.NearAlly, proximity.LateGame.Grouped]
+                        : null))
                 .ToList());
+
+    private static PerGamePhase<TeamProximity>? ToProximity(IReadOnlyList<int>? flat) => flat switch
+    {
+        null => null,
+        { Count: 6 } => new PerGamePhase<TeamProximity>(
+            new TeamProximity(flat[0], flat[1]), new TeamProximity(flat[2], flat[3]), new TeamProximity(flat[4], flat[5])),
+        _ => throw new InvalidDataException("A saved heatmap's proximity is not 6 numbers."),
+    };
 
     private static List<int> ToFlat(IReadOnlyList<HeatCell> cells) =>
         cells.SelectMany(cell => new[] { cell.Column, cell.Row, cell.Samples }).ToList();

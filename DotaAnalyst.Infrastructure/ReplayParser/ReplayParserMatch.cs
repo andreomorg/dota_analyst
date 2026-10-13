@@ -230,7 +230,18 @@ internal static class ReplayParserMappings
 
         return new ReplayAnalysis(
             matchId, endsAt, laningStats, timeline, deaths, wards, damage, purchases, mapObjectives, metrics,
-            positions.Select(HeroHeatmap.FromPositions).ToList());
+            positions.Select(hero => HeroHeatmap.FromPositions(hero, AlliesOf(hero))).ToList());
+
+        // The positions of the hero's teammates (the laning stats say each hero's team).
+        IReadOnlyList<HeroPositions> AlliesOf(HeroPositions hero)
+        {
+            var team = laningStats.FirstOrDefault(player => player.HeroId == hero.HeroId)?.Team;
+            return positions
+                .Where(other => other.HeroId != hero.HeroId
+                    && team is not null
+                    && laningStats.FirstOrDefault(player => player.HeroId == other.HeroId)?.Team == team)
+                .ToList();
+        }
     }
 
     // [t, x, y] -> a position sample.

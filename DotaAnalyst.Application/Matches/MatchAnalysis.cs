@@ -55,7 +55,29 @@ public record MatchAnalysis(
 /// <param name="MapMax">Map coordinate of the grid's east and north edges.</param>
 /// <param name="SecondsPerSample">About how many seconds of game each sample stands for.</param>
 /// <param name="Heroes">One heatmap per hero, Radiant first.</param>
-public record HeatmapSet(int GridSize, int MapMin, int MapMax, int SecondsPerSample, IReadOnlyList<HeroHeatmapView> Heroes);
+/// <param name="MatchAverage">The average of the ten heroes' indicators, per phase.</param>
+public record HeatmapSet(
+    int GridSize, int MapMin, int MapMax, int SecondsPerSample, IReadOnlyList<HeroHeatmapView> Heroes,
+    PhaseIndicators? MatchAverage = null);
+
+/// <summary>Where and how a hero played, from its heatmap: the whole match and each phase.</summary>
+/// <param name="All">The whole match; null when the hero has no samples.</param>
+/// <param name="EarlyGame">0-10 minutes; null without samples there.</param>
+/// <param name="MidGame">10-20 minutes; null without samples there.</param>
+/// <param name="LateGame">From 20 minutes on; null without samples there.</param>
+public record PhaseIndicators(
+    PositionIndicatorsView? All, PositionIndicatorsView? EarlyGame, PositionIndicatorsView? MidGame, PositionIndicatorsView? LateGame);
+
+/// <summary>Position indicators of one hero in one period.</summary>
+/// <param name="AliveSeconds">Time alive with a known position, in seconds.</param>
+/// <param name="Advance">How far forward on average, from the own fountain (0) to the enemy's (1); the river is about 0.5.</param>
+/// <param name="Coverage">Share of the playable map the hero stood in (cells of about 590 units, at least 4 s in each).</param>
+/// <param name="Concentration">Share of the time in the 5 most visited cells.</param>
+/// <param name="EnemySide">Share of the time past the river, on the enemy's side.</param>
+/// <param name="NearAlly">Share of the time with at least one ally hero within 1500 units; null for older analyses.</param>
+/// <param name="Grouped">Share of the time with at least two ally heroes within 1500 units; null for older analyses.</param>
+public record PositionIndicatorsView(
+    int AliveSeconds, double Advance, double Coverage, double Concentration, double EnemySide, double? NearAlly, double? Grouped);
 
 /// <summary>The heatmap of one hero. Each phase is a flat list of [column, row, samples] triples, only for the cells the hero was in.</summary>
 /// <param name="HeroId">Hero, as OpenDota's hero ID.</param>
@@ -65,6 +87,7 @@ public record HeatmapSet(int GridSize, int MapMin, int MapMax, int SecondsPerSam
 /// <param name="EarlyGame">0-10 minutes.</param>
 /// <param name="MidGame">10-20 minutes.</param>
 /// <param name="LateGame">From 20 minutes on.</param>
+/// <param name="Indicators">Where and how the hero played (advance, coverage, allies close by…), per phase.</param>
 public record HeroHeatmapView(
     int HeroId,
     string HeroName,
@@ -72,7 +95,8 @@ public record HeroHeatmapView(
     bool IsCurrentPlayer,
     IReadOnlyList<int> EarlyGame,
     IReadOnlyList<int> MidGame,
-    IReadOnlyList<int> LateGame);
+    IReadOnlyList<int> LateGame,
+    PhaseIndicators? Indicators = null);
 
 /// <summary>One of the ten players of the match.</summary>
 /// <param name="AccountId">Dota account ID; null for players with an anonymous profile.</param>

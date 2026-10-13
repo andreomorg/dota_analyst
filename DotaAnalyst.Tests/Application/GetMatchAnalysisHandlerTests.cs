@@ -310,7 +310,8 @@ public class GetMatchAnalysisHandlerTests
     public async Task Heatmaps_Ready_EveryHeroRadiantFirst_AsFlatTriples()
     {
         static HeroHeatmap Heatmap(int heroId, params HeatCell[] early) =>
-            new(heroId, new PerGamePhase<IReadOnlyList<HeatCell>>(early, [], [new HeatCell(16, 16, 3)]));
+            new(heroId, new PerGamePhase<IReadOnlyList<HeatCell>>(early, [], [new HeatCell(16, 16, 3)]),
+                new PerGamePhase<TeamProximity>(new TeamProximity(early.Sum(cell => cell.Samples), 0), default, default));
         var players = new[]
         {
             ReplayBuilder.Hero(31, Team.Radiant, Lane.Bottom), ReplayBuilder.Hero(5, Team.Radiant, Lane.Bottom),
@@ -333,6 +334,14 @@ public class GetMatchAnalysisHandlerTests
         Assert.Equal([5, 25, 4, 6, 25, 1], heatmaps.Heroes[0].EarlyGame);
         Assert.Equal([16, 16, 3], heatmaps.Heroes[0].LateGame);
         Assert.Empty(heatmaps.Heroes[1].MidGame);
+
+        // Indicators per phase: 5 early samples (10 s), all with an ally close by; no mid game.
+        var mine = heatmaps.Heroes[0].Indicators!;
+        Assert.Equal((10, 1.0), (mine.EarlyGame!.AliveSeconds, mine.EarlyGame.NearAlly!.Value));
+        Assert.Null(mine.MidGame);
+        Assert.Equal(16, mine.All!.AliveSeconds);
+        // The match average of the two heroes in the match.
+        Assert.Equal((10 + 18) / 2, heatmaps.MatchAverage!.EarlyGame!.AliveSeconds);
     }
 
     [Fact]

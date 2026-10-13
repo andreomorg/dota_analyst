@@ -267,7 +267,7 @@ public class GetMatchAnalysisHandlerTests
                 new WardPlacement(WardKind.Sentry, Team.Dire, 28, 100, 200, 700, 760, destroyed: true, 31),
                 new WardPlacement(WardKind.Observer, Team.Radiant, 31, -3000, 1500, -60, null, destroyed: false, null),
             ],
-            damage: [], purchases: [], objectives: []);
+            damage: [], purchases: [], objectives: [], metrics: []);
         var handler = CreateHandler(
             UnparsedMatchWithMe(), new FakeReplayAnalysisRepository(SavedReplayAnalysis.Ready(replay, Now)));
 
@@ -302,7 +302,7 @@ public class GetMatchAnalysisHandlerTests
         };
         return new ReplayAnalysis(
             MatchIdOf(10), ReplayAnalysis.LaningPhaseEndsAtSeconds, players, ReplayBuilder.Timeline(players), deaths,
-            wards: [], damage, purchases: [], objectives: []);
+            wards: [], damage, purchases: [], objectives: [], metrics: []);
     }
 
     [Fact]
@@ -379,7 +379,7 @@ public class GetMatchAnalysisHandlerTests
                 new ItemPurchase(31, 1000, "recipe_black_king_bar"),
                 new ItemPurchase(31, 1003, "black_king_bar"), // logged when the parts came together
             ],
-            objectives: []);
+            objectives: [], metrics: []);
         var items = new[]
         {
             new Item(44, "Tango") { Details = new ItemDetails("tango", 90, [], isConsumable: true) },
@@ -412,7 +412,8 @@ public class GetMatchAnalysisHandlerTests
             [
                 new MapObjective(ObjectiveKind.Roshan, 1300, Team.Radiant, 31, aegisHeroId: 31),
                 new MapObjective(ObjectiveKind.Tower, 680, Team.Dire, 28, Team.Radiant, towerTier: 1, lane: Lane.Bottom),
-            ]);
+            ],
+            metrics: []);
         var handler = CreateHandler(
             UnparsedMatchWithMe(), new FakeReplayAnalysisRepository(SavedReplayAnalysis.Ready(replay, Now)));
 
@@ -426,6 +427,48 @@ public class GetMatchAnalysisHandlerTests
                     Lane: null, MeleeBarracks: null, Denied: false, "Lich", "Lich"),
             ],
             objectives);
+    }
+
+    private static HeroMetrics HeroMetricsOf(int heroId, Team team, int role, int isolatedDeaths = 0, int deaths = 2) =>
+        new(heroId, team, role, deaths, isolatedDeaths, 0, 0.2, 0.02, 2000, null, 10, 0.2, 0, 0, null, 0, 0);
+
+    [Fact]
+    public async Task SmartStats_ComparedWithTheEnemyOfTheSameRole()
+    {
+        var players = new[] { ReplayBuilder.Hero(31, Team.Radiant, Lane.Bottom), ReplayBuilder.Hero(28, Team.Dire, Lane.Bottom) };
+        var replay = new ReplayAnalysis(
+            MatchIdOf(10), ReplayAnalysis.LaningPhaseEndsAtSeconds, players, ReplayBuilder.Timeline(players), deaths: [],
+            wards: [], damage: [], purchases: [], objectives: [],
+            metrics:
+            [
+                HeroMetricsOf(31, Team.Radiant, role: 5, isolatedDeaths: 3, deaths: 5),
+                HeroMetricsOf(2, Team.Dire, role: 1),
+                HeroMetricsOf(28, Team.Dire, role: 5, isolatedDeaths: 1, deaths: 3),
+            ]);
+        var handler = CreateHandler(
+            UnparsedMatchWithMe(), new FakeReplayAnalysisRepository(SavedReplayAnalysis.Ready(replay, Now)));
+
+        var stats = (await handler.HandleAsync(MatchIdOf(10), Me, CancellationToken.None))!.SmartStats;
+
+        Assert.NotNull(stats);
+        Assert.Equal((5, 28, GetMatchAnalysisHandler.UnknownHeroName), (stats.Role, stats.CounterpartHeroId, stats.CounterpartHeroName));
+        Assert.Equal((5, 3), (stats.Player.Deaths, stats.Counterpart.Deaths));
+        Assert.Equal(10.0 / 3, stats.MatchAverage.Deaths, precision: 6);
+        Assert.Null(stats.MatchAverage.NetWorthAt20);
+        Assert.Equal([new InsightSummary(InsightKind.IsolatedDeaths, 3, 1)], stats.Insights);
+    }
+
+    [Fact]
+    public async Task SmartStats_WithoutRoleQueue_IsNull()
+    {
+        var replay = ReplayBuilder.Analysis(10, ReplayBuilder.Hero(31, Team.Radiant, Lane.Bottom)); // metrics: []
+        var handler = CreateHandler(
+            UnparsedMatchWithMe(), new FakeReplayAnalysisRepository(SavedReplayAnalysis.Ready(replay, Now)));
+
+        var analysis = await handler.HandleAsync(MatchIdOf(10), Me, CancellationToken.None);
+
+        Assert.Equal(ReplayStatus.Ready, analysis!.ReplayStatus);
+        Assert.Null(analysis.SmartStats);
     }
 
     [Fact]

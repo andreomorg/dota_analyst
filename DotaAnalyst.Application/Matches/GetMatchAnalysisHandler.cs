@@ -78,8 +78,60 @@ public class GetMatchAnalysisHandler(
             ItemBuild: replay?.Purchases is { } purchases && currentPlayer is not null
                 ? ToItemBuild(purchases, currentPlayer, itemsTask.Result)
                 : null,
-            Objectives: replay?.Objectives is { } objectives ? ToObjectives(objectives, currentPlayer, names) : null);
+            Objectives: replay?.Objectives is { } objectives ? ToObjectives(objectives, currentPlayer, names) : null,
+            SmartStats: replay?.Metrics is { } metrics && currentPlayer is not null
+                ? ToSmartStats(metrics, currentPlayer, names)
+                : null);
     }
+
+    // Null without metrics for the player or an enemy of the same role (a match without role queue has none).
+    private static SmartStats? ToSmartStats(IReadOnlyList<HeroMetrics> metrics, MatchPlayer player, NameLookup names)
+    {
+        if (metrics.FirstOrDefault(hero => hero.HeroId == player.HeroId) is not { } mine
+            || metrics.FirstOrDefault(hero => hero.Team != mine.Team && hero.Role == mine.Role) is not { } counterpart)
+        {
+            return null;
+        }
+
+        // Over the heroes that have the number (no net worth at 20:00 in a shorter match).
+        static double? Average(IEnumerable<int?> values)
+        {
+            var known = values.OfType<int>().ToList();
+            return known.Count == 0 ? null : known.Average();
+        }
+
+        var matchAverage = new MetricsSummary(
+            Deaths: metrics.Average(hero => hero.Deaths),
+            IsolatedDeaths: metrics.Average(hero => hero.IsolatedDeaths),
+            DeathsOnEnemySide: metrics.Average(hero => hero.DeathsOnEnemySide),
+            EnemySideShare: metrics.Average(hero => hero.EnemySideShare),
+            AloneOnEnemySideShare: metrics.Average(hero => hero.AloneOnEnemySideShare),
+            NetWorthAt10: Average(metrics.Select(hero => hero.NetWorthAt10)),
+            NetWorthAt20: Average(metrics.Select(hero => hero.NetWorthAt20)),
+            LastHitsAt10: metrics.Average(hero => hero.LastHitsAt10),
+            NetWorthShare: metrics.Average(hero => hero.NetWorthShare),
+            ObserversPlaced: metrics.Average(hero => hero.ObserversPlaced),
+            SentriesPlaced: metrics.Average(hero => hero.SentriesPlaced),
+            ObserverAverageLifetimeSeconds: Average(metrics.Select(hero => hero.ObserverAverageLifetimeSeconds)),
+            WardsLostToEnemy: metrics.Average(hero => hero.WardsLostToEnemy),
+            EnemyWardsDestroyed: metrics.Average(hero => hero.EnemyWardsDestroyed));
+
+        return new SmartStats(
+            Role: mine.Role,
+            CounterpartHeroId: counterpart.HeroId,
+            CounterpartHeroName: names.Hero(counterpart.HeroId),
+            Player: ToSummary(mine),
+            Counterpart: ToSummary(counterpart),
+            MatchAverage: matchAverage,
+            Insights: InsightGenerator.Generate(mine, counterpart)
+                .Select(insight => new InsightSummary(insight.Kind, insight.Value, insight.Counterpart))
+                .ToList());
+    }
+
+    private static MetricsSummary ToSummary(HeroMetrics hero) =>
+        new(hero.Deaths, hero.IsolatedDeaths, hero.DeathsOnEnemySide, hero.EnemySideShare, hero.AloneOnEnemySideShare,
+            hero.NetWorthAt10, hero.NetWorthAt20, hero.LastHitsAt10, hero.NetWorthShare, hero.ObserversPlaced,
+            hero.SentriesPlaced, hero.ObserverAverageLifetimeSeconds, hero.WardsLostToEnemy, hero.EnemyWardsDestroyed);
 
     private static IReadOnlyList<MapObjectiveSummary> ToObjectives(
         IReadOnlyList<MapObjective> objectives, MatchPlayer? player, NameLookup names) =>

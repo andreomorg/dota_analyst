@@ -39,7 +39,7 @@ public class ReplayParserClientTests
             { "player": 5, "netWorth": [600,800,1000,1200,1400,1600,1800,2000,2200,2400,3500,3600],
               "xp": [0,150,300,450,600,750,900,1050,1200,1350,2800,2900], "lastHits": [0,3,6,9,12,15,18,21,24,27,40,41],
               "denies": [0,0,0,0,0,0,0,0,0,0,0,0], "deaths": [0,0,0,0,0,0,0,0,0,0,0,0] }
-          ] },
+          ], "positionIntervalSeconds": 2, "positions": [] },
           "laning": {{laning ?? """{ "endsAtSeconds": 600, "lanes": [ { "player": 0, "lane": "bottom" }, { "player": 5, "lane": "jungle" } ] }"""}},
           "kills": [],
           "vision": { "wards": [] },
@@ -237,6 +237,37 @@ public class ReplayParserClientTests
                 new MapObjective(ObjectiveKind.Ancient, 1906, Team.Dire, 28, Team.Radiant),
             ],
             analysis.Objectives);
+    }
+
+    [Fact]
+    public async Task Parse_WithRolesAndPositions_ComputesTheMetrics()
+    {
+        var body = MatchJson()
+            .Replace("\"name\": \"me\" }", "\"name\": \"me\", \"role\": 1 }")
+            .Replace("{ \"player\": 5, \"heroId\": 28, \"team\": \"dire\" }", "{ \"player\": 5, \"heroId\": 28, \"team\": \"dire\", \"role\": 1 }")
+            .Replace("\"positions\": []", """
+                "positions": [
+                  { "player": 0, "samples": [ [0, -4000, -4000], [2, 5000, 5000.4] ] },
+                  { "player": 5, "samples": [ [0, 4000, 4000] ] }
+                ]
+                """);
+
+        var analysis = await CreateClient(new FakeParser(Json(HttpStatusCode.OK, body, "application/json")))
+            .ParseAsync(Match, ReplayUrl, CancellationToken.None);
+
+        var me = Assert.Single(analysis.Metrics!, hero => hero.HeroId == 31);
+        Assert.Equal((1, 0.5, 2900), (me.Role, me.EnemySideShare, me.NetWorthAt10));
+    }
+
+    [Fact]
+    public async Task Parse_WithoutRoleQueue_HasNoMetrics()
+    {
+        var analysis = await CreateClient(new FakeParser(Json(HttpStatusCode.OK, MatchJson(), "application/json")))
+            .ParseAsync(Match, ReplayUrl, CancellationToken.None);
+
+        Assert.NotNull(analysis.Metrics);
+        Assert.Empty(analysis.Metrics);
+        Assert.False(analysis.IsOutdated);
     }
 
     [Fact]

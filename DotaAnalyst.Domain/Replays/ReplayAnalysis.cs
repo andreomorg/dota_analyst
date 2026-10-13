@@ -1,3 +1,4 @@
+using DotaAnalyst.Domain.Analysis;
 using DotaAnalyst.Domain.Matches;
 
 namespace DotaAnalyst.Domain.Replays;
@@ -18,7 +19,8 @@ public record ReplayAnalysis
         IReadOnlyList<WardPlacement>? wards = null,
         IReadOnlyList<DamageRow>? damage = null,
         IReadOnlyList<ItemPurchase>? purchases = null,
-        IReadOnlyList<MapObjective>? objectives = null)
+        IReadOnlyList<MapObjective>? objectives = null,
+        IReadOnlyList<HeroMetrics>? metrics = null)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(matchId.Value, nameof(matchId));
         ArgumentOutOfRangeException.ThrowIfNegative(endsAtSeconds);
@@ -71,7 +73,17 @@ public record ReplayAnalysis
         }
 
         Objectives = objectives?.OrderBy(objective => objective.Seconds).ToList();
+        if (metrics is not null && metrics.Any(hero => hero is null))
+        {
+            throw new ArgumentException("A replay analysis can't have empty metrics.", nameof(metrics));
+        }
+
+        Metrics = metrics?.ToList();
     }
+
+    // The metrics of every hero (MatchMetricsCalculator); empty for a match without role queue (Turbo, unranked: no
+    // metrics, by choice), null for analyses made before metrics existed.
+    public IReadOnlyList<HeroMetrics>? Metrics { get; }
 
     // Buildings that fell and Roshan/Tormentor kills, in time order; null for analyses made before they were read.
     public IReadOnlyList<MapObjective>? Objectives { get; }
@@ -94,7 +106,8 @@ public record ReplayAnalysis
     // Made before everything the analysis page shows was read from the replay: worth parsing again.
     // (Analyses without damage were also read before deaths had assists.)
     public bool IsOutdated =>
-        Timeline is null || Deaths is null || Wards is null || Damage is null || Purchases is null || Objectives is null;
+        Timeline is null || Deaths is null || Wards is null || Damage is null || Purchases is null || Objectives is null
+        || Metrics is null;
 
     public MatchId MatchId { get; }
 

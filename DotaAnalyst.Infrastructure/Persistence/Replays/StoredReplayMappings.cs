@@ -1,3 +1,4 @@
+using DotaAnalyst.Domain.Analysis;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using DotaAnalyst.Application.Abstractions;
@@ -25,7 +26,15 @@ internal sealed record StoredReplayAnalysis(
     // Added in sprint 15, the same way.
     IReadOnlyList<StoredItemPurchase>? Purchases = null,
     // Added in sprint 16, the same way.
-    IReadOnlyList<StoredMapObjective>? Objectives = null);
+    IReadOnlyList<StoredMapObjective>? Objectives = null,
+    // Added in sprint 17, the same way (empty: a match without role queue).
+    IReadOnlyList<StoredHeroMetrics>? Metrics = null);
+
+internal sealed record StoredHeroMetrics(
+    int HeroId, Team Team, int Role, int Deaths, int IsolatedDeaths, int DeathsOnEnemySide, double EnemySideShare,
+    double AloneOnEnemySideShare, int? NetWorthAt10, int? NetWorthAt20, int LastHitsAt10, double NetWorthShare,
+    int ObserversPlaced, int SentriesPlaced, int? ObserverAverageLifetimeSeconds, int WardsLostToEnemy,
+    int EnemyWardsDestroyed);
 
 internal sealed record StoredMapObjective(
     ObjectiveKind Kind, int Seconds, Team TakenBy, int? KillerHeroId, Team? Owner, int? TowerTier, Lane? Lane,
@@ -162,6 +171,14 @@ internal static class StoredReplayMappings
                         : new MapObjective(objective.Kind, objective.Seconds, objective.TakenBy, objective.KillerHeroId,
                             objective.Owner, objective.TowerTier, objective.Lane, objective.MeleeBarracks, objective.Denied,
                             objective.AegisHeroId))
+                    .ToList(),
+                stored.Metrics?.Select(hero => hero is null
+                        ? throw new InvalidDataException("A saved replay analysis has empty metrics.")
+                        : new HeroMetrics(hero.HeroId, hero.Team, hero.Role, hero.Deaths, hero.IsolatedDeaths,
+                            hero.DeathsOnEnemySide, hero.EnemySideShare, hero.AloneOnEnemySideShare, hero.NetWorthAt10,
+                            hero.NetWorthAt20, hero.LastHitsAt10, hero.NetWorthShare, hero.ObserversPlaced,
+                            hero.SentriesPlaced, hero.ObserverAverageLifetimeSeconds, hero.WardsLostToEnemy,
+                            hero.EnemyWardsDestroyed))
                     .ToList());
         }
         catch (ArgumentException ex)
@@ -207,5 +224,11 @@ internal static class StoredReplayMappings
                 .Select(objective => new StoredMapObjective(objective.Kind, objective.Seconds, objective.TakenBy,
                     objective.KillerHeroId, objective.Owner, objective.TowerTier, objective.Lane, objective.MeleeBarracks,
                     objective.Denied, objective.AegisHeroId))
+                .ToList(),
+            Metrics: analysis.Metrics?
+                .Select(hero => new StoredHeroMetrics(hero.HeroId, hero.Team, hero.Role, hero.Deaths, hero.IsolatedDeaths,
+                    hero.DeathsOnEnemySide, hero.EnemySideShare, hero.AloneOnEnemySideShare, hero.NetWorthAt10,
+                    hero.NetWorthAt20, hero.LastHitsAt10, hero.NetWorthShare, hero.ObserversPlaced, hero.SentriesPlaced,
+                    hero.ObserverAverageLifetimeSeconds, hero.WardsLostToEnemy, hero.EnemyWardsDestroyed))
                 .ToList());
 }

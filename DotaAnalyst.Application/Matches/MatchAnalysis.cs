@@ -23,6 +23,7 @@ namespace DotaAnalyst.Application.Matches;
 /// <param name="Damage">The player's damage to and from enemy heroes and by ability/item, read from the replay; null unless replayStatus is ready and the player is in the match.</param>
 /// <param name="Fights">The teamfights of the match (3+ deaths at most 15 s apart), in time order, with the player's part; null unless replayStatus is ready.</param>
 /// <param name="Objectives">Towers, barracks and Ancients that fell and Roshan/Tormentor kills of both teams, read from the replay, in time order (the buildings of the base besides towers 4 left out); null unless replayStatus is ready.</param>
+/// <param name="SmartStats">Numbers that show where the player could improve (positioning, economy, vision), compared with the enemy of the same role and the match average, and what to improve; null unless replayStatus is ready and the player is in the match, and for matches without role queue (Turbo, unranked).</param>
 /// <param name="ItemBuild">The player's starting items and when each item of the build was ready (approximate: items sold or given away still count); null unless replayStatus is ready and the player is in the match, or when the item catalog is unavailable.</param>
 public record MatchAnalysis(
     long MatchId,
@@ -43,7 +44,8 @@ public record MatchAnalysis(
     PlayerDamage? Damage = null,
     IReadOnlyList<FightSummary>? Fights = null,
     PlayerItemBuild? ItemBuild = null,
-    IReadOnlyList<MapObjectiveSummary>? Objectives = null);
+    IReadOnlyList<MapObjectiveSummary>? Objectives = null,
+    SmartStats? SmartStats = null);
 
 /// <summary>One of the ten players of the match.</summary>
 /// <param name="AccountId">Dota account ID; null for players with an anonymous profile.</param>
@@ -307,3 +309,57 @@ public record MapObjectiveSummary(
     bool Denied,
     string? KillerHeroName,
     string? AegisHeroName);
+
+/// <summary>The player's numbers that show where to improve, compared within the match.</summary>
+/// <param name="Role">The player's role-queue position, 1 (carry) to 5 (hard support).</param>
+/// <param name="CounterpartHeroId">The enemy hero of the same role.</param>
+/// <param name="CounterpartHeroName">Its name, or "Unknown hero".</param>
+/// <param name="Player">The player's numbers.</param>
+/// <param name="Counterpart">The numbers of the enemy of the same role.</param>
+/// <param name="MatchAverage">The average of the ten heroes.</param>
+/// <param name="Insights">What to improve (positioning, then economy, then vision); empty when nothing stands out.</param>
+public record SmartStats(
+    int Role,
+    int CounterpartHeroId,
+    string CounterpartHeroName,
+    MetricsSummary Player,
+    MetricsSummary Counterpart,
+    MetricsSummary MatchAverage,
+    IReadOnlyList<InsightSummary> Insights);
+
+/// <summary>A hero's numbers (or the match average) for the smart stats.</summary>
+/// <param name="Deaths">Deaths (Aegis deaths included).</param>
+/// <param name="IsolatedDeaths">Deaths with no ally hero within 1500 map units.</param>
+/// <param name="DeathsOnEnemySide">Deaths on the enemy's side of the map (past the river).</param>
+/// <param name="EnemySideShare">Share (0..1) of the time alive from 0:00 on the enemy's side; mostly shows which team was winning.</param>
+/// <param name="AloneOnEnemySideShare">Share (0..1) of the time alive on the enemy's side with no ally nearby.</param>
+/// <param name="NetWorthAt10">Net worth at 10:00; null when the match ended before.</param>
+/// <param name="NetWorthAt20">Net worth at 20:00; null when the match ended before.</param>
+/// <param name="LastHitsAt10">Last hits at the end of the laning phase.</param>
+/// <param name="NetWorthShare">Share (0..1) of the team's net worth at the end.</param>
+/// <param name="ObserversPlaced">Observer wards placed.</param>
+/// <param name="SentriesPlaced">Sentry wards placed.</param>
+/// <param name="ObserverAverageLifetimeSeconds">How long the observers lived on average (360 at most); null without observers.</param>
+/// <param name="WardsLostToEnemy">Own wards the enemy destroyed.</param>
+/// <param name="EnemyWardsDestroyed">Enemy wards destroyed.</param>
+public record MetricsSummary(
+    double Deaths,
+    double IsolatedDeaths,
+    double DeathsOnEnemySide,
+    double EnemySideShare,
+    double AloneOnEnemySideShare,
+    double? NetWorthAt10,
+    double? NetWorthAt20,
+    double LastHitsAt10,
+    double NetWorthShare,
+    double ObserversPlaced,
+    double SentriesPlaced,
+    double? ObserverAverageLifetimeSeconds,
+    double WardsLostToEnemy,
+    double EnemyWardsDestroyed);
+
+/// <summary>Something to improve, with the numbers behind it.</summary>
+/// <param name="Kind">isolatedDeaths, aloneOnEnemySide, behindAtTen, fewObservers or shortObserverLife.</param>
+/// <param name="Value">The player's number (deaths, share 0..1, net worth, observers or seconds).</param>
+/// <param name="Counterpart">The same number for the enemy of the same role; null when there is none.</param>
+public record InsightSummary(InsightKind Kind, double Value, double? Counterpart);

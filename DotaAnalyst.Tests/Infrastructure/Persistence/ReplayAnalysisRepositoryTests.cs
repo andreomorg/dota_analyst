@@ -1,3 +1,4 @@
+using DotaAnalyst.Domain.Analysis;
 using DotaAnalyst.Application.Abstractions;
 using DotaAnalyst.Domain.Matches;
 using DotaAnalyst.Domain.Replays;
@@ -73,6 +74,10 @@ public class ReplayAnalysisRepositoryTests(PostgresFixture postgres) : IAsyncLif
                 new MapObjective(ObjectiveKind.Tower, 680, Team.Dire, 28, Team.Radiant, towerTier: 2, lane: Lane.Middle),
                 new MapObjective(ObjectiveKind.Barracks, 1668, Team.Dire, null, Team.Radiant, lane: Lane.Bottom, meleeBarracks: true),
                 new MapObjective(ObjectiveKind.Roshan, 1300, Team.Radiant, 31, aegisHeroId: 31),
+            ],
+            metrics:
+            [
+                new HeroMetrics(31, Team.Radiant, 5, 4, 2, 1, 0.31, 0.12, 2900, null, 12, 0.18, 9, 6, 287, 3, 4),
             ]);
         var repository = CreateRepository();
 
@@ -83,6 +88,7 @@ public class ReplayAnalysisRepositoryTests(PostgresFixture postgres) : IAsyncLif
         Assert.Equal(analysis.Damage, found?.Analysis?.Damage);
         Assert.Equal(analysis.Purchases, found?.Analysis?.Purchases);
         Assert.Equal(analysis.Objectives, found?.Analysis?.Objectives);
+        Assert.Equal(analysis.Metrics, found?.Analysis?.Metrics);
     }
 
     [Fact]

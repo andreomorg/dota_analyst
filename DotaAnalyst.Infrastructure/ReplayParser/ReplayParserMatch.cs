@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using DotaAnalyst.Domain.Analysis;
 using DotaAnalyst.Domain.Matches;
 using DotaAnalyst.Domain.Replays;
 
@@ -61,9 +62,14 @@ internal sealed record ReplayParserDamage(
 
 internal sealed record ReplayParserMatchInfo(double? DurationSeconds);
 
-internal sealed record ReplayParserMatchPlayer(int? Player, int? HeroId, string? Team);
+// role: role-queue position 1-5; null without role queue (Turbo, unranked).
+internal sealed record ReplayParserMatchPlayer(int? Player, int? HeroId, string? Team, int? Role);
 
-internal sealed record ReplayParserTimelines(IReadOnlyList<ReplayParserPlayerMinutes?>? PerMinute);
+internal sealed record ReplayParserTimelines(
+    IReadOnlyList<ReplayParserPlayerMinutes?>? PerMinute, IReadOnlyList<ReplayParserPlayerPositions?>? Positions);
+
+// One player's hero positions as [t, x, y] tuples (JSON arrays, read one by one in the mapping), while alive.
+internal sealed record ReplayParserPlayerPositions(int? Player, IReadOnlyList<JsonElement>? Samples);
 
 // One value per point: every minute of the game clock from 0:00, then the end of the match.
 internal sealed record ReplayParserPlayerMinutes(
@@ -195,9 +201,34 @@ internal static class ReplayParserMappings
                 .Select(kill => ToCreatureObjective(ObjectiveKind.Tormentor, kill ?? throw Empty("tormentor"), HeroOfPlayer)))
             .ToList();
 
+        var timeline = new MatchTimeline(Seconds(count, duration), heroes);
+        var positions = Required(response.Timelines?.Positions, "timelines.positions")
+            .Select(entry => entry ?? throw Empty("positions entry"))
+            .Select(entry => new HeroPositions(
+                HeroOfPlayer(entry.Player ?? throw Missing("positions.player"))!.Value,
+                Required(entry.Samples, "positions.samples").Select(ToPositionSample).ToList()))
+            .ToList();
+        // Every player needs a role, or the match has no role queue (Turbo, unranked): no metrics then.
+        var roles = players.All(player => player.Role is not null)
+            ? players.ToDictionary(player => player.HeroId!.Value, player => player.Role!.Value)
+            : null;
+        var metrics = MatchMetricsCalculator.Calculate(laningStats, timeline, deaths, wards, positions, roles) ?? [];
+
         return new ReplayAnalysis(
-            matchId, endsAt, laningStats, new MatchTimeline(Seconds(count, duration), heroes), deaths, wards, damage,
-            purchases, mapObjectives);
+            matchId, endsAt, laningStats, timeline, deaths, wards, damage, purchases, mapObjectives, metrics);
+    }
+
+    // [t, x, y] -> a position sample.
+    private static PositionSample ToPositionSample(JsonElement tuple)
+    {
+        if (tuple.ValueKind != JsonValueKind.Array || tuple.GetArrayLength() != 3
+            || tuple.EnumerateArray().Any(value => value.ValueKind != JsonValueKind.Number))
+        {
+            throw new InvalidDataException("A position is not [t, x, y].");
+        }
+
+        return new PositionSample(
+            (int)Math.Round(tuple[0].GetDouble()), (int)Math.Round(tuple[1].GetDouble()), (int)Math.Round(tuple[2].GetDouble()));
     }
 
     // npc_dota_goodguys_tower2_mid, npc_dota_badguys_tower4, npc_dota_goodguys_melee_rax_bot, npc_dota_badguys_fort.

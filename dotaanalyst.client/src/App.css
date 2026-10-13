@@ -13,11 +13,10 @@
     --series-5: #e87ba4;
     --chart-grid: #ecebe8;
     --chart-zero: #9b9a96;
-    /* Schematic map (DeathMap): neutral ground, lanes and bases; the river a pale step of the blue ramp. */
-    --map-ground: #f3f2ee;
-    --map-base: #e4e2dc;
-    --map-lane: #d3d1ca;
-    --map-river: #cde2fb;
+    /* Marks on the game's minimap (DeathMap, WardMap): the map is the same in both themes, so these don't change
+       with the theme. */
+    --map-mark-outline: #fff;
+    --map-mark-ink: #111;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -34,10 +33,6 @@
         --series-5: #d55181;
         --chart-grid: #2b2c33;
         --chart-zero: #6b6c73;
-        --map-ground: #1e1f26;
-        --map-base: #2a2b33;
-        --map-lane: #3a3b45;
-        --map-river: #183a5c;
     }
 }
 
@@ -787,14 +782,10 @@ a:focus-visible {
     height: auto;
 }
 
-.map-ground { fill: var(--map-ground); }
-.map-base { fill: var(--map-base); }
-.map-river { fill: none; stroke: var(--map-river); stroke-width: 900; stroke-linecap: round; stroke-linejoin: round; }
-.map-lane { fill: none; stroke: var(--map-lane); stroke-width: 380; stroke-linecap: round; stroke-linejoin: round; }
-
-.map-label {
-    font-size: 520px;
-    fill: var(--text);
+/* The game's minimap (GameMap) is the same art in both themes, so the marks on it use fixed outline colours, not
+   the theme's. Toned down a little so the marks stand out. */
+.game-map {
+    filter: saturate(0.75) brightness(0.9);
 }
 
 .death-hit {
@@ -803,8 +794,8 @@ a:focus-visible {
 
 .death-dot {
     fill: var(--series);
-    stroke: var(--bg);
-    stroke-width: 90;
+    stroke: var(--map-mark-outline);
+    stroke-width: 110;
 }
 
 .death-marker {
@@ -812,15 +803,15 @@ a:focus-visible {
 }
 
 .death-marker.is-reincarnated .death-dot {
-    fill: var(--bg);
+    fill: var(--map-mark-outline);
     stroke: var(--series);
-    stroke-width: 120;
+    stroke-width: 130;
     stroke-dasharray: 160 110;
 }
 
 .death-marker.is-selected .death-dot {
-    stroke: var(--text-h);
-    stroke-width: 140;
+    stroke: var(--map-mark-ink);
+    stroke-width: 150;
 }
 
 .death-number {
@@ -831,7 +822,7 @@ a:focus-visible {
 }
 
 .death-marker.is-reincarnated .death-number {
-    fill: var(--text-h);
+    fill: var(--map-mark-ink);
 }
 
 .legend-swatch.reincarnated {
@@ -1046,13 +1037,13 @@ a:focus-visible {
 
 .ward-shape {
     fill: var(--team);
-    stroke: var(--bg);
-    stroke-width: 80;
+    stroke: var(--map-mark-outline);
+    stroke-width: 90;
 }
 
 .ward-cross {
-    /* Ink on top of the whole shape (a cross in the background colour would cut it in pieces). */
-    stroke: var(--text-h);
+    /* Ink on top of the whole shape (a cross in the outline colour would cut it in pieces). */
+    stroke: var(--map-mark-ink);
     stroke-width: 100;
     stroke-linecap: round;
 }
@@ -1062,8 +1053,8 @@ a:focus-visible {
 }
 
 .ward-marker.is-selected .ward-shape {
-    stroke: var(--text-h);
-    stroke-width: 130;
+    stroke: var(--map-mark-ink);
+    stroke-width: 140;
 }
 
 .legend-shape {

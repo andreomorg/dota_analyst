@@ -2,9 +2,9 @@ import { useState } from 'react';
 import { formatDuration } from '../matches/format';
 
 import { svgY, VIEW_BOX } from './mapGeometry';
-import SchematicMap from './SchematicMap';
+import GameMap from './GameMap';
 
-// Where the player died, on the schematic map (SchematicMap.jsx).
+// Where the player died, on the game's minimap (GameMap.jsx).
 
 const KILLERS = {
     tower: 'Torre',
@@ -38,7 +38,7 @@ function DeathMap({ deaths }) {
                     <>
                         <p className="laning-intro">
                             {deaths.length} {deaths.length === 1 ? 'morte' : 'mortes'}, {laning} na fase de rotas (até 10:00).
-                            Mapa esquemático: rotas, rio e bases.
+                            No minimapa do jogo.
                         </p>
                         <ul className="chart-legend death-legend">
                             <li><span className="legend-swatch series-1" aria-hidden="true" /> Fase de rotas (até 10:00)</li>
@@ -47,7 +47,7 @@ function DeathMap({ deaths }) {
                         </ul>
                         <div className="death-map-frame">
                             <svg viewBox={VIEW_BOX} role="img" aria-label={`Mapa com ${deaths.length} mortes; os detalhes estão na tabela abaixo.`}>
-                                <SchematicMap />
+                                <GameMap />
                                 {deaths.map((death, index) => (
                                     <g
                                         key={`${death.seconds}-${index}`}

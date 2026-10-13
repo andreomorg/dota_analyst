@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { formatDuration } from '../matches/format';
 import { svgY, VIEW_BOX } from './mapGeometry';
-import SchematicMap from './SchematicMap';
+import GameMap from './GameMap';
 
-// Both teams' wards on the schematic map. Shape = kind (circle observer, diamond sentry), colour = team (blue the
+// Both teams' wards on the game's minimap (GameMap.jsx). Shape = kind (circle observer, diamond sentry), colour = team (blue the
 // player's team, red the other; the validated diverging pair — so colour is never the only cue), a cross =
 // destroyed. Filters in one row above the map; a table with every ward shown.
 
@@ -85,7 +85,7 @@ function WardMap({ wards }) {
             </ul>
             <div className="death-map-frame">
                 <svg viewBox={VIEW_BOX} role="img" aria-label={`Mapa com ${shown.length} wards; os detalhes estão na tabela abaixo.`}>
-                    <SchematicMap />
+                    <GameMap />
                     {shown.map(({ ward, index }) => (
                         <g
                             key={index}

@@ -77,7 +77,8 @@ function HeatmapCard({ hero, label, phase, heatmaps, deaths }) {
 
 // heatmaps, deaths, smartStats and laning come from the API (heatmaps is null until the replay is read and for
 // replays read before heatmaps existed: then nothing shows). variant 'laning': only the first 10 minutes, compared
-// with the heroes of the player's lane (the "Fase de rotas" tab); otherwise every period and every hero.
+// with the heroes of the player's lane (the "Fase de rotas" tab); 'afterLaning': every period but the first 10
+// minutes (the "Posicionamento" tab); otherwise every period. Outside 'laning', every hero.
 function HeatmapSection({ heatmaps, deaths, smartStats, laning, variant }) {
     const isLaning = variant === 'laning';
     const [phaseKey, setPhaseKey] = useState(isLaning ? 'early' : 'all');
@@ -87,7 +88,10 @@ function HeatmapSection({ heatmaps, deaths, smartStats, laning, variant }) {
         return null;
     }
 
-    const phases = isLaning ? PHASES.filter(candidate => candidate.key === 'early') : PHASES;
+    // Each period shows in one tab only: 0–10 in "Fase de rotas", the rest (and the whole match) in "Posicionamento".
+    const phases = isLaning
+        ? PHASES.filter(candidate => candidate.key === 'early')
+        : variant === 'afterLaning' ? PHASES.filter(candidate => candidate.key !== 'early') : PHASES;
     const phase = phases.find(candidate => candidate.key === phaseKey) ?? phases[0];
     const player = heatmaps.heroes.find(hero => hero.isCurrentPlayer);
     const laneHeroIds = new Set([...(laning?.opponents ?? []), ...(laning?.allies ?? [])].map(hero => hero.heroId));

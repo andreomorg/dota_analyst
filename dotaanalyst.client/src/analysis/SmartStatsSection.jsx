@@ -1,74 +1,18 @@
-import { formatDuration, formatNumber } from '../matches/format';
+import { Link } from 'react-router';
+import { formatNumber } from '../matches/format';
 import SectionHead from '../ui/SectionHead';
 import { standingDetail, standingOf } from '../ui/standingLevels';
 import ComparisonCard from './ComparisonCard';
+import { INSIGHT_TITLES, insightText, plain, ROLES } from './insights';
+import { metricLabel } from './metrics';
+import { INSIGHT_TABS, TAB_NAMES } from './statThemes';
+import { useTabLink } from './tabLink';
+
+// The smart stats in words: the highlight cards of the overview, the tips of "Como melhorar" (each linking to the tab
+// whose numbers back it) and the deaths by region and phase of "Posicionamento". The numbers themselves live once,
+// in the tab of their subject (ThemeStatsCard).
 
 const capitalize = text => text.charAt(0).toUpperCase() + text.slice(1);
-import { INSIGHT_TITLES, insightText, lifetime, percent, plain, ROLES } from './insights';
-import { metricLabel } from './metrics';
-
-// "Dicas e oportunidades de melhoria" (the Stitch smart-stats section): three highlight cards (strong point, point
-// of attention, the lane), the API's findings, then the numbers next to the enemy of the same role, the match
-// average and other players of the same hero (pro and high rank).
-
-const GROUPS = [
-    {
-        title: 'Posicionamento',
-        rows: [
-            { key: 'deaths', label: 'Mortes', format: plain },
-            { key: 'isolatedDeaths', label: 'Mortes sem aliado por perto', format: plain },
-            { key: 'deathsOnEnemySide', label: 'Mortes no lado inimigo', format: plain },
-            { key: 'deathsByRegion.enemyJungle', label: 'Mortes na selva inimiga', format: plain },
-            { key: 'deathsByRegion.river', label: 'Mortes no rio', format: plain },
-            { key: 'aloneOnEnemySideShare', label: 'Tempo sozinho no lado inimigo', format: percent },
-            { key: 'enemySideShare', label: 'Tempo no lado inimigo', format: percent },
-            { key: 'quickRedeaths', label: 'Mortes logo depois de voltar', format: plain },
-        ],
-    },
-    {
-        title: 'Lutas',
-        rows: [
-            {
-                key: 'fightsNearby',
-                label: 'Lutas do time em que esteve perto',
-                // "x de y" (the average row has fractions: one decimal).
-                value: summary => summary?.teamFights === null || summary?.teamFights === undefined
-                    ? null
-                    : `${plain(summary.fightsNearby)} de ${plain(summary.teamFights)}`,
-            },
-            { key: 'killParticipation', label: 'Participação em abates', format: percent },
-            { key: 'leadLostPerDeath', label: 'Vantagem do time perdida por morte', format: value => formatNumber(Math.round(value)) },
-        ],
-    },
-    {
-        title: 'Economia',
-        rows: [
-            { key: 'lastHitsAt10', label: 'Last hits aos 10:00', format: plain },
-            { key: 'netWorthAt10', label: 'Patrimônio aos 10:00', format: plain },
-            { key: 'netWorthAt20', label: 'Patrimônio aos 20:00', format: plain },
-            { key: 'firstBigItemSeconds', label: 'Primeiro item grande', format: value => formatDuration(Math.round(value)) },
-            { key: 'netWorthShare', label: 'Parte do patrimônio do time', format: percent },
-            { key: 'laneDamageDealt', label: 'Dano causado em heróis até 10:00', format: plain },
-            { key: 'laneDamageTaken', label: 'Dano recebido de heróis até 10:00', format: plain },
-        ],
-    },
-    {
-        title: 'Visão',
-        rows: [
-            { key: 'observersPlaced', label: 'Observers colocados', format: plain },
-            { key: 'sentriesPlaced', label: 'Sentries colocados', format: plain },
-            { key: 'observerAverageLifetimeSeconds', label: 'Vida média dos observers', format: lifetime },
-            { key: 'wardsLostToEnemy', label: 'Seus wards destruídos pelo inimigo', format: plain },
-            { key: 'enemyWardsDestroyed', label: 'Wards inimigos destruídos', format: plain },
-            { key: 'teamObserverUptime', label: 'Tempo com observer do time', format: percent },
-        ],
-    },
-];
-
-// key may go one level down ("deathsByRegion.river"); missing on metrics computed before the regions.
-function valueOf(summary, key) {
-    return key.split('.').reduce((value, part) => value?.[part], summary);
-}
 
 function cell(value, format) {
     return value === null || value === undefined ? '—' : format(value);
@@ -207,90 +151,53 @@ function LanePoint({ laning, smartStats }) {
     );
 }
 
-// ----- Tables -----
+// ----- Deaths by region and phase (the "Posicionamento" tab) -----
 
-function PhaseDeathTable({ player, counterpart, matchAverage, counterpartName }) {
-    const series = [
-        { key: 'player', label: 'Você', values: player },
-        { key: 'counterpart', label: counterpartName, values: counterpart },
-        { key: 'average', label: 'Média da partida', values: matchAverage },
+export function PhaseDeathsCard({ smartStats }) {
+    const series = smartStats && [
+        { key: 'player', label: 'Você', values: smartStats.player.deathsByRegionByPhase },
+        { key: 'counterpart', label: smartStats.counterpartHeroName, values: smartStats.counterpart.deathsByRegionByPhase },
+        { key: 'average', label: 'Média da partida', values: smartStats.matchAverage.deathsByRegionByPhase },
     ];
-    if (!series.some(item => item.values)) {
+    if (!series || !series.some(item => item.values)) {
         return null;
     }
 
     return (
-        <div className="table-scroll">
-            <table className="data-table">
-                <caption className="visually-hidden">
-                    Mortes em cada região por fase: você, {counterpartName} e a média da partida
-                </caption>
-                <thead>
-                    <tr>
-                        <th scope="col">Fase</th>
-                        <th scope="col">Jogador</th>
-                        {REGIONS.map(region => <th key={region.key} scope="col" className="num-col">{region.label}</th>)}
-                    </tr>
-                </thead>
-                <tbody>
-                    {PHASES.flatMap(phase => series.map(item => (
-                        <tr key={`${phase.key}-${item.key}`} className={item.key === 'player' ? 'is-you' : undefined}>
-                            <th scope="row">{phase.label}</th>
-                            <th scope="row">{item.label}</th>
-                            {REGIONS.map(region => (
-                                <td key={region.key} className="num-col mono">{cell(item.values?.[phase.key]?.[region.key], plain)}</td>
-                            ))}
-                        </tr>
-                    )))}
-                </tbody>
-            </table>
-        </div>
-    );
-}
-
-function CounterpartTable({ smartStats }) {
-    const { player, counterpart, matchAverage } = smartStats;
-    return (
-        <div className="card">
-            <h3 className="card-title">Você, {smartStats.counterpartHeroName} e a média da partida</h3>
+        <details className="card">
+            <summary>
+                Onde e quando as mortes aconteceram
+                <span className="summary-hint">por região do mapa, 0–10, 10–20 e 20+ min</span>
+            </summary>
             <div className="table-scroll">
                 <table className="data-table">
                     <caption className="visually-hidden">
-                        Seus números, os de {smartStats.counterpartHeroName} e a média da partida
+                        Mortes em cada região por fase: você, {smartStats.counterpartHeroName} e a média da partida
                     </caption>
                     <thead>
                         <tr>
-                            <th scope="col">Métrica</th>
-                            <th scope="col" className="num-col">Você</th>
-                            <th scope="col" className="num-col">{smartStats.counterpartHeroName}</th>
-                            <th scope="col" className="num-col">Média da partida</th>
+                            <th scope="col">Fase</th>
+                            <th scope="col">Jogador</th>
+                            {REGIONS.map(region => <th key={region.key} scope="col" className="num-col">{region.label}</th>)}
                         </tr>
                     </thead>
-                    {GROUPS.map(group => (
-                        <tbody key={group.title}>
-                            <tr className="group-row">
-                                <th scope="rowgroup" colSpan={4}>{group.title}</th>
+                    <tbody>
+                        {PHASES.flatMap(phase => series.map(item => (
+                            <tr key={`${phase.key}-${item.key}`} className={item.key === 'player' ? 'is-you' : undefined}>
+                                <th scope="row">{phase.label}</th>
+                                <th scope="row">{item.label}</th>
+                                {REGIONS.map(region => (
+                                    <td key={region.key} className="num-col mono">{cell(item.values?.[phase.key]?.[region.key], plain)}</td>
+                                ))}
                             </tr>
-                            {group.rows.map(row => (
-                                <tr key={row.key}>
-                                    <th scope="row">{row.label}</th>
-                                    {[player, counterpart, matchAverage].map((summary, index) => (
-                                        <td key={index} className="num-col mono">
-                                            {row.value ? (row.value(summary) ?? '—') : cell(valueOf(summary, row.key), row.format)}
-                                        </td>
-                                    ))}
-                                </tr>
-                            ))}
-                        </tbody>
-                    ))}
+                        )))}
+                    </tbody>
                 </table>
             </div>
             <p className="section-note">
-                &quot;Sem aliado por perto&quot;: nenhum herói do seu time a menos de 1.500 unidades do mapa.
-                &quot;Lado inimigo&quot;: além do rio, no lado do outro time. O tempo no lado inimigo mostra mais quem estava
-                ganhando do que um erro; o tempo sozinho lá é o que indica risco.
+                Contagem de mortes do replay pela posição; a média considera os dez heróis da partida.
             </p>
-        </div>
+        </details>
     );
 }
 
@@ -314,11 +221,11 @@ export function HighlightCards({ performance, laning, smartStats }) {
     );
 }
 
-// The "Como melhorar" tab: every finding of the API, one card comparing the player with other players of the hero
-// (OpenDota, our base, the lane matchup), then the numbers next to the enemy of the same role and the match average.
-// smartStats is null until the replay is read, without a point-of-view player and for matches without role queue:
-// then only OpenDota's comparison shows.
-function SmartStatsSection({ performance, smartStats }) {
+// The "Como melhorar" tab: every tip of the API, most important first, each with a link to the tab whose numbers
+// back it; then the per-minute numbers against every match of the hero (OpenDota). smartStats is null until the
+// replay is read, without a point-of-view player and for matches without role queue: then only OpenDota's part shows.
+function SmartStatsSection({ performance, smartStats, tabs }) {
+    const tabLink = useTabLink();
     if (!performance && !smartStats) {
         return null;
     }
@@ -326,11 +233,7 @@ function SmartStatsSection({ performance, smartStats }) {
     const texts = (smartStats?.insights ?? [])
         .map(insight => ({ insight, text: insightText(insight, smartStats) }))
         .filter(entry => entry.text);
-    const hasPhaseMetrics = Boolean(
-        smartStats?.player.deathsByRegionByPhase
-        || smartStats?.counterpart.deathsByRegionByPhase
-        || smartStats?.matchAverage.deathsByRegionByPhase,
-    );
+    const hasTab = key => (tabs ?? []).some(tab => tab.key === key);
 
     return (
         <section className="section" aria-labelledby="smart-stats-title">
@@ -341,44 +244,33 @@ function SmartStatsSection({ performance, smartStats }) {
             {smartStats && (
                 <>
                     <p className="section-intro">
-                        Você jogou de {ROLES[smartStats.role] ?? `posição ${smartStats.role}`}. As dicas mais importantes vêm primeiro.
+                        Você jogou de {ROLES[smartStats.role] ?? `posição ${smartStats.role}`}. As dicas mais importantes vêm
+                        primeiro; os números de cada uma estão na aba do assunto.
                     </p>
                     {texts.length === 0
                         ? <p className="empty-state">Nada se destacou como ponto a melhorar nesta partida.</p>
                         : (
                             <ol className="insight-list">
-                                {texts.map(({ insight, text }) => (
-                                    <li key={insight.kind} className="insight-item">
-                                        <strong>{INSIGHT_TITLES[insight.kind] ?? 'Dica'}</strong>
-                                        <span>{text}</span>
-                                    </li>
-                                ))}
+                                {texts.map(({ insight, text }) => {
+                                    const tab = INSIGHT_TABS[insight.kind];
+                                    return (
+                                        <li key={insight.kind} className="insight-item">
+                                            <strong>{INSIGHT_TITLES[insight.kind] ?? 'Dica'}</strong>
+                                            <span>{text}</span>
+                                            {tab && hasTab(tab) && (
+                                                <Link className="insight-link" to={tabLink(tab)}>
+                                                    Ver os números em {TAB_NAMES[tab]} →
+                                                </Link>
+                                            )}
+                                        </li>
+                                    );
+                                })}
                             </ol>
                         )}
                 </>
             )}
 
-            <div className="stack">
-                <ComparisonCard performance={performance} smartStats={smartStats} />
-                {smartStats && <CounterpartTable smartStats={smartStats} />}
-                {hasPhaseMetrics && (
-                    <details className="card">
-                        <summary>
-                            Mortes por região e fase da partida
-                            <span className="summary-hint">0–10, 10–20 e 20+ min</span>
-                        </summary>
-                        <PhaseDeathTable
-                            player={smartStats.player.deathsByRegionByPhase}
-                            counterpart={smartStats.counterpart.deathsByRegionByPhase}
-                            matchAverage={smartStats.matchAverage.deathsByRegionByPhase}
-                            counterpartName={smartStats.counterpartHeroName}
-                        />
-                        <p className="section-note">
-                            Contagem de eventos de morte do replay por coordenada; a média considera os dez heróis da partida.
-                        </p>
-                    </details>
-                )}
-            </div>
+            <ComparisonCard performance={performance} />
         </section>
     );
 }

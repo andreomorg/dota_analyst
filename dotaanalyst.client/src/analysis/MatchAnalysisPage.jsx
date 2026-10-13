@@ -13,8 +13,10 @@ import LaningSection, { ReplayStatusBanner } from './LaningSection';
 import MatchHeader from './MatchHeader';
 import ObjectivesSection from './ObjectivesSection';
 import PerformanceSummary from './PerformanceSummary';
-import SmartStatsSection, { HighlightCards } from './SmartStatsSection';
+import SmartStatsSection, { HighlightCards, PhaseDeathsCard } from './SmartStatsSection';
+import { useTabLink } from './tabLink';
 import TeamTable from './TeamTable';
+import ThemeStatsCard from './ThemeStatsCard';
 import TimelineSection from './TimelineSection';
 import WardMap from './WardMap';
 import { useMatchAnalysis } from './useMatchAnalysis';
@@ -157,21 +159,6 @@ function tabsOf(analysis) {
 // Links to the tabs of an earlier version still open the right page.
 const OLD_TABS = { maps: 'positioning', items: 'build', abilities: 'build', economy: 'overview' };
 
-function useTabLink() {
-    const [searchParams] = useSearchParams();
-    // Keeps ?player= (whose point of view) and only changes the tab.
-    return key => {
-        const params = new URLSearchParams(searchParams);
-        if (key === 'overview') {
-            params.delete('tab');
-        } else {
-            params.set('tab', key);
-        }
-        const search = params.toString();
-        return { search: search ? `?${search}` : '' };
-    };
-}
-
 function TabNav({ tabs, active }) {
     const tabLink = useTabLink();
     const barRef = useRef(null);
@@ -272,6 +259,8 @@ function AnalysisContent({ analysis, accountId, replayPollingStopped }) {
     // A tab this match doesn't have (or not yet: replay still being read) shows the overview.
     const active = tabs.some(tab => tab.key === requested) ? requested : 'overview';
     const ready = analysis.replayStatus === 'ready';
+    const smartStats = ready ? analysis.smartStats : null;
+    const heroName = performance?.heroName;
     // null stays null for both teams: an unknown winner highlights nobody.
     const radiantWon = analysis.radiantWon ?? null;
     const direWon = radiantWon === null ? null : !radiantWon;
@@ -317,7 +306,7 @@ function AnalysisContent({ analysis, accountId, replayPollingStopped }) {
                 )}
 
                 {active === 'tips' && (
-                    <SmartStatsSection performance={performance} smartStats={ready ? analysis.smartStats : null} />
+                    <SmartStatsSection performance={performance} smartStats={smartStats} tabs={tabs} />
                 )}
 
                 {active === 'laning' && (
@@ -333,6 +322,12 @@ function AnalysisContent({ analysis, accountId, replayPollingStopped }) {
                                 variant="laning"
                             />
                         </section>
+                        <ThemeStatsCard
+                            themes={['laning']}
+                            smartStats={smartStats}
+                            heroName={heroName}
+                            title="Sua rota contra outros jogadores"
+                        />
                     </>
                 )}
 
@@ -347,11 +342,14 @@ function AnalysisContent({ analysis, accountId, replayPollingStopped }) {
                                 deaths={analysis.deaths}
                                 smartStats={analysis.smartStats}
                                 laning={analysis.laning}
+                                variant="afterLaning"
                             />
                             <div className="split">
                                 <DeathMap deaths={analysis.deaths} />
                                 <WardMap wards={analysis.wards} />
                             </div>
+                            <ThemeStatsCard themes={['deaths', 'vision']} smartStats={smartStats} heroName={heroName} title="Mortes e visão" />
+                            <PhaseDeathsCard smartStats={smartStats} />
                         </div>
                     </section>
                 )}
@@ -367,6 +365,7 @@ function AnalysisContent({ analysis, accountId, replayPollingStopped }) {
                                 </div>
                             </section>
                         )}
+                        <ThemeStatsCard themes={['fights']} smartStats={smartStats} heroName={heroName} />
                         <ObjectivesSection objectives={analysis.objectives} />
                     </>
                 )}
@@ -374,6 +373,7 @@ function AnalysisContent({ analysis, accountId, replayPollingStopped }) {
                 {active === 'build' && (
                     <>
                         <ItemBuildSection itemBuild={analysis.itemBuild} />
+                        <ThemeStatsCard themes={['economy']} smartStats={smartStats} heroName={heroName} />
                         <AbilityBuildSection abilityBuild={analysis.abilityBuild} heroName={performance?.heroName} />
                     </>
                 )}

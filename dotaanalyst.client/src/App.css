@@ -1521,6 +1521,21 @@ details[open] > summary {
     font-weight: 600;
 }
 
+/* Each tip links to the tab whose numbers back it (the numbers are not repeated in "Como melhorar"). */
+.insight-link {
+    justify-self: start;
+    margin-top: 0.15rem;
+    color: var(--accent);
+    font-size: 13px;
+    font-weight: 500;
+    text-decoration: none;
+}
+
+.insight-link:hover,
+.insight-link:focus-visible {
+    text-decoration: underline;
+}
+
 .baseline-cell {
     display: grid;
     gap: 0.3rem;

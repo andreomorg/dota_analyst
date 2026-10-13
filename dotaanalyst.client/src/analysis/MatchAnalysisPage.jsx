@@ -10,6 +10,7 @@ import LaningSection from './LaningSection';
 import MatchHeader from './MatchHeader';
 import ObjectivesSection from './ObjectivesSection';
 import PerformanceSummary from './PerformanceSummary';
+import SmartStatsSection from './SmartStatsSection';
 import TeamTable from './TeamTable';
 import TimelineSection from './TimelineSection';
 import WardMap from './WardMap';
@@ -133,6 +134,8 @@ function AnalysisContent({ analysis, accountId, replayPollingStopped }) {
                 laning={analysis.laning}
                 pollingStopped={replayPollingStopped}
             />
+
+            {analysis.replayStatus === 'ready' && <SmartStatsSection smartStats={analysis.smartStats} />}
 
             {analysis.replayStatus === 'ready' && <ItemBuildSection itemBuild={analysis.itemBuild} />}
 

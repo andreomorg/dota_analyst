@@ -853,6 +853,31 @@ a:focus-visible {
     margin: 0.5rem auto 0;
 }
 
+/* ----- Smart stats (SmartStatsSection) ----- */
+.smart-stats {
+    margin: 1.5rem 0;
+}
+
+.insight-list {
+    max-width: 640px;
+    margin: 0 auto 1rem;
+    padding-left: 1.25rem;
+    text-align: left;
+}
+
+.insight-list li {
+    margin-bottom: 0.5rem;
+    color: var(--text-h);
+}
+
+.smart-stats-table {
+    margin: 0.5rem auto 0;
+}
+
+.smart-stats-table td {
+    font-variant-numeric: tabular-nums;
+}
+
 /* ----- Objectives: marks under the lead chart (TimelineSection) and ObjectivesSection ----- */
 .objective-mark.ahead { fill: var(--chart-ahead); }
 .objective-mark.behind { fill: var(--chart-behind); }

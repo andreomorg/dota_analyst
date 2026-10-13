@@ -19,14 +19,21 @@ internal sealed record StoredReplayAnalysis(
     // Added in sprint 12, the same way.
     IReadOnlyList<StoredHeroDeath>? Deaths = null,
     // Added in sprint 13, the same way.
-    IReadOnlyList<StoredWard>? Wards = null);
+    IReadOnlyList<StoredWard>? Wards = null,
+    // Added in sprint 14, the same way.
+    IReadOnlyList<StoredDamageRow>? Damage = null);
+
+internal sealed record StoredDamageRow(
+    int? SourceHeroId, string SourceKind, int? TargetHeroId, string TargetKind, string? Inflictor, int Amount);
 
 internal sealed record StoredWard(
     WardKind Kind, Team Team, int? PlacedByHeroId, int X, int Y, int PlacedAt, int? RemovedAt, bool Destroyed,
     int? DestroyedByHeroId);
 
 internal sealed record StoredHeroDeath(
-    int HeroId, int Seconds, int X, int Y, KillerKind Killer, int? KillerHeroId, bool Reincarnated);
+    int HeroId, int Seconds, int X, int Y, KillerKind Killer, int? KillerHeroId, bool Reincarnated,
+    // Added in sprint 14 (null in older rows).
+    IReadOnlyList<int>? AssistHeroIds = null);
 
 internal sealed record StoredTimeline(IReadOnlyList<int> Seconds, IReadOnlyList<StoredHeroTimeline> Heroes);
 
@@ -124,12 +131,17 @@ internal static class StoredReplayMappings
                 stored.Deaths?.Select(death => death is null
                         ? throw new InvalidDataException("A saved replay analysis has an empty death.")
                         : new HeroDeath(death.HeroId, death.Seconds, death.X, death.Y, death.Killer, death.KillerHeroId,
-                            death.Reincarnated))
+                            death.Reincarnated, death.AssistHeroIds))
                     .ToList(),
                 stored.Wards?.Select(ward => ward is null
                         ? throw new InvalidDataException("A saved replay analysis has an empty ward.")
                         : new WardPlacement(ward.Kind, ward.Team, ward.PlacedByHeroId, ward.X, ward.Y, ward.PlacedAt,
                             ward.RemovedAt, ward.Destroyed, ward.DestroyedByHeroId))
+                    .ToList(),
+                stored.Damage?.Select(row => row is null
+                        ? throw new InvalidDataException("A saved replay analysis has an empty damage row.")
+                        : new DamageRow(row.SourceHeroId, row.SourceKind, row.TargetHeroId, row.TargetKind, row.Inflictor,
+                            row.Amount))
                     .ToList());
         }
         catch (ArgumentException ex)
@@ -158,10 +170,14 @@ internal static class StoredReplayMappings
                 : null,
             Deaths: analysis.Deaths?
                 .Select(death => new StoredHeroDeath(death.HeroId, death.Seconds, death.X, death.Y, death.Killer,
-                    death.KillerHeroId, death.Reincarnated))
+                    death.KillerHeroId, death.Reincarnated, death.AssistHeroIds))
                 .ToList(),
             Wards: analysis.Wards?
                 .Select(ward => new StoredWard(ward.Kind, ward.Team, ward.PlacedByHeroId, ward.X, ward.Y, ward.PlacedAt,
                     ward.RemovedAt, ward.Destroyed, ward.DestroyedByHeroId))
+                .ToList(),
+            Damage: analysis.Damage?
+                .Select(row => new StoredDamageRow(row.SourceHeroId, row.SourceKind, row.TargetHeroId, row.TargetKind,
+                    row.Inflictor, row.Amount))
                 .ToList());
 }

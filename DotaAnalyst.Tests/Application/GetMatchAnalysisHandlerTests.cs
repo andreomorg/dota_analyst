@@ -266,7 +266,8 @@ public class GetMatchAnalysisHandlerTests
             [
                 new WardPlacement(WardKind.Sentry, Team.Dire, 28, 100, 200, 700, 760, destroyed: true, 31),
                 new WardPlacement(WardKind.Observer, Team.Radiant, 31, -3000, 1500, -60, null, destroyed: false, null),
-            ]);
+            ],
+            damage: []);
         var handler = CreateHandler(
             UnparsedMatchWithMe(), new FakeReplayAnalysisRepository(SavedReplayAnalysis.Ready(replay, Now)));
 
@@ -280,6 +281,104 @@ public class GetMatchAnalysisHandlerTests
                     100, 200, 700, 760, Destroyed: true, DestroyedByHeroName: "Lich", InLaningPhase: false),
             ],
             wards);
+    }
+
+    // Me (Lich, 31) and an ally (5) on Radiant; two enemies (28, 2) on Dire.
+    private static MatchDetails TeamfightMatch() =>
+        CreateMatch(
+            Team.Radiant,
+            MatchPlayerBuilder.Create(accountId: Me, heroId: 31, team: Team.Radiant),
+            MatchPlayerBuilder.Create(accountId: null, heroId: 5, team: Team.Radiant),
+            MatchPlayerBuilder.Create(accountId: null, heroId: 28, team: Team.Dire),
+            MatchPlayerBuilder.Create(accountId: null, heroId: 2, team: Team.Dire))
+        with { ReplayUrl = ReplayUrl };
+
+    private static ReplayAnalysis TeamfightReplay(IReadOnlyList<HeroDeath> deaths, IReadOnlyList<DamageRow> damage)
+    {
+        var players = new[]
+        {
+            ReplayBuilder.Hero(31, Team.Radiant, Lane.Bottom), ReplayBuilder.Hero(5, Team.Radiant, Lane.Bottom),
+            ReplayBuilder.Hero(28, Team.Dire, Lane.Bottom), ReplayBuilder.Hero(2, Team.Dire, Lane.Top),
+        };
+        return new ReplayAnalysis(
+            MatchIdOf(10), ReplayAnalysis.LaningPhaseEndsAtSeconds, players, ReplayBuilder.Timeline(players), deaths,
+            wards: [], damage);
+    }
+
+    [Fact]
+    public async Task Damage_Ready_ThePlayersToAndFromEnemyHeroes_ByHeroAndByInflictor()
+    {
+        const string Hero = DamageRow.HeroKind;
+        var replay = TeamfightReplay(
+            deaths: [],
+            damage:
+            [
+                new DamageRow(31, Hero, 28, Hero, "lich_frost_nova", 1000),
+                new DamageRow(31, "summons", 28, Hero, null, 200),
+                new DamageRow(31, Hero, 2, Hero, null, 1500),
+                new DamageRow(31, Hero, 2, "illusion", "lich_frost_nova", 999), // an illusion isn't the hero
+                new DamageRow(31, Hero, 5, Hero, null, 50), // the ally (deny)
+                new DamageRow(31, Hero, null, "laneCreeps", null, 5000),
+                new DamageRow(28, "illusion", 31, Hero, null, 700),
+                new DamageRow(2, Hero, 31, "summons", null, 888), // hit my summon, not me
+                new DamageRow(null, "buildings", 31, Hero, null, 400),
+                new DamageRow(28, Hero, 5, Hero, null, 600), // the ally took it
+            ]);
+        var handler = CreateHandler(
+            TeamfightMatch(), new FakeReplayAnalysisRepository(SavedReplayAnalysis.Ready(replay, Now)));
+
+        var damage = (await handler.HandleAsync(MatchIdOf(10), Me, CancellationToken.None))!.Damage;
+
+        Assert.NotNull(damage);
+        var unknown = GetMatchAnalysisHandler.UnknownHeroName;
+        Assert.Equal([new HeroAmount(2, unknown, 1500), new HeroAmount(28, unknown, 1200)], damage.ToHeroes);
+        Assert.Equal([new HeroAmount(28, unknown, 700)], damage.FromHeroes);
+        Assert.Equal([new InflictorAmount(null, 1700), new InflictorAmount("lich_frost_nova", 1000)], damage.ByInflictor);
+    }
+
+    [Fact]
+    public async Task Fights_Ready_WithThePlayersPart()
+    {
+        var replay = TeamfightReplay(
+            deaths:
+            [
+                // A fight at 10:00 won by Radiant: I killed one and assisted on the other, then died.
+                new HeroDeath(28, 600, 100, 100, KillerKind.Hero, 31, reincarnated: false, assistHeroIds: [5]),
+                new HeroDeath(2, 605, 300, 100, KillerKind.Hero, 5, reincarnated: false, assistHeroIds: [31]),
+                new HeroDeath(31, 612, 200, 400, KillerKind.Hero, 28, reincarnated: false),
+                // A pick-off, not a fight.
+                new HeroDeath(5, 1200, 0, 0, KillerKind.Hero, 2, reincarnated: false),
+            ],
+            damage: []);
+        var handler = CreateHandler(
+            TeamfightMatch(), new FakeReplayAnalysisRepository(SavedReplayAnalysis.Ready(replay, Now)));
+
+        var fights = (await handler.HandleAsync(MatchIdOf(10), Me, CancellationToken.None))!.Fights;
+
+        Assert.Equal(
+            [
+                new FightSummary(600, 612, RadiantDeaths: 1, DireDeaths: 2, Team.Radiant, PlayersTeamWon: true,
+                    Died: true, Kills: 1, Assists: 1, X: 200, Y: 200),
+            ],
+            fights);
+    }
+
+    [Fact]
+    public async Task Damage_SavedWithoutIt_IsParsedAgain()
+    {
+        var players = new[] { ReplayBuilder.Hero(31, Team.Radiant, Lane.Bottom) };
+        var withoutDamage = new ReplayAnalysis(
+            MatchIdOf(10), ReplayAnalysis.LaningPhaseEndsAtSeconds, players, ReplayBuilder.Timeline(players), deaths: [],
+            wards: []);
+        var queue = new FakeReplayParseQueue();
+        var handler = CreateHandler(
+            UnparsedMatchWithMe(), new FakeReplayAnalysisRepository(SavedReplayAnalysis.Ready(withoutDamage, Now)), queue);
+
+        var analysis = await handler.HandleAsync(MatchIdOf(10), Me, CancellationToken.None);
+
+        Assert.Equal(ReplayStatus.Processing, analysis!.ReplayStatus);
+        Assert.Equal([10], queue.Enqueued.Select(entry => entry.MatchId));
+        Assert.Null(analysis.Fights);
     }
 
     [Fact]

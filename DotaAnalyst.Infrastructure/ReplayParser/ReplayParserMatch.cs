@@ -16,7 +16,8 @@ internal sealed record ReplayParserMatchResponse(
     ReplayParserTimelines? Timelines,
     ReplayParserLaning? Laning,
     IReadOnlyList<ReplayParserKill?>? Kills,
-    ReplayParserVision? Vision);
+    ReplayParserVision? Vision,
+    ReplayParserCombat? Combat);
 
 internal sealed record ReplayParserVision(IReadOnlyList<ReplayParserWard?>? Wards);
 
@@ -27,7 +28,15 @@ internal sealed record ReplayParserWard(
 
 // One hero death; killer is a player index (null when no player dealt the blow), killerUnit the combat log name.
 internal sealed record ReplayParserKill(
-    double? T, int? Victim, int? Killer, string? KillerUnit, int? X, int? Y, bool? Reincarnated);
+    double? T, int? Victim, int? Killer, string? KillerUnit, int? X, int? Y, bool? Reincarnated,
+    IReadOnlyList<int>? Assists);
+
+internal sealed record ReplayParserCombat(IReadOnlyList<ReplayParserDamage?>? Damage);
+
+// Aggregated damage from one source to one target with one inflictor; sourcePlayer/targetPlayer are player indexes
+// (null for a non-hero unit, then named by its kind).
+internal sealed record ReplayParserDamage(
+    int? SourcePlayer, string? SourceKind, int? TargetPlayer, string? TargetKind, string? Inflictor, int? Amount);
 
 internal sealed record ReplayParserMatchInfo(double? DurationSeconds);
 
@@ -129,8 +138,25 @@ internal static class ReplayParserMappings
             .Select(ward => ToWard(ward ?? throw Empty("ward"), heroOf))
             .ToList();
 
+        int? HeroOfPlayer(int? index) => index is { } i
+            ? heroOf.TryGetValue(i, out var heroId) ? heroId : throw new InvalidDataException($"Unknown player {i}.")
+            : null;
+
+        var damage = Required(response.Combat?.Damage, "combat.damage")
+            .Select(row => row ?? throw Empty("damage row"))
+            // Only rows with a hero on a side (the parser groups the rest by unit kind on both sides).
+            .Where(row => row.SourcePlayer is not null || row.TargetPlayer is not null)
+            .Select(row => new DamageRow(
+                sourceHeroId: HeroOfPlayer(row.SourcePlayer),
+                sourceKind: row.SourceKind ?? throw Missing("damage.sourceKind"),
+                targetHeroId: HeroOfPlayer(row.TargetPlayer),
+                targetKind: row.TargetKind ?? throw Missing("damage.targetKind"),
+                inflictor: row.Inflictor,
+                amount: row.Amount ?? throw Missing("damage.amount")))
+            .ToList();
+
         return new ReplayAnalysis(
-            matchId, endsAt, laningStats, new MatchTimeline(Seconds(count, duration), heroes), deaths, wards);
+            matchId, endsAt, laningStats, new MatchTimeline(Seconds(count, duration), heroes), deaths, wards, damage);
     }
 
     private static WardPlacement ToWard(ReplayParserWard ward, Dictionary<int, int> heroOf)
@@ -171,7 +197,8 @@ internal static class ReplayParserMappings
             y: kill.Y ?? throw Missing("kill.y"),
             killer: killer,
             killerHeroId: kill.Killer is { } index ? HeroOf(index) : null,
-            reincarnated: kill.Reincarnated ?? false);
+            reincarnated: kill.Reincarnated ?? false,
+            assistHeroIds: (kill.Assists ?? []).Select(HeroOf).ToList());
     }
 
     // Combat log names of what dealt the blow when it wasn't a player (contract: Kill.KillerUnit). A hero name

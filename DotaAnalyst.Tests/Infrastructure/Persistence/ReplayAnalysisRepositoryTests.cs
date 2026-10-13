@@ -55,6 +55,28 @@ public class ReplayAnalysisRepositoryTests(PostgresFixture postgres) : IAsyncLif
     }
 
     [Fact]
+    public async Task SaveThenFind_KeepsDamageAndAssists()
+    {
+        var players = new[] { ReplayBuilder.Hero(31, Team.Radiant, Lane.Bottom), ReplayBuilder.Hero(28, Team.Dire, Lane.Top) };
+        var analysis = new ReplayAnalysis(
+            Match, ReplayAnalysis.LaningPhaseEndsAtSeconds, players, ReplayBuilder.Timeline(players),
+            deaths: [new HeroDeath(28, 300, 0, 0, KillerKind.Hero, 31, reincarnated: false, assistHeroIds: [7])],
+            wards: [],
+            damage:
+            [
+                new DamageRow(31, DamageRow.HeroKind, 28, DamageRow.HeroKind, "lich_frost_nova", 1200),
+                new DamageRow(null, "buildings", 31, DamageRow.HeroKind, null, 300),
+            ]);
+        var repository = CreateRepository();
+
+        await repository.SaveAsync(SavedReplayAnalysis.Ready(analysis, SavedAt), CancellationToken.None);
+        var found = await repository.FindAsync(Match, CancellationToken.None);
+
+        Assert.Equal(analysis.Deaths, found?.Analysis?.Deaths);
+        Assert.Equal(analysis.Damage, found?.Analysis?.Damage);
+    }
+
+    [Fact]
     public async Task SaveThenFind_FailedAndExpired_HaveNoAnalysis()
     {
         var repository = CreateRepository();

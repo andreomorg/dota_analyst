@@ -71,7 +71,10 @@ public class GetMatchAnalysisHandler(
             Laning: replay is null || currentPlayer is null ? null : ToLaningPhase(replay, currentPlayer, names),
             Timeline: replay?.Timeline is { } timeline ? ToTimelineChart(replay, timeline, currentPlayer, names) : null,
             Deaths: replay?.Deaths is { } deaths && currentPlayer is not null ? ToDeaths(deaths, currentPlayer, names) : null,
-            Wards: replay?.Wards is { } wards ? ToWards(wards, currentPlayer, names) : null);
+            Wards: replay?.Wards is { } wards ? ToWards(wards, currentPlayer, names) : null,
+            Damage: replay?.Damage is { } damage && currentPlayer is not null ? ToDamage(damage, match, currentPlayer, names) : null,
+            // Deaths read before the damage have no assists: no fights until the replay is read again.
+            Fights: replay?.Deaths is { } fightDeaths && replay.Damage is not null ? ToFights(fightDeaths, match, currentPlayer) : null);
     }
 
     // Our own reading of the replay (laning phase, timeline, deaths), for every match with a replay: OpenDota's
@@ -146,6 +149,55 @@ public class GetMatchAnalysisHandler(
         }
 
         return (notQueued, null);
+    }
+
+    private static PlayerDamage ToDamage(
+        IReadOnlyList<DamageRow> damage, MatchDetails match, MatchPlayer player, NameLookup names)
+    {
+        var enemies = match.Players.Where(other => other.Team != player.Team).Select(other => other.HeroId).ToHashSet();
+
+        IReadOnlyList<HeroAmount> ByHero(IEnumerable<(int HeroId, int Amount)> rows) => rows
+            .GroupBy(row => row.HeroId)
+            .Select(group => new HeroAmount(group.Key, names.Hero(group.Key), group.Sum(row => row.Amount)))
+            .OrderByDescending(hero => hero.Amount)
+            .ToList();
+
+        // Only damage taken by the heroes themselves; the source may be the hero, its illusions or its summons.
+        var dealt = damage
+            .Where(row => row.SourceHeroId == player.HeroId && row.TargetIsHero && enemies.Contains(row.TargetHeroId!.Value))
+            .ToList();
+        return new PlayerDamage(
+            ToHeroes: ByHero(dealt.Select(row => (row.TargetHeroId!.Value, row.Amount))),
+            FromHeroes: ByHero(damage
+                .Where(row => row.TargetHeroId == player.HeroId && row.TargetIsHero
+                    && row.SourceHeroId is { } source && enemies.Contains(source))
+                .Select(row => (row.SourceHeroId!.Value, row.Amount))),
+            ByInflictor: dealt
+                .GroupBy(row => row.Inflictor)
+                .Select(group => new InflictorAmount(group.Key, group.Sum(row => row.Amount)))
+                .OrderByDescending(inflictor => inflictor.Amount)
+                .ToList());
+    }
+
+    private static IReadOnlyList<FightSummary> ToFights(
+        IReadOnlyList<HeroDeath> deaths, MatchDetails match, MatchPlayer? player)
+    {
+        // DistinctBy: a custom game with the same hero twice must not break the analysis.
+        var teamOf = match.Players.DistinctBy(other => other.HeroId).ToDictionary(other => other.HeroId, other => other.Team);
+        return TeamfightDetector.Detect(deaths, teamOf)
+            .Select(fight => new FightSummary(
+                StartSeconds: fight.StartSeconds,
+                EndSeconds: fight.EndSeconds,
+                RadiantDeaths: fight.RadiantDeaths,
+                DireDeaths: fight.DireDeaths,
+                Winner: fight.Winner,
+                PlayersTeamWon: player is null || fight.Winner is null ? null : fight.Winner == player.Team,
+                Died: player is not null && fight.Deaths.Any(death => death.HeroId == player.HeroId),
+                Kills: player is null ? 0 : fight.Deaths.Count(death => death.KillerHeroId == player.HeroId),
+                Assists: player is null ? 0 : fight.Deaths.Count(death => death.AssistHeroIds.Contains(player.HeroId)),
+                X: (int)Math.Round(fight.Deaths.Average(death => death.X)),
+                Y: (int)Math.Round(fight.Deaths.Average(death => death.Y))))
+            .ToList();
     }
 
     private static IReadOnlyList<MapWard> ToWards(

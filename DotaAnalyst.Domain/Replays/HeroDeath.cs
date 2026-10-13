@@ -15,9 +15,17 @@ public enum KillerKind
 // −8200..8200 on both axes, Radiant's base bottom-left) and what killed it.
 public record HeroDeath
 {
-    public HeroDeath(int heroId, int seconds, int x, int y, KillerKind killer, int? killerHeroId, bool reincarnated)
+    public HeroDeath(
+        int heroId, int seconds, int x, int y, KillerKind killer, int? killerHeroId, bool reincarnated,
+        IReadOnlyList<int>? assistHeroIds = null)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(heroId);
+        if (assistHeroIds is not null && assistHeroIds.Any(assist => assist <= 0 || assist == heroId))
+        {
+            throw new ArgumentException("Assists are other heroes.", nameof(assistHeroIds));
+        }
+
+        AssistHeroIds = assistHeroIds?.Distinct().Order().ToList() ?? [];
         if (killerHeroId is not null && killer != KillerKind.Hero)
         {
             throw new ArgumentException("Only a hero kill names the killer hero.", nameof(killerHeroId));
@@ -39,6 +47,18 @@ public record HeroDeath
 
     // The hero that died.
     public int HeroId { get; }
+
+    // Heroes the combat log credits with an assist (the killer left out), in hero ID order. A subset of the
+    // scoreboard's assists, which credit more heroes.
+    public IReadOnlyList<int> AssistHeroIds { get; }
+
+    // A record compares lists by reference; deaths with the same assists are the same death.
+    public virtual bool Equals(HeroDeath? other) =>
+        other is not null && HeroId == other.HeroId && Seconds == other.Seconds && X == other.X && Y == other.Y
+        && Killer == other.Killer && KillerHeroId == other.KillerHeroId && Reincarnated == other.Reincarnated
+        && AssistHeroIds.SequenceEqual(other.AssistHeroIds);
+
+    public override int GetHashCode() => HashCode.Combine(HeroId, Seconds, X, Y, Killer, KillerHeroId, Reincarnated);
 
     // Game clock of the death (negative before the horn).
     public int Seconds { get; }

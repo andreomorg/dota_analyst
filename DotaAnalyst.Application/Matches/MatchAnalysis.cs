@@ -20,6 +20,8 @@ namespace DotaAnalyst.Application.Matches;
 /// <param name="Timeline">Net worth and experience during the whole match, read from the replay; null unless replayStatus is ready (and for replays read before the timeline existed).</param>
 /// <param name="Deaths">Where and when the player died, read from the replay, in time order; null unless replayStatus is ready and the player is in the match.</param>
 /// <param name="Wards">Every ward of both teams, read from the replay, in the order they were placed; null unless replayStatus is ready.</param>
+/// <param name="Damage">The player's damage to and from enemy heroes and by ability/item, read from the replay; null unless replayStatus is ready and the player is in the match.</param>
+/// <param name="Fights">The teamfights of the match (3+ deaths at most 15 s apart), in time order, with the player's part; null unless replayStatus is ready.</param>
 public record MatchAnalysis(
     long MatchId,
     int DurationSeconds,
@@ -35,7 +37,9 @@ public record MatchAnalysis(
     LaningPhase? Laning,
     MatchTimelineChart? Timeline = null,
     IReadOnlyList<PlayerDeath>? Deaths = null,
-    IReadOnlyList<MapWard>? Wards = null);
+    IReadOnlyList<MapWard>? Wards = null,
+    PlayerDamage? Damage = null,
+    IReadOnlyList<FightSummary>? Fights = null);
 
 /// <summary>One of the ten players of the match.</summary>
 /// <param name="AccountId">Dota account ID; null for players with an anonymous profile.</param>
@@ -211,3 +215,48 @@ public record MapWard(
     bool Destroyed,
     string? DestroyedByHeroName,
     bool InLaningPhase);
+
+/// <summary>The player's damage over the whole match (illusions and summons count for their owner).</summary>
+/// <param name="ToHeroes">Damage dealt to each enemy hero, highest first.</param>
+/// <param name="FromHeroes">Damage taken from each enemy hero, highest first.</param>
+/// <param name="ByInflictor">Damage dealt to enemy heroes by each ability or item, highest first; inflictor null = basic attacks.</param>
+public record PlayerDamage(
+    IReadOnlyList<HeroAmount> ToHeroes,
+    IReadOnlyList<HeroAmount> FromHeroes,
+    IReadOnlyList<InflictorAmount> ByInflictor);
+
+/// <summary>An amount for one hero.</summary>
+/// <param name="HeroId">Hero.</param>
+/// <param name="HeroName">Hero name, or "Unknown hero".</param>
+/// <param name="Amount">The amount.</param>
+public record HeroAmount(int HeroId, string HeroName, int Amount);
+
+/// <summary>An amount for one ability or item.</summary>
+/// <param name="Inflictor">Internal name of the ability or item (lich_frost_nova, item_dagon_5); null for basic attacks.</param>
+/// <param name="Amount">The amount.</param>
+public record InflictorAmount(string? Inflictor, int Amount);
+
+/// <summary>One teamfight: hero deaths at most 15 s apart, at least 3 of them.</summary>
+/// <param name="StartSeconds">Game clock of the first death.</param>
+/// <param name="EndSeconds">Game clock of the last death.</param>
+/// <param name="RadiantDeaths">Radiant heroes that died (Aegis deaths included).</param>
+/// <param name="DireDeaths">Dire heroes that died.</param>
+/// <param name="Winner">The team with fewer deaths; null on a tie.</param>
+/// <param name="PlayersTeamWon">Whether the player's team won it; null on a tie or when the player is not in the match.</param>
+/// <param name="Died">The player died in it.</param>
+/// <param name="Kills">Killing blows of the player in it.</param>
+/// <param name="Assists">Assists of the player in it (the combat log's: fewer than the scoreboard credits).</param>
+/// <param name="X">Map coordinate of the middle of the fight (average of the deaths).</param>
+/// <param name="Y">Map coordinate of the middle of the fight.</param>
+public record FightSummary(
+    int StartSeconds,
+    int EndSeconds,
+    int RadiantDeaths,
+    int DireDeaths,
+    Team? Winner,
+    bool? PlayersTeamWon,
+    bool Died,
+    int Kills,
+    int Assists,
+    int X,
+    int Y);

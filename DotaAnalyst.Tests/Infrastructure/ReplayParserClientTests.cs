@@ -42,7 +42,8 @@ public class ReplayParserClientTests
           ] },
           "laning": {{laning ?? """{ "endsAtSeconds": 600, "lanes": [ { "player": 0, "lane": "bottom" }, { "player": 5, "lane": "jungle" } ] }"""}},
           "kills": [],
-          "vision": { "wards": [] }
+          "vision": { "wards": [] },
+          "combat": { "damage": [], "healing": [], "perMinute": [] }
         }
         """;
 
@@ -126,6 +127,46 @@ public class ReplayParserClientTests
                 new WardPlacement(WardKind.Sentry, Team.Dire, 28, 100, 200, 400, 461, destroyed: true, 31),
             ],
             analysis.Wards);
+    }
+
+    [Fact]
+    public async Task Parse_CombatDamage_KeepsRowsWithAHero_AndKillsKeepTheirAssists()
+    {
+        var body = MatchJson()
+            .Replace("\"kills\": []", """
+                "kills": [ { "t": 300, "victim": 5, "killer": null, "killerUnit": "npc_dota_goodguys_tower1_bot",
+                  "x": 0, "y": 0, "assists": [0] } ]
+                """)
+            .Replace("\"combat\": { \"damage\": []", """
+                "combat": { "damage": [
+                  { "sourcePlayer": 0, "sourceKind": "illusion", "targetPlayer": 5, "targetKind": "hero",
+                    "inflictor": null, "damageType": "physical", "amount": 450 },
+                  { "sourcePlayer": null, "sourceKind": "buildings", "targetPlayer": 0, "targetKind": "hero",
+                    "inflictor": null, "damageType": "physical", "amount": 300 },
+                  { "sourcePlayer": null, "sourceKind": "laneCreeps", "targetPlayer": null, "targetKind": "buildings",
+                    "inflictor": null, "damageType": "physical", "amount": 9000 }
+                ]
+                """);
+
+        var analysis = await CreateClient(new FakeParser(Json(HttpStatusCode.OK, body, "application/json")))
+            .ParseAsync(Match, ReplayUrl, CancellationToken.None);
+
+        Assert.Equal(
+            [
+                new DamageRow(31, "illusion", 28, DamageRow.HeroKind, null, 450),
+                new DamageRow(null, "buildings", 31, DamageRow.HeroKind, null, 300),
+            ],
+            analysis.Damage);
+        Assert.Equal([31], Assert.Single(analysis.Deaths!).AssistHeroIds);
+    }
+
+    [Fact]
+    public async Task Parse_WithoutCombat_IsAnUnreadableReplay()
+    {
+        var body = MatchJson().Replace("\"combat\": { \"damage\": [], \"healing\": [], \"perMinute\": [] }", "\"combat\": null");
+
+        await Assert.ThrowsAsync<ReplayUnreadableException>(() =>
+            CreateClient(new FakeParser(Json(HttpStatusCode.OK, body, "application/json"))).ParseAsync(Match, ReplayUrl, CancellationToken.None));
     }
 
     [Fact]

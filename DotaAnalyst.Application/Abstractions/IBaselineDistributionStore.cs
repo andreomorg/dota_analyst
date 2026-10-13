@@ -3,10 +3,11 @@ using DotaAnalyst.Domain.Analysis;
 namespace DotaAnalyst.Application.Abstractions;
 
 // The finished comparison base of one hero in one role from one source; OpponentHeroId narrows it to a lane matchup.
-// This is what the sites read; the raw matches stay on the collector's machine.
+// This is what the sites read; the raw matches stay on the collector's machine. Timed: the statistics of the catalog
+// at each checkpoint (BaselineComparer.Checkpoints); empty in sets published before they existed.
 public record BaselineDistributionSet(
     int HeroId, int Role, BaselineSource Source, int Matches, IReadOnlyList<MetricDistribution> Distributions,
-    int? OpponentHeroId = null);
+    int? OpponentHeroId = null, IReadOnlyList<TimedDistribution>? Timed = null);
 
 // Where the finished base is read from: the site's own database (local on the project owner's machine, Neon in
 // production — a mirror of the local one).

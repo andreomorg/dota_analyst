@@ -1,5 +1,6 @@
 using DotaAnalyst.Domain.Analysis;
 using DotaAnalyst.Domain.Matches;
+using DotaAnalyst.Domain.Stats;
 
 namespace DotaAnalyst.Application.Abstractions;
 
@@ -14,7 +15,8 @@ public enum BaselineMatchStatus
     Failed,
 }
 
-// A match the collector tried, with the metrics of its heroes when it was collected.
+// A match the collector tried, with the metrics of its heroes when it was collected and their statistics minute by
+// minute (by hero ID).
 public record BaselineMatch(
     MatchId MatchId,
     BaselineSource Source,
@@ -22,7 +24,8 @@ public record BaselineMatch(
     int DurationSeconds,
     BaselineMatchStatus Status,
     IReadOnlyList<HeroMetrics> Metrics,
-    DateTimeOffset TriedAt);
+    DateTimeOffset TriedAt,
+    IReadOnlyDictionary<int, HeroStatHistory>? Histories = null);
 
 // The raw comparison base: metrics of other players' matches (pro and high-rank), collected in the background on the
 // project owner's machine (local database only; production gets the finished base, IBaselineDistributionStore).

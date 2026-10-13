@@ -1,6 +1,7 @@
 using System.Text.Json;
 using DotaAnalyst.Application.Abstractions;
 using DotaAnalyst.Domain.Analysis;
+using DotaAnalyst.Domain.Stats;
 using DotaAnalyst.Infrastructure.Persistence.Replays;
 using Microsoft.EntityFrameworkCore;
 
@@ -12,6 +13,12 @@ public class BaselineDistributionStore(IDbContextFactory<AppDbContext> dbContext
     : IBaselineDistributionStore
 {
     private sealed record StoredDistribution(ComparedMetric Metric, IReadOnlyList<double> Quantiles, int SampleSize);
+
+    private sealed record StoredTimedDistribution(StatKey Stat, int Second, IReadOnlyList<double> Quantiles, int SampleSize);
+
+    // Two decimals are plenty for a comparison and keep the mirror small (percentiles interpolate: 1234.5666...).
+    private static IReadOnlyList<double> Rounded(IReadOnlyList<double> quantiles) =>
+        quantiles.Select(value => Math.Round(value, 2)).ToList();
 
     public Task<BaselineDistributionSet?> FindAsync(int heroId, int role, BaselineSource source, CancellationToken cancellationToken) =>
         FindSetAsync(heroId, role, null, source, cancellationToken);
@@ -39,10 +46,12 @@ public class BaselineDistributionStore(IDbContextFactory<AppDbContext> dbContext
             try
             {
                 var distributions = JsonSerializer.Deserialize<List<StoredDistribution>>(row.Distributions, StoredReplayMappings.JsonOptions) ?? [];
+                var timed = JsonSerializer.Deserialize<List<StoredTimedDistribution>>(row.TimedDistributions, StoredReplayMappings.JsonOptions) ?? [];
                 return new BaselineDistributionSet(
                     heroId, role, source, row.Matches,
                     distributions.Select(stored => new MetricDistribution(stored.Metric, stored.Quantiles, stored.SampleSize)).ToList(),
-                    opponentHeroId);
+                    opponentHeroId,
+                    timed.Select(stored => new TimedDistribution(stored.Stat, stored.Second, stored.Quantiles, stored.SampleSize)).ToList());
             }
             catch (JsonException)
             {
@@ -71,7 +80,10 @@ public class BaselineDistributionStore(IDbContextFactory<AppDbContext> dbContext
                     Source = BaselineRepository.SourceName(set.Source),
                     Matches = set.Matches,
                     Distributions = JsonSerializer.Serialize(
-                        set.Distributions.Select(d => new StoredDistribution(d.Metric, d.Quantiles, d.SampleSize)).ToList(),
+                        set.Distributions.Select(d => new StoredDistribution(d.Metric, Rounded(d.Quantiles), d.SampleSize)).ToList(),
+                        StoredReplayMappings.JsonOptions),
+                    TimedDistributions = JsonSerializer.Serialize(
+                        (set.Timed ?? []).Select(d => new StoredTimedDistribution(d.Stat, d.Second, Rounded(d.Quantiles), d.SampleSize)).ToList(),
                         StoredReplayMappings.JsonOptions),
                     PublishedAt = at,
                 }));

@@ -80,8 +80,9 @@ public static class StatCatalog
         new(StatKey.Assists, StatSource.ReplayMinutes, StatKind.Total, StatUnit.Count, BetterWhen.Higher),
         new(StatKey.HeroDamage, StatSource.ReplayMinutes, StatKind.Total, StatUnit.Damage, BetterWhen.Higher),
 
-        // combat.perMinute of the replay (the damage of each minute, added up here).
-        new(StatKey.DamageFromHeroes, StatSource.ReplayMinutes, StatKind.Total, StatUnit.Damage, BetterWhen.Neither),
+        // combat.perMinute of the replay (the damage of each minute, added up here). Damage from heroes: less is better,
+        // like the lane trades (LostLaneTrades); all the damage taken (creeps, towers...) depends on the hero.
+        new(StatKey.DamageFromHeroes, StatSource.ReplayMinutes, StatKind.Total, StatUnit.Damage, BetterWhen.Lower),
         new(StatKey.DamageTaken, StatSource.ReplayMinutes, StatKind.Total, StatUnit.Damage, BetterWhen.Neither),
         new(StatKey.Healing, StatSource.ReplayMinutes, StatKind.Total, StatUnit.Healing, BetterWhen.Higher),
 

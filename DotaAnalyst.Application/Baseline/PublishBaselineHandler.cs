@@ -1,5 +1,6 @@
 using DotaAnalyst.Application.Abstractions;
 using DotaAnalyst.Domain.Analysis;
+using DotaAnalyst.Domain.Stats;
 using Microsoft.Extensions.Logging;
 
 namespace DotaAnalyst.Application.Baseline;
@@ -26,7 +27,8 @@ public class PublishBaselineHandler(
         foreach (var (heroId, role, source) in await repository.GetGroupsAsync(since, cancellationToken))
         {
             var samples = await repository.GetSamplesAsync(heroId, role, source, since, cancellationToken);
-            sets.Add(new BaselineDistributionSet(heroId, role, source, samples.Count, BaselineComparer.Distribute(samples)));
+            sets.Add(new BaselineDistributionSet(
+                heroId, role, source, samples.Count, BaselineComparer.Distribute(samples), Timed: Timed(samples)));
         }
 
         // Lane matchups (hero x role x lane opponent) are many and mostly small: only the ones with something to compare
@@ -36,9 +38,10 @@ public class PublishBaselineHandler(
             var samples = await repository.GetMatchupSamplesAsync(
                 heroId, role, opponentHeroId, source, since, cancellationToken);
             var distributions = BaselineComparer.Distribute(samples);
-            if (distributions.Count > 0)
+            var timed = Timed(samples);
+            if (distributions.Count > 0 || timed.Count > 0)
             {
-                sets.Add(new BaselineDistributionSet(heroId, role, source, samples.Count, distributions, opponentHeroId));
+                sets.Add(new BaselineDistributionSet(heroId, role, source, samples.Count, distributions, opponentHeroId, timed));
             }
         }
 
@@ -52,4 +55,8 @@ public class PublishBaselineHandler(
             "Published the comparison base: {Sets} hero/role/source sets{Mirror}", sets.Count, mirror.IsConfigured ? " (and the mirror)" : "");
         return sets.Count;
     }
+
+    // The statistics of the catalog at each checkpoint, from the samples that kept them.
+    private static IReadOnlyList<TimedDistribution> Timed(IReadOnlyList<BaselineSample> samples) =>
+        BaselineComparer.DistributeTimed(samples.Select(sample => sample.History).OfType<HeroStatHistory>().ToList());
 }

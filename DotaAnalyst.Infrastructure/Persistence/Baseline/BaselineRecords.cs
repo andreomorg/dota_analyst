@@ -41,6 +41,10 @@ public class BaselineMetricsRecord
 
     // StoredHeroMetrics as JSON (the same format as the replay analyses).
     public string Metrics { get; set; } = "";
+
+    // The hero's statistics minute by minute (StoredStatHistory as JSON); null in rows collected before they were kept
+    // (filled from the kept replay document by BaselineHistoryBackfill).
+    public string? StatHistory { get; set; }
 }
 
 internal sealed class BaselineMatchRecordConfiguration : IEntityTypeConfiguration<BaselineMatchRecord>
@@ -63,6 +67,7 @@ internal sealed class BaselineMetricsRecordConfiguration : IEntityTypeConfigurat
         builder.HasKey(metrics => new { metrics.MatchId, metrics.HeroId });
         builder.Property(metrics => metrics.Source).HasMaxLength(16);
         builder.Property(metrics => metrics.Metrics).HasColumnType("jsonb");
+        builder.Property(metrics => metrics.StatHistory).HasColumnType("jsonb");
         // The comparison's query.
         builder.HasIndex(metrics => new { metrics.HeroId, metrics.Role, metrics.Source, metrics.StartTime });
         builder.HasIndex(metrics => new { metrics.HeroId, metrics.Role, metrics.OpponentHeroId, metrics.Source, metrics.StartTime });

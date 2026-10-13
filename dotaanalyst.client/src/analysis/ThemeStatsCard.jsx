@@ -23,13 +23,15 @@ function summaryCell(summary, row) {
 
 const SOURCES = { highRank: 'Alto nível', pro: 'Profissionais' };
 
-// The base groups that compare at least one of these rows.
-function groupsOf(smartStats, keys) {
+// The base groups that compare at least one of these rows: keys are the saved metrics (deathsPer30...), stats the
+// catalog's statistics compared at the checkpoints (timed: { stat, second, value, median, betterThan }).
+function groupsOf(smartStats, keys, stats) {
     const groups = [];
     const add = (baselines, prefix, label) => (baselines ?? []).forEach(baseline => {
         const metrics = baseline.metrics.filter(metric => keys.has(metric.metric));
-        if (metrics.length > 0) {
-            groups.push({ key: `${prefix}${baseline.source}`, label: label(baseline), matches: baseline.matches, metrics });
+        const timed = (baseline.timed ?? []).filter(comparison => stats.has(comparison.stat));
+        if (metrics.length > 0 || timed.length > 0) {
+            groups.push({ key: `${prefix}${baseline.source}`, label: label(baseline), matches: baseline.matches, metrics, timed });
         }
     });
     add(smartStats.baselines, '', baseline => SOURCES[baseline.source] ?? baseline.source);
@@ -68,7 +70,8 @@ function ThemeStatsCard({ themes, smartStats, stats, heroName, title }) {
         ?? moments[0]
         ?? null;
     const comparedKeys = new Set(sections.flatMap(section => section.rows.map(row => row.compared).filter(Boolean)));
-    const groups = groupsOf(smartStats, comparedKeys);
+    const timedStats = new Set(moments.length > 0 ? sections.flatMap(section => section.rows.map(row => row.stat).filter(Boolean)) : []);
+    const groups = groupsOf(smartStats, comparedKeys, timedStats);
     const group = groups.find(candidate => candidate.key === selectedKey)
         ?? groups.find(candidate => candidate.key === 'highRank')
         ?? groups[0];
@@ -156,9 +159,17 @@ function ThemeStatsCard({ themes, smartStats, stats, heroName, title }) {
                                 const definition = row.stat && stats ? definitionOf(stats, row.stat) : null;
                                 const timed = Boolean(row.stat && moment);
                                 const lower = row.lower ?? definition?.better === 'lower';
+                                // A catalog row compares at the picked moment when the base has it (checkpoints only: not
+                                // the end, not a period); the others with the saved metric, at the moment it was taken.
+                                const timedCompared = timed && !moment.atEnd && moment.at !== undefined
+                                    ? group?.timed.find(comparison => comparison.stat === row.stat && comparison.second === moment.at)
+                                    : null;
                                 const comparable = !timed || moment.at === row.comparedAt;
-                                const compared = comparable ? group?.metrics.find(metric => metric.metric === row.compared) : null;
-                                const format = COMPARED_FORMAT[row.compared];
+                                const compared = timedCompared
+                                    ?? (comparable ? group?.metrics.find(metric => metric.metric === row.compared) : null);
+                                const format = timedCompared
+                                    ? value => formatStat(value, definition)
+                                    : COMPARED_FORMAT[row.compared];
                                 return (
                                     <tr key={row.stat ?? row.key}>
                                         <th scope="row">
@@ -178,7 +189,7 @@ function ThemeStatsCard({ themes, smartStats, stats, heroName, title }) {
                                                         <span className="baseline-cell">
                                                             <span className="baseline-typical">
                                                                 Típico <span className="mono">{format(compared.median)}</span>
-                                                                {PER_30.has(row.compared) && (
+                                                                {!timedCompared && PER_30.has(row.compared) && (
                                                                     <> · você <span className="mono">{format(compared.value)}</span> por 30 min</>
                                                                 )}
                                                             </span>
@@ -187,8 +198,8 @@ function ThemeStatsCard({ themes, smartStats, stats, heroName, title }) {
                                                     )
                                                     : (
                                                         <span className="indicator-hint">
-                                                            {row.compared && !comparable
-                                                                ? `comparação ${momentLabel({ at: row.comparedAt })}`
+                                                            {timed && (moment.atEnd || moment.at === undefined)
+                                                                ? 'sem comparação no fim nem em períodos'
                                                                 : 'sem comparação'}
                                                         </span>
                                                     )}
@@ -208,7 +219,8 @@ function ThemeStatsCard({ themes, smartStats, stats, heroName, title }) {
             )}
             {moments.length > 1 && (
                 <p className="section-note">
-                    Escolha o momento acima; a comparação com outros jogadores, por enquanto, só existe no momento indicado em cada linha.
+                    Escolha o momento acima. A comparação com outros jogadores usa as partidas da base que chegaram até esse
+                    momento (aos 5, 10, 15, 20, 25, 30 e 40 min).
                 </p>
             )}
         </div>

@@ -1,6 +1,7 @@
 using DotaAnalyst.Application.Abstractions;
 using DotaAnalyst.Application.Matches;
 using DotaAnalyst.Domain.Analysis;
+using DotaAnalyst.Domain.Stats;
 using Microsoft.Extensions.Logging;
 
 namespace DotaAnalyst.Application.Baseline;
@@ -14,15 +15,15 @@ public class DistributionBaselineProvider(
     private static readonly BaselineSource[] Sources = [BaselineSource.Pro, BaselineSource.HighRank];
 
     public async Task<IReadOnlyList<BaselineComparisonSummary>?> CompareAsync(
-        HeroMetrics player, int matchSeconds, CancellationToken cancellationToken)
-        => await CompareAsync(player, matchSeconds, null, cancellationToken);
+        HeroMetrics player, int matchSeconds, HeroStatHistory? history, CancellationToken cancellationToken)
+        => await CompareAsync(player, matchSeconds, history, null, cancellationToken);
 
     public async Task<IReadOnlyList<BaselineComparisonSummary>?> CompareLaneMatchupAsync(
-        HeroMetrics player, int opponentHeroId, int matchSeconds, CancellationToken cancellationToken)
-        => await CompareAsync(player, matchSeconds, opponentHeroId, cancellationToken);
+        HeroMetrics player, int opponentHeroId, int matchSeconds, HeroStatHistory? history, CancellationToken cancellationToken)
+        => await CompareAsync(player, matchSeconds, history, opponentHeroId, cancellationToken);
 
     private async Task<IReadOnlyList<BaselineComparisonSummary>?> CompareAsync(
-        HeroMetrics player, int matchSeconds, int? opponentHeroId, CancellationToken cancellationToken)
+        HeroMetrics player, int matchSeconds, HeroStatHistory? history, int? opponentHeroId, CancellationToken cancellationToken)
     {
         var baselines = new List<BaselineComparisonSummary>();
         try
@@ -38,7 +39,14 @@ public class DistributionBaselineProvider(
                     BaselineComparer.Compare(player, matchSeconds, set?.Distributions ?? [])
                         .Select(comparison => new MetricComparisonSummary(
                             comparison.Metric, comparison.Value, comparison.Median, comparison.BetterThan, comparison.SampleSize))
-                        .ToList()));
+                        .ToList(),
+                    history is null
+                        ? []
+                        : BaselineComparer.CompareTimed(history, set?.Timed ?? [])
+                            .Select(comparison => new TimedComparisonSummary(
+                                comparison.Stat, comparison.Second, comparison.Value, comparison.Median,
+                                comparison.BetterThan, comparison.SampleSize))
+                            .ToList()));
             }
         }
         catch (StorageUnavailableException ex)

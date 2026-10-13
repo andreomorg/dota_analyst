@@ -61,6 +61,10 @@ public sealed record MatchStatTimeline
 
     public HeroStatSeries? FindHero(int heroId) => Heroes.FirstOrDefault(hero => hero.HeroId == heroId);
 
+    // One hero's statistics with the points' clock: what the comparison base keeps of each hero.
+    public HeroStatHistory? HistoryOf(int heroId) =>
+        FindHero(heroId) is { } hero ? new HeroStatHistory(Seconds, hero.Series) : null;
+
     // The value at a moment of the game clock: the last point at or before it (no guessing between two minutes);
     // before 0:00, the first point; after the end, the end. Null when the hero doesn't have the statistic.
     public int? ValueAt(int heroId, StatKey key, int second) =>

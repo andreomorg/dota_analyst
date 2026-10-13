@@ -25,7 +25,7 @@ public class ReplayParserClientTests
 
     // A /v1/match document (only the parts the API reads, plus one it ignores) for a 11:30 match: 12 points per
     // series (minutes 0..10, then the end); the values at minute 10 are the laning numbers.
-    private static string MatchJson(string? laning = null, int schemaVersion = 1) => $$"""
+    internal static string MatchJson(string? laning = null, int schemaVersion = 1) => $$"""
         {
           "schemaVersion": {{schemaVersion}},
           "match": { "matchId": "9034320024", "durationSeconds": 690.4 },

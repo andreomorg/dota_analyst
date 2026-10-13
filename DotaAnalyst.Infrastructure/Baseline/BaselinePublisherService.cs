@@ -25,6 +25,8 @@ public class BaselinePublisherService(
             {
                 await Task.Delay(wait, timeProvider, stoppingToken);
                 await using var scope = scopeFactory.CreateAsyncScope();
+                // Older rows get their statistics per minute first, so the publish compares them at every moment.
+                await scope.ServiceProvider.GetRequiredService<BaselineHistoryBackfill>().RunAsync(stoppingToken);
                 await scope.ServiceProvider.GetRequiredService<PublishBaselineHandler>().PublishAsync(stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)

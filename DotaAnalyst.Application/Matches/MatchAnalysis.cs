@@ -527,7 +527,19 @@ public record RegionValues(
 /// <param name="Source">pro (league matches; roles inferred from the laning) or highRank (public ranked matches of the highest ranks).</param>
 /// <param name="Matches">How many matches of the hero in that role the base has.</param>
 /// <param name="Metrics">The metrics with enough matches to compare (at least 10); empty while the base is small.</param>
-public record BaselineComparisonSummary(BaselineSource Source, int Matches, IReadOnlyList<MetricComparisonSummary> Metrics);
+/// <param name="Timed">The statistics of the catalog (stats.definitions) at 5, 10, 15, 20, 25, 30 and 40 minutes, against the base's matches that lasted until then (at least 10); empty while the base is small or the replay was read before the statistics per minute.</param>
+public record BaselineComparisonSummary(
+    BaselineSource Source, int Matches, IReadOnlyList<MetricComparisonSummary> Metrics,
+    IReadOnlyList<TimedComparisonSummary>? Timed = null);
+
+/// <summary>One statistic of the player at one moment of the match against the base.</summary>
+/// <param name="Stat">The statistic (a key of stats.definitions).</param>
+/// <param name="Second">The moment, in seconds of the game clock.</param>
+/// <param name="Value">The player's value then.</param>
+/// <param name="Median">The base's median then.</param>
+/// <param name="BetterThan">Share (0..1) of the base's matches the player did better than (ties count half; when less is better, e.g. deaths, less counts as better).</param>
+/// <param name="SampleSize">How many of the base's matches lasted until then.</param>
+public record TimedComparisonSummary(StatKey Stat, int Second, double Value, double Median, double BetterThan, int SampleSize);
 
 /// <summary>One metric of the player against the base.</summary>
 /// <param name="Metric">The metric; counts are per 30 minutes of game (deathsPer30, observersPer30...).</param>

@@ -1,6 +1,7 @@
 using DotaAnalyst.Application.Abstractions;
 using DotaAnalyst.Domain.Analysis;
 using DotaAnalyst.Domain.Matches;
+using DotaAnalyst.Domain.Stats;
 using DotaAnalyst.Infrastructure.Persistence;
 using DotaAnalyst.Infrastructure.Persistence.Baseline;
 using DotaAnalyst.Tests.Domain;
@@ -21,6 +22,28 @@ public class BaselineRepositoryTests(PostgresFixture postgres) : IAsyncLifetime
         new(heroId, team, role, deaths, 1, 0, 0.2, 0.05, 3000, 7000, 40, 0.25, 0, 0, null, 0, 0,
             PerRegion<double>.Of(_ => 0.125), PerRegion<int>.Of(region => region == MapRegion.River ? 1 : 0),
             RoleInferred: true, FirstBigItemSeconds: 900);
+
+    // A 12:30 match: points at 0:00, 10:00 and the end.
+    private static HeroStatHistory History(int lastHits) => new(
+        [0, 600, 750],
+        new Dictionary<StatKey, IReadOnlyList<int>> { [StatKey.LastHits] = [0, lastHits, lastHits + 5] });
+
+    [Fact]
+    public async Task SaveThenRead_KeepsTheStatisticsPerMinute()
+    {
+        var repository = CreateRepository();
+        var match = Collected(1, BaselineSource.Pro, Now.AddDays(-1), Hero(31, 5, 3), Hero(1, 1, 2)) with
+        {
+            Histories = new Dictionary<int, HeroStatHistory> { [31] = History(lastHits: 40) },
+        };
+        await repository.SaveAsync(match, CancellationToken.None);
+
+        var lich = Assert.Single(await repository.GetSamplesAsync(31, 5, BaselineSource.Pro, Now.AddDays(-60), CancellationToken.None));
+        var other = Assert.Single(await repository.GetSamplesAsync(1, 1, BaselineSource.Pro, Now.AddDays(-60), CancellationToken.None));
+
+        Assert.Equal(40, lich.History!.ValueAt(StatKey.LastHits, 600));
+        Assert.Null(other.History);
+    }
 
     private static BaselineMatch Collected(long matchId, BaselineSource source, DateTimeOffset start, params HeroMetrics[] heroes) =>
         new(ReplayBuilder.MatchIdOf(matchId), source, start, 2100, BaselineMatchStatus.Collected, heroes, Now);
@@ -120,15 +143,21 @@ public class BaselineRepositoryTests(PostgresFixture postgres) : IAsyncLifetime
     {
         var store = new BaselineDistributionStore(postgres.DbContextFactory, new StorageGuard(TimeProvider.System));
         var distributions = BaselineComparer.Distribute(
-            Enumerable.Range(1, 10).Select(i => new BaselineSample(Hero(31, 5, i), 1800)).ToList());
+            Enumerable.Range(1, 10).Select(i => new BaselineSample(Hero(31, 5, i), 1700)).ToList());
+        var timed = BaselineComparer.DistributeTimed(Enumerable.Range(1, 10).Select(i => History(lastHits: 10 * i)).ToList());
         await store.ReplaceAllAsync([new(31, 5, BaselineSource.Pro, 99, [])], Now, CancellationToken.None);
 
-        await store.ReplaceAllAsync([new(31, 5, BaselineSource.Pro, 10, distributions)], Now, CancellationToken.None);
+        await store.ReplaceAllAsync([new(31, 5, BaselineSource.Pro, 10, distributions, Timed: timed)], Now, CancellationToken.None);
 
         var set = await store.FindAsync(31, 5, BaselineSource.Pro, CancellationToken.None);
         Assert.NotNull(set);
         Assert.Equal(10, set.Matches);
-        Assert.Equal(distributions, set.Distributions);
+        // Kept with two decimals (enough to compare; the mirror stays small).
+        Assert.Equal(
+            distributions.Select(d => d with { Quantiles = d.Quantiles.Select(value => Math.Round(value, 2)).ToList() }),
+            set.Distributions);
+        Assert.Equal(timed.Select(d => d with { Quantiles = d.Quantiles.Select(value => Math.Round(value, 2)).ToList() }), set.Timed);
+        Assert.Contains(set.Timed!, d => d is { Stat: StatKey.LastHits, Second: 600, SampleSize: 10 });
         await store.ReplaceAllAsync(
             [
                 new(31, 5, BaselineSource.Pro, 10, distributions),

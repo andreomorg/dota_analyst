@@ -23,6 +23,10 @@ public class BaselineDistributionRecord
     // [{ "metric": "deathsPer30", "quantiles": [21 numbers], "sampleSize": 42 }, ...] as JSON.
     public string Distributions { get; set; } = "";
 
+    // [{ "stat": "lastHits", "second": 600, "quantiles": [21 numbers], "sampleSize": 42 }, ...] as JSON: the
+    // statistics of the catalog at each checkpoint. "[]" in sets published before them.
+    public string TimedDistributions { get; set; } = "[]";
+
     public DateTimeOffset PublishedAt { get; set; }
 }
 
@@ -34,5 +38,6 @@ internal sealed class BaselineDistributionRecordConfiguration : IEntityTypeConfi
         builder.Property(set => set.OpponentHeroId).HasDefaultValue(0);
         builder.Property(set => set.Source).HasMaxLength(16);
         builder.Property(set => set.Distributions).HasColumnType("jsonb");
+        builder.Property(set => set.TimedDistributions).HasColumnType("jsonb").HasDefaultValueSql("'[]'::jsonb");
     }
 }

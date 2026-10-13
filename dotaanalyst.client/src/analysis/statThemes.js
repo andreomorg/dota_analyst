@@ -71,6 +71,7 @@ export const THEMES = {
             // From 20:00: up to 15:00 is the laning card's.
             { key: 'at20', label: '20:00', at: AT_TWENTY, isDefault: true },
             { key: 'at30', label: '30:00', at: 1800 },
+            { key: 'at40', label: '40:00', at: 2400 },
             { key: 'end', label: 'Fim', atEnd: true },
             { key: 'gain10to20', label: 'De 10 a 20 min', from: AT_TEN, to: AT_TWENTY },
         ],

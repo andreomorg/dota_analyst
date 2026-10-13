@@ -56,6 +56,13 @@ namespace DotaAnalyst.Infrastructure.Persistence.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("published_at");
 
+                    b.Property<string>("TimedDistributions")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("timed_distributions")
+                        .HasDefaultValueSql("'[]'::jsonb");
+
                     b.HasKey("HeroId", "Role", "OpponentHeroId", "Source")
                         .HasName("pk_baseline_distributions");
 
@@ -137,6 +144,10 @@ namespace DotaAnalyst.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset>("StartTime")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("start_time");
+
+                    b.Property<string>("StatHistory")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("stat_history");
 
                     b.HasKey("MatchId", "HeroId")
                         .HasName("pk_baseline_metrics");

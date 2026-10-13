@@ -2,6 +2,7 @@ using DotaAnalyst.Application.Abstractions;
 using DotaAnalyst.Domain.Analysis;
 using DotaAnalyst.Domain.Matches;
 using DotaAnalyst.Domain.Players;
+using DotaAnalyst.Domain.Stats;
 using Microsoft.Extensions.Logging;
 
 namespace DotaAnalyst.Application.Baseline;
@@ -115,7 +116,18 @@ public class CollectBaselineHandler(
             var metrics = analysis.Metrics is { } replayMetrics && analysis.Purchases is { } purchases
                 ? FirstBigItemMetric.AddTo(replayMetrics, purchases, await itemCatalog.GetItemsAsync(cancellationToken))
                 : analysis.Metrics ?? [];
-            await SaveAsync(candidate, details, BaselineMatchStatus.Collected, metrics, now, cancellationToken);
+            // Every hero's statistics minute by minute, so the base can compare at any moment.
+            var stats = MatchStatTimeline.From(analysis);
+            var histories = new Dictionary<int, HeroStatHistory>();
+            foreach (var hero in metrics)
+            {
+                if (stats?.HistoryOf(hero.HeroId) is { } history)
+                {
+                    histories[hero.HeroId] = history;
+                }
+            }
+
+            await SaveAsync(candidate, details, BaselineMatchStatus.Collected, metrics, now, cancellationToken, histories);
             logger.LogInformation(
                 "Collected {Source} match {MatchId} for the comparison base", candidate.Source, candidate.MatchId.Value);
         }
@@ -140,7 +152,7 @@ public class CollectBaselineHandler(
 
     private Task SaveAsync(
         BaselineCandidate candidate, MatchDetails? details, BaselineMatchStatus status, IReadOnlyList<HeroMetrics> metrics,
-        DateTimeOffset now, CancellationToken cancellationToken) =>
+        DateTimeOffset now, CancellationToken cancellationToken, IReadOnlyDictionary<int, HeroStatHistory>? histories = null) =>
         repository.SaveAsync(
             new BaselineMatch(
                 candidate.MatchId,
@@ -149,7 +161,8 @@ public class CollectBaselineHandler(
                 (int)(details?.Duration.TotalSeconds ?? 0),
                 status,
                 metrics,
-                now),
+                now,
+                histories),
             cancellationToken);
 
     // The heroes of the focus accounts' recent matches (none when OpenDota can't say: then high-rank matches wait).

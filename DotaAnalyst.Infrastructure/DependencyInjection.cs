@@ -128,6 +128,7 @@ public static class DependencyInjection
             return;
         }
 
+        services.AddScoped<BaselineHistoryBackfill>();
         services.AddHostedService<BaselineCollectorService>();
         services.AddHostedService<BaselinePublisherService>();
     }

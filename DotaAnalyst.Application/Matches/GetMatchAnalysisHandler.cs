@@ -86,7 +86,7 @@ public class GetMatchAnalysisHandler(
                 : null,
             Objectives: replay?.Objectives is { } objectives ? ToObjectives(objectives, currentPlayer, names) : null,
             SmartStats: replayMetrics is { } metricsForAnalysis && currentPlayer is not null
-                ? await WithBaselinesAsync(ToSmartStats(metricsForAnalysis, currentPlayer, names), metricsForAnalysis, currentPlayer, match, names, cancellationToken)
+                ? await WithBaselinesAsync(ToSmartStats(metricsForAnalysis, currentPlayer, names), metricsForAnalysis, currentPlayer, match, names, replay, cancellationToken)
                 : null,
             Heatmaps: replay?.Heatmaps is { } heatmaps ? ToHeatmaps(heatmaps, match, currentPlayer, names) : null,
             AbilityBuild: replay?.AbilityUpgrades is { } upgrades && currentPlayer is not null
@@ -190,14 +190,15 @@ public class GetMatchAnalysisHandler(
     // comparison base (IBaselineProvider): an extra, the analysis comes without it when it can't be reached.
     private async Task<SmartStats?> WithBaselinesAsync(
         SmartStats? stats, IReadOnlyList<HeroMetrics> metrics, MatchPlayer player, MatchDetails match,
-        NameLookup names, CancellationToken cancellationToken)
+        NameLookup names, ReplayAnalysis? replay, CancellationToken cancellationToken)
     {
         if (stats is null || metrics.FirstOrDefault(hero => hero.HeroId == player.HeroId) is not { } mine)
         {
             return stats;
         }
 
-        var baselines = await baselineProvider.CompareAsync(mine, (int)match.Duration.TotalSeconds, cancellationToken);
+        var history = replay is null ? null : MatchStatTimeline.From(replay)?.HistoryOf(mine.HeroId);
+        var baselines = await baselineProvider.CompareAsync(mine, (int)match.Duration.TotalSeconds, history, cancellationToken);
         var opponentRole = LaneMatchup.OpposingRole(mine.Role);
         var laneOpponent = opponentRole is { } role
             ? metrics.FirstOrDefault(hero => hero.Team != mine.Team && hero.Role == role)
@@ -205,7 +206,7 @@ public class GetMatchAnalysisHandler(
         var matchupBaselines = laneOpponent is null
             ? []
             : await baselineProvider.CompareLaneMatchupAsync(
-                mine, laneOpponent.HeroId, (int)match.Duration.TotalSeconds, cancellationToken);
+                mine, laneOpponent.HeroId, (int)match.Duration.TotalSeconds, history, cancellationToken);
         return stats with
         {
             Baselines = baselines,

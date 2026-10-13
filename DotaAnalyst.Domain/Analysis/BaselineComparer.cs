@@ -1,3 +1,5 @@
+using DotaAnalyst.Domain.Stats;
+
 namespace DotaAnalyst.Domain.Analysis;
 
 // Where the comparison base comes from.
@@ -33,8 +35,23 @@ public enum ComparedMetric
     FirstBigItemSeconds,
 }
 
-// One hero's metrics in one match of the base, with the match's length (for the per-30-minutes numbers).
-public record BaselineSample(HeroMetrics Metrics, int MatchSeconds, int? OpponentHeroId = null);
+// One hero's metrics in one match of the base, with the match's length (for the per-30-minutes numbers), and the
+// hero's statistics minute by minute (null for matches collected before they were kept).
+public record BaselineSample(HeroMetrics Metrics, int MatchSeconds, int? OpponentHeroId = null, HeroStatHistory? History = null);
+
+// A statistic of the catalog at a moment of the match (StatKey at Second) in the base: the values at percentiles
+// 0, 5 ... 100, like MetricDistribution.
+public record TimedDistribution(StatKey Stat, int Second, IReadOnlyList<double> Quantiles, int SampleSize)
+{
+    public virtual bool Equals(TimedDistribution? other) =>
+        other is not null && Stat == other.Stat && Second == other.Second && SampleSize == other.SampleSize
+        && Quantiles.SequenceEqual(other.Quantiles);
+
+    public override int GetHashCode() => HashCode.Combine(Stat, Second, SampleSize);
+}
+
+// How the player did on a statistic at a moment against the base.
+public record TimedComparison(StatKey Stat, int Second, double Value, double Median, double BetterThan, int SampleSize);
 
 // A metric's distribution in the base: the values at percentiles 0, 5, 10 ... 100 (QuantileCount points) and how
 // many matches it came from. What is published to production: small however big the base is.
@@ -123,6 +140,65 @@ public static class BaselineComparer
             var below = ShareBelow(distribution.Quantiles, value);
             comparisons.Add(new MetricComparison(
                 metric, value, distribution.Quantiles[QuantileCount / 2], higherIsBetter ? below : 1 - below, distribution.SampleSize));
+        }
+
+        return comparisons;
+    }
+
+    // The moments the base compares the statistics of the catalog at (5, 10, 15, 20, 25, 30 and 40 minutes): enough for
+    // the page's time pickers, few enough for the production mirror to stay small.
+    public static IReadOnlyList<int> Checkpoints { get; } = [300, 600, 900, 1200, 1500, 1800, 2400];
+
+    // Statistics where more or less is better (the others, like damage taken, have no "better than").
+    private static IEnumerable<StatDefinition> ComparableStats => StatCatalog.All.Where(stat => stat.Better != BetterWhen.Neither);
+
+    // Each comparable statistic at each checkpoint, from the matches that lasted until then (a match over at 25:00 says
+    // nothing about 30:00), when at least MinSampleSize of them have it.
+    public static IReadOnlyList<TimedDistribution> DistributeTimed(IReadOnlyList<HeroStatHistory> histories)
+    {
+        var distributions = new List<TimedDistribution>();
+        foreach (var stat in ComparableStats)
+        {
+            foreach (var second in Checkpoints)
+            {
+                var values = histories
+                    .Select(history => history.ValueAt(stat.Key, second))
+                    .OfType<int>()
+                    .Select(value => (double)value)
+                    .Order()
+                    .ToList();
+                if (values.Count < MinSampleSize)
+                {
+                    continue;
+                }
+
+                var quantiles = Enumerable.Range(0, QuantileCount)
+                    .Select(i => Percentile(values, (double)i / (QuantileCount - 1)))
+                    .ToList();
+                distributions.Add(new TimedDistribution(stat.Key, second, quantiles, values.Count));
+            }
+        }
+
+        return distributions;
+    }
+
+    // The player against each statistic and moment of the base the player's match reached.
+    public static IReadOnlyList<TimedComparison> CompareTimed(HeroStatHistory player, IReadOnlyList<TimedDistribution> distributions)
+    {
+        var comparisons = new List<TimedComparison>();
+        foreach (var distribution in distributions)
+        {
+            var better = StatCatalog.Get(distribution.Stat).Better;
+            if (better == BetterWhen.Neither || distribution.Quantiles.Count != QuantileCount
+                || player.ValueAt(distribution.Stat, distribution.Second) is not { } value)
+            {
+                continue;
+            }
+
+            var below = ShareBelow(distribution.Quantiles, value);
+            comparisons.Add(new TimedComparison(
+                distribution.Stat, distribution.Second, value, distribution.Quantiles[QuantileCount / 2],
+                better == BetterWhen.Higher ? below : 1 - below, distribution.SampleSize));
         }
 
         return comparisons;

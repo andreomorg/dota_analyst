@@ -2,6 +2,7 @@ using System.Text.Json;
 using DotaAnalyst.Application.Abstractions;
 using DotaAnalyst.Domain.Analysis;
 using DotaAnalyst.Domain.Matches;
+using DotaAnalyst.Domain.Stats;
 using DotaAnalyst.Infrastructure.Persistence.Replays;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -67,6 +68,9 @@ public class BaselineRepository(
                     StartTime = start,
                     DurationSeconds = match.DurationSeconds,
                     Metrics = JsonSerializer.Serialize(StoredReplayMappings.ToStored(hero), StoredReplayMappings.JsonOptions),
+                    StatHistory = match.Histories?.GetValueOrDefault(hero.HeroId) is { } history
+                        ? StoredStatHistory.Serialize(history)
+                        : null,
                 }));
                 await db.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
@@ -142,7 +146,7 @@ public class BaselineRepository(
             var rows = await db.BaselineMetrics
                 .AsNoTracking()
                 .Where(row => row.HeroId == heroId && row.Role == role && row.Source == name && row.StartTime >= from)
-                .Select(row => new { row.Metrics, row.DurationSeconds })
+                .Select(row => new { row.Metrics, row.DurationSeconds, row.StatHistory })
                 .ToListAsync(cancellationToken);
 
             var samples = new List<BaselineSample>();
@@ -152,7 +156,7 @@ public class BaselineRepository(
                 {
                     var stored = JsonSerializer.Deserialize<StoredHeroMetrics>(row.Metrics, StoredReplayMappings.JsonOptions)
                         ?? throw new InvalidDataException("Empty metrics.");
-                    samples.Add(new BaselineSample(StoredReplayMappings.ToDomain(stored), row.DurationSeconds));
+                    samples.Add(new BaselineSample(StoredReplayMappings.ToDomain(stored), row.DurationSeconds, History: HistoryOf(row.StatHistory, heroId)));
                 }
                 catch (Exception ex) when (ex is JsonException or InvalidDataException or ArgumentException)
                 {
@@ -176,7 +180,7 @@ public class BaselineRepository(
                 .AsNoTracking()
                 .Where(row => row.HeroId == heroId && row.Role == role && row.OpponentHeroId == opponentHeroId
                     && row.Source == name && row.StartTime >= from)
-                .Select(row => new { row.Metrics, row.DurationSeconds })
+                .Select(row => new { row.Metrics, row.DurationSeconds, row.StatHistory })
                 .ToListAsync(cancellationToken);
 
             var samples = new List<BaselineSample>();
@@ -186,7 +190,7 @@ public class BaselineRepository(
                 {
                     var stored = JsonSerializer.Deserialize<StoredHeroMetrics>(row.Metrics, StoredReplayMappings.JsonOptions)
                         ?? throw new InvalidDataException("Empty metrics.");
-                    samples.Add(new BaselineSample(StoredReplayMappings.ToDomain(stored), row.DurationSeconds, opponentHeroId));
+                    samples.Add(new BaselineSample(StoredReplayMappings.ToDomain(stored), row.DurationSeconds, opponentHeroId, HistoryOf(row.StatHistory, heroId)));
                 }
                 catch (Exception ex) when (ex is JsonException or InvalidDataException or ArgumentException)
                 {
@@ -196,6 +200,20 @@ public class BaselineRepository(
 
             return (IReadOnlyList<BaselineSample>)samples;
         });
+
+    // A row's statistics minute by minute; unreadable ones only leave that row out of the comparison at a moment.
+    private HeroStatHistory? HistoryOf(string? json, int heroId)
+    {
+        try
+        {
+            return StoredStatHistory.Deserialize(json);
+        }
+        catch (Exception ex) when (ex is JsonException or ArgumentException)
+        {
+            logger.LogWarning(ex, "The statistics per minute of a comparison base row of hero {HeroId} can't be read", heroId);
+            return null;
+        }
+    }
 
     internal static string SourceName(BaselineSource source) => source switch
     {

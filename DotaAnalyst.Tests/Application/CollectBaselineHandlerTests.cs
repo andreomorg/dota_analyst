@@ -29,6 +29,9 @@ public class CollectBaselineHandlerTests
         Assert.Equal((2L, BaselineSource.Pro, BaselineMatchStatus.Collected), (saved.MatchId.Value, saved.Source, saved.Status));
         Assert.Single(saved.Metrics);
         Assert.Equal([2L], parser.Parsed);
+        // And each hero's statistics minute by minute, for the comparison at any moment.
+        var history = Assert.Single(saved.Histories!);
+        Assert.Equal((31, 40), (history.Key, history.Value.ValueAt(DotaAnalyst.Domain.Stats.StatKey.LastHits, 1200)));
     }
 
     [Fact]

@@ -31,7 +31,7 @@ public class OpenDotaHeroCatalog(
             .ToDictionary(hero => hero.Id, hero => new Hero(hero.Id, hero.LocalizedName!));
     }
 
-    protected override Hero Create(int id, string name) => new(id, name);
+    protected override Hero Create(int id, string name, string? details) => new(id, name);
 
     protected override string NameOf(Hero hero) => hero.Name;
 }

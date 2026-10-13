@@ -21,7 +21,11 @@ internal sealed record StoredReplayAnalysis(
     // Added in sprint 13, the same way.
     IReadOnlyList<StoredWard>? Wards = null,
     // Added in sprint 14, the same way.
-    IReadOnlyList<StoredDamageRow>? Damage = null);
+    IReadOnlyList<StoredDamageRow>? Damage = null,
+    // Added in sprint 15, the same way.
+    IReadOnlyList<StoredItemPurchase>? Purchases = null);
+
+internal sealed record StoredItemPurchase(int HeroId, int Seconds, string ItemKey);
 
 internal sealed record StoredDamageRow(
     int? SourceHeroId, string SourceKind, int? TargetHeroId, string TargetKind, string? Inflictor, int Amount);
@@ -142,6 +146,10 @@ internal static class StoredReplayMappings
                         ? throw new InvalidDataException("A saved replay analysis has an empty damage row.")
                         : new DamageRow(row.SourceHeroId, row.SourceKind, row.TargetHeroId, row.TargetKind, row.Inflictor,
                             row.Amount))
+                    .ToList(),
+                stored.Purchases?.Select(purchase => purchase is null
+                        ? throw new InvalidDataException("A saved replay analysis has an empty purchase.")
+                        : new ItemPurchase(purchase.HeroId, purchase.Seconds, purchase.ItemKey))
                     .ToList());
         }
         catch (ArgumentException ex)
@@ -179,5 +187,8 @@ internal static class StoredReplayMappings
             Damage: analysis.Damage?
                 .Select(row => new StoredDamageRow(row.SourceHeroId, row.SourceKind, row.TargetHeroId, row.TargetKind,
                     row.Inflictor, row.Amount))
+                .ToList(),
+            Purchases: analysis.Purchases?
+                .Select(purchase => new StoredItemPurchase(purchase.HeroId, purchase.Seconds, purchase.ItemKey))
                 .ToList());
 }

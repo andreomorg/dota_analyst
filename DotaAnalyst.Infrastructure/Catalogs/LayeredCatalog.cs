@@ -30,9 +30,17 @@ public abstract class LayeredCatalog<T>(
     /// <exception cref="DataSourceUnavailableException">OpenDota could not be reached.</exception>
     protected abstract Task<IReadOnlyDictionary<int, T>> LoadFromOpenDotaAsync(CancellationToken cancellationToken);
 
-    protected abstract T Create(int id, string name);
+    // An entry from the saved copy; details is its extra data as saved by DetailsOf (null when it has none).
+    protected abstract T Create(int id, string name, string? details);
 
     protected abstract string NameOf(T entry);
+
+    // The entry's extra data, saved as JSON next to its name; null when the catalog has none (heroes).
+    protected virtual string? DetailsOf(T entry) => null;
+
+    // False for a saved copy made before the catalog had something it needs now: then it is treated as old
+    // (refreshed from OpenDota, still used if OpenDota fails).
+    protected virtual bool IsComplete(SavedCatalog saved) => true;
 
     private string CacheKey => $"catalog:{CatalogName}";
 
@@ -84,7 +92,7 @@ public abstract class LayeredCatalog<T>(
         {
             // Never negative, even if the clocks of two servers disagree a little.
             var savedAge = now - saved.UpdatedAt > TimeSpan.Zero ? now - saved.UpdatedAt : TimeSpan.Zero;
-            if (savedAge < FreshFor)
+            if (savedAge < FreshFor && IsComplete(saved))
             {
                 // Kept in memory only until the saved copy itself gets old.
                 return (ToEntries(saved), FreshFor - savedAge);
@@ -136,7 +144,11 @@ public abstract class LayeredCatalog<T>(
         try
         {
             var names = entries.ToDictionary(pair => pair.Key, pair => NameOf(pair.Value));
-            await store.ReplaceAsync(CatalogName, names, loadedAt, cancellationToken);
+            var details = entries
+                .Select(pair => (pair.Key, Details: DetailsOf(pair.Value)))
+                .Where(entry => entry.Details is not null)
+                .ToDictionary(entry => entry.Key, entry => entry.Details!);
+            await store.ReplaceAsync(CatalogName, names, details, loadedAt, cancellationToken);
         }
         catch (StorageUnavailableException ex)
         {
@@ -145,5 +157,5 @@ public abstract class LayeredCatalog<T>(
     }
 
     private Dictionary<int, T> ToEntries(SavedCatalog saved) =>
-        saved.Names.ToDictionary(pair => pair.Key, pair => Create(pair.Key, pair.Value));
+        saved.Names.ToDictionary(pair => pair.Key, pair => Create(pair.Key, pair.Value, saved.Details.GetValueOrDefault(pair.Key)));
 }

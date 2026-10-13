@@ -66,7 +66,8 @@ public class ReplayAnalysisRepositoryTests(PostgresFixture postgres) : IAsyncLif
             [
                 new DamageRow(31, DamageRow.HeroKind, 28, DamageRow.HeroKind, "lich_frost_nova", 1200),
                 new DamageRow(null, "buildings", 31, DamageRow.HeroKind, null, 300),
-            ]);
+            ],
+            purchases: [new ItemPurchase(31, -90, "tango"), new ItemPurchase(28, 1120, "recipe_black_king_bar")]);
         var repository = CreateRepository();
 
         await repository.SaveAsync(SavedReplayAnalysis.Ready(analysis, SavedAt), CancellationToken.None);
@@ -74,6 +75,7 @@ public class ReplayAnalysisRepositoryTests(PostgresFixture postgres) : IAsyncLif
 
         Assert.Equal(analysis.Deaths, found?.Analysis?.Deaths);
         Assert.Equal(analysis.Damage, found?.Analysis?.Damage);
+        Assert.Equal(analysis.Purchases, found?.Analysis?.Purchases);
     }
 
     [Fact]

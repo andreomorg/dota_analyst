@@ -145,14 +145,18 @@ public class LayeredCatalogTests
         }
 
         public Task ReplaceAsync(
-            string catalog, IReadOnlyDictionary<int, string> names, DateTimeOffset updatedAt, CancellationToken cancellationToken)
+            string catalog,
+            IReadOnlyDictionary<int, string> names,
+            IReadOnlyDictionary<int, string> details,
+            DateTimeOffset updatedAt,
+            CancellationToken cancellationToken)
         {
             if (Fail)
             {
                 throw new StorageUnavailableException("The database is down.");
             }
 
-            Saved = new SavedCatalog(names, updatedAt);
+            Saved = new SavedCatalog(names, updatedAt) { Details = details };
             return Task.CompletedTask;
         }
     }

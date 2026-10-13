@@ -22,6 +22,7 @@ namespace DotaAnalyst.Application.Matches;
 /// <param name="Wards">Every ward of both teams, read from the replay, in the order they were placed; null unless replayStatus is ready.</param>
 /// <param name="Damage">The player's damage to and from enemy heroes and by ability/item, read from the replay; null unless replayStatus is ready and the player is in the match.</param>
 /// <param name="Fights">The teamfights of the match (3+ deaths at most 15 s apart), in time order, with the player's part; null unless replayStatus is ready.</param>
+/// <param name="ItemBuild">The player's starting items and when each item of the build was ready (approximate: items sold or given away still count); null unless replayStatus is ready and the player is in the match, or when the item catalog is unavailable.</param>
 public record MatchAnalysis(
     long MatchId,
     int DurationSeconds,
@@ -39,7 +40,8 @@ public record MatchAnalysis(
     IReadOnlyList<PlayerDeath>? Deaths = null,
     IReadOnlyList<MapWard>? Wards = null,
     PlayerDamage? Damage = null,
-    IReadOnlyList<FightSummary>? Fights = null);
+    IReadOnlyList<FightSummary>? Fights = null,
+    PlayerItemBuild? ItemBuild = null);
 
 /// <summary>One of the ten players of the match.</summary>
 /// <param name="AccountId">Dota account ID; null for players with an anonymous profile.</param>
@@ -260,3 +262,21 @@ public record FightSummary(
     int Assists,
     int X,
     int Y);
+
+/// <summary>The player's item build, read from the replay purchases.</summary>
+/// <param name="StartingItems">Items bought before the horn, in purchase order.</param>
+/// <param name="Items">Items of the build in the order they were ready: assembled items (also the ones that later became part of another, like Mekansm) and items of 600+ gold bought whole that never became a part; no consumables.</param>
+public record PlayerItemBuild(IReadOnlyList<StartingItemCount> StartingItems, IReadOnlyList<TimedItem> Items);
+
+/// <summary>A starting item and how many were bought.</summary>
+/// <param name="ItemId">Item.</param>
+/// <param name="Name">Item name.</param>
+/// <param name="Count">How many were bought before the horn.</param>
+public record StartingItemCount(int ItemId, string Name, int Count);
+
+/// <summary>An item of the build and when it was ready.</summary>
+/// <param name="ItemId">Item.</param>
+/// <param name="Name">Item name.</param>
+/// <param name="Seconds">Game clock when it got into the inventory (for an assembled item, when its parts came together).</param>
+/// <param name="Assembled">Assembled from parts (true) or bought whole (false).</param>
+public record TimedItem(int ItemId, string Name, int Seconds, bool Assembled);

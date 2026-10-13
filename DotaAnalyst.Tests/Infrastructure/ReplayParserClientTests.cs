@@ -43,7 +43,8 @@ public class ReplayParserClientTests
           "laning": {{laning ?? """{ "endsAtSeconds": 600, "lanes": [ { "player": 0, "lane": "bottom" }, { "player": 5, "lane": "jungle" } ] }"""}},
           "kills": [],
           "vision": { "wards": [] },
-          "combat": { "damage": [], "healing": [], "perMinute": [] }
+          "combat": { "damage": [], "healing": [], "perMinute": [] },
+          "items": { "purchases": [], "uses": [], "final": [] }
         }
         """;
 
@@ -158,6 +159,42 @@ public class ReplayParserClientTests
             ],
             analysis.Damage);
         Assert.Equal([31], Assert.Single(analysis.Deaths!).AssistHeroIds);
+    }
+
+    [Fact]
+    public async Task Parse_Purchases_BecomeItemPurchasesWithoutThePrefix()
+    {
+        var body = MatchJson().Replace("\"purchases\": []", """
+            "purchases": [
+              { "player": 0, "items": [ [-89.9, "item_tango"], [1120.4, "item_recipe_black_king_bar"] ] },
+              { "player": 5, "items": [ [34.6, "item_circlet"] ] }
+            ]
+            """);
+
+        var analysis = await CreateClient(new FakeParser(Json(HttpStatusCode.OK, body, "application/json")))
+            .ParseAsync(Match, ReplayUrl, CancellationToken.None);
+
+        Assert.Equal(
+            [
+                new ItemPurchase(31, -90, "tango"),
+                new ItemPurchase(28, 35, "circlet"),
+                new ItemPurchase(31, 1120, "recipe_black_king_bar"),
+            ],
+            analysis.Purchases);
+    }
+
+    [Theory]
+    [InlineData("""[ "item_tango", -89.9 ]""")]
+    [InlineData("""[ -89.9 ]""")]
+    [InlineData("""{ "t": -89.9, "name": "item_tango" }""")]
+    public async Task Parse_PurchaseNotATuple_IsAnUnreadableReplay(string tuple)
+    {
+        var body = MatchJson().Replace("\"purchases\": []", $$"""
+            "purchases": [ { "player": 0, "items": [ {{tuple}} ] } ]
+            """);
+
+        await Assert.ThrowsAsync<ReplayUnreadableException>(() =>
+            CreateClient(new FakeParser(Json(HttpStatusCode.OK, body, "application/json"))).ParseAsync(Match, ReplayUrl, CancellationToken.None));
     }
 
     [Fact]

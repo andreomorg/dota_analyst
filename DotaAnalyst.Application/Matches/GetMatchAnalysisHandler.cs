@@ -74,7 +74,39 @@ public class GetMatchAnalysisHandler(
             Wards: replay?.Wards is { } wards ? ToWards(wards, currentPlayer, names) : null,
             Damage: replay?.Damage is { } damage && currentPlayer is not null ? ToDamage(damage, match, currentPlayer, names) : null,
             // Deaths read before the damage have no assists: no fights until the replay is read again.
-            Fights: replay?.Deaths is { } fightDeaths && replay.Damage is not null ? ToFights(fightDeaths, match, currentPlayer) : null);
+            Fights: replay?.Deaths is { } fightDeaths && replay.Damage is not null ? ToFights(fightDeaths, match, currentPlayer) : null,
+            ItemBuild: replay?.Purchases is { } purchases && currentPlayer is not null
+                ? ToItemBuild(purchases, currentPlayer, itemsTask.Result)
+                : null);
+    }
+
+    // Null when the catalog has no details (an old saved copy with OpenDota down): without components there is no
+    // assembly to redo.
+    private static PlayerItemBuild? ToItemBuild(
+        IReadOnlyList<ItemPurchase> purchases, MatchPlayer player, IReadOnlyDictionary<int, Item> items)
+    {
+        var byKey = items.Values
+            .Where(item => item.Details is not null)
+            .DistinctBy(item => item.Details!.Key)
+            .ToDictionary(item => item.Details!.Key);
+        if (byKey.Count == 0)
+        {
+            return null;
+        }
+
+        var build = ItemBuildEvaluator.Evaluate(
+            purchases.Where(purchase => purchase.HeroId == player.HeroId),
+            byKey.ToDictionary(pair => pair.Key, pair => pair.Value.Details!));
+
+        return new PlayerItemBuild(
+            // An item from a newer patch than the catalog has no name to show: left out.
+            StartingItems: build.StartingItems
+                .Where(item => byKey.ContainsKey(item.ItemKey))
+                .Select(item => new StartingItemCount(byKey[item.ItemKey].Id, byKey[item.ItemKey].Name, item.Count))
+                .ToList(),
+            Items: build.Items
+                .Select(item => new TimedItem(byKey[item.ItemKey].Id, byKey[item.ItemKey].Name, item.Seconds, item.Assembled))
+                .ToList());
     }
 
     // Our own reading of the replay (laning phase, timeline, deaths), for every match with a replay: OpenDota's

@@ -33,6 +33,10 @@ namespace DotaAnalyst.Infrastructure.Persistence.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("id");
 
+                    b.Property<string>("Details")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("details");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("text")

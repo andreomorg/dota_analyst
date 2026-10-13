@@ -23,7 +23,11 @@ public sealed class NoDatabase : IMatchRepository, IPlayerSearchRepository, ICat
         Task.FromResult<SavedCatalog?>(null);
 
     public Task ReplaceAsync(
-        string catalog, IReadOnlyDictionary<int, string> names, DateTimeOffset updatedAt, CancellationToken cancellationToken) =>
+        string catalog,
+        IReadOnlyDictionary<int, string> names,
+        IReadOnlyDictionary<int, string> details,
+        DateTimeOffset updatedAt,
+        CancellationToken cancellationToken) =>
         Task.CompletedTask;
 }
 

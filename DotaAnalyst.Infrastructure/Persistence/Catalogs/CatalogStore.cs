@@ -2,8 +2,12 @@ using Microsoft.EntityFrameworkCore;
 
 namespace DotaAnalyst.Infrastructure.Persistence.Catalogs;
 
-// A saved catalog: ID -> name, and when it was loaded from OpenDota.
-public sealed record SavedCatalog(IReadOnlyDictionary<int, string> Names, DateTimeOffset UpdatedAt);
+// A saved catalog: ID -> name, and when it was loaded from OpenDota. Details: ID -> the entry's extra data as JSON,
+// only for the entries that have it.
+public sealed record SavedCatalog(IReadOnlyDictionary<int, string> Names, DateTimeOffset UpdatedAt)
+{
+    public IReadOnlyDictionary<int, string> Details { get; init; } = new Dictionary<int, string>();
+}
 
 // Saved copies of the hero/item catalogs. An Infrastructure detail of the catalogs (the Application only
 // knows IHeroCatalog/IItemCatalog), behind an interface so the catalog logic can be tested without a database.
@@ -13,8 +17,14 @@ public interface ICatalogStore
     /// <exception cref="Application.Abstractions.StorageUnavailableException">The database could not be read.</exception>
     Task<SavedCatalog?> LoadAsync(string catalog, CancellationToken cancellationToken);
 
+    /// <param name="details">ID -> extra data as JSON, for the entries that have it.</param>
     /// <exception cref="Application.Abstractions.StorageUnavailableException">The database could not be written.</exception>
-    Task ReplaceAsync(string catalog, IReadOnlyDictionary<int, string> names, DateTimeOffset updatedAt, CancellationToken cancellationToken);
+    Task ReplaceAsync(
+        string catalog,
+        IReadOnlyDictionary<int, string> names,
+        IReadOnlyDictionary<int, string> details,
+        DateTimeOffset updatedAt,
+        CancellationToken cancellationToken);
 }
 
 public class CatalogStore(IDbContextFactory<AppDbContext> dbContextFactory, StorageGuard storageGuard) : ICatalogStore
@@ -32,11 +42,20 @@ public class CatalogStore(IDbContextFactory<AppDbContext> dbContextFactory, Stor
                 ? null
                 : new SavedCatalog(
                     entries.ToDictionary(entry => entry.Id, entry => entry.Name),
-                    entries.Min(entry => entry.UpdatedAt));
+                    entries.Min(entry => entry.UpdatedAt))
+                {
+                    Details = entries
+                        .Where(entry => entry.Details is not null)
+                        .ToDictionary(entry => entry.Id, entry => entry.Details!),
+                };
         });
 
     public Task ReplaceAsync(
-        string catalog, IReadOnlyDictionary<int, string> names, DateTimeOffset updatedAt, CancellationToken cancellationToken) =>
+        string catalog,
+        IReadOnlyDictionary<int, string> names,
+        IReadOnlyDictionary<int, string> details,
+        DateTimeOffset updatedAt,
+        CancellationToken cancellationToken) =>
         storageGuard.RunAsync($"saving the {catalog} catalog", async () =>
         {
             await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
@@ -58,6 +77,7 @@ public class CatalogStore(IDbContextFactory<AppDbContext> dbContextFactory, Stor
                     Catalog = catalog,
                     Id = pair.Key,
                     Name = pair.Value,
+                    Details = details.GetValueOrDefault(pair.Key),
                     UpdatedAt = at,
                 }));
                 await db.SaveChangesAsync(cancellationToken);

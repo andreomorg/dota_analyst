@@ -16,7 +16,8 @@ public record ReplayAnalysis
         MatchTimeline? timeline = null,
         IReadOnlyList<HeroDeath>? deaths = null,
         IReadOnlyList<WardPlacement>? wards = null,
-        IReadOnlyList<DamageRow>? damage = null)
+        IReadOnlyList<DamageRow>? damage = null,
+        IReadOnlyList<ItemPurchase>? purchases = null)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(matchId.Value, nameof(matchId));
         ArgumentOutOfRangeException.ThrowIfNegative(endsAtSeconds);
@@ -56,7 +57,17 @@ public record ReplayAnalysis
         }
 
         Damage = damage?.ToList();
+        if (purchases is not null && purchases.Any(purchase => purchase is null))
+        {
+            throw new ArgumentException("A replay analysis can't have an empty purchase.", nameof(purchases));
+        }
+
+        // OrderBy is stable: purchases in the same second keep the replay's order.
+        Purchases = purchases?.OrderBy(purchase => purchase.Seconds).ToList();
     }
+
+    // Every item purchase of every hero, in time order; null for analyses made before purchases were read.
+    public IReadOnlyList<ItemPurchase>? Purchases { get; }
 
     // Damage of the whole match with a hero on at least one side; null for analyses made before it was read.
     public IReadOnlyList<DamageRow>? Damage { get; }
@@ -72,7 +83,8 @@ public record ReplayAnalysis
 
     // Made before everything the analysis page shows was read from the replay: worth parsing again.
     // (Analyses without damage were also read before deaths had assists.)
-    public bool IsOutdated => Timeline is null || Deaths is null || Wards is null || Damage is null;
+    public bool IsOutdated =>
+        Timeline is null || Deaths is null || Wards is null || Damage is null || Purchases is null;
 
     public MatchId MatchId { get; }
 

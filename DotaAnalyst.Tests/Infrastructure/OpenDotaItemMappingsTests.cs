@@ -24,8 +24,8 @@ public class OpenDotaItemMappingsTests
 
         // Assert
         Assert.Equal(2, result.Count);
-        Assert.Equal(new Item(1, "Blink Dagger"), result[1]);
-        Assert.Equal(new Item(36, "Magic Wand"), result[36]);
+        Assert.Equal((1, "Blink Dagger"), (result[1].Id, result[1].Name));
+        Assert.Equal((36, "Magic Wand"), (result[36].Id, result[36].Name));
     }
 
     [Fact]
@@ -48,6 +48,27 @@ public class OpenDotaItemMappingsTests
         var result = OpenDotaMappings.ToItems(itemIds, items);
 
         Assert.Equal([1], result.Keys);
+    }
+
+    [Fact]
+    public void ToItems_KeepsKeyCostComponentsAndConsumables()
+    {
+        var itemIds = Deserialize<Dictionary<int, string>>("""{ "36": "magic_wand", "44": "tango", "1": "blink" }""");
+        var items = Deserialize<Dictionary<string, OpenDotaItem>>(
+            """
+            {
+              "magic_wand": { "dname": "Magic Wand", "cost": 460, "qual": "common", "created": true,
+                              "components": ["magic_stick", "branches", "branches"] },
+              "tango": { "dname": "Tango", "cost": 90, "qual": "consumable;laning", "components": null },
+              "blink": { "dname": "Blink Dagger", "cost": 2250, "qual": "component" }
+            }
+            """);
+
+        var result = OpenDotaMappings.ToItems(itemIds, items);
+
+        Assert.Equal(new ItemDetails("magic_wand", 460, ["magic_stick", "branches", "branches"], isConsumable: false), result[36].Details);
+        Assert.Equal(new ItemDetails("tango", 90, [], isConsumable: true), result[44].Details);
+        Assert.Equal(new ItemDetails("blink", 2250, null, isConsumable: false), result[1].Details);
     }
 
     private static T Deserialize<T>(string json) => JsonSerializer.Deserialize<T>(json, OpenDotaClient.JsonOptions)!;

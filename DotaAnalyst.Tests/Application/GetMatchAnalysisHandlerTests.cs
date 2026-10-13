@@ -267,7 +267,7 @@ public class GetMatchAnalysisHandlerTests
                 new WardPlacement(WardKind.Sentry, Team.Dire, 28, 100, 200, 700, 760, destroyed: true, 31),
                 new WardPlacement(WardKind.Observer, Team.Radiant, 31, -3000, 1500, -60, null, destroyed: false, null),
             ],
-            damage: []);
+            damage: [], purchases: []);
         var handler = CreateHandler(
             UnparsedMatchWithMe(), new FakeReplayAnalysisRepository(SavedReplayAnalysis.Ready(replay, Now)));
 
@@ -302,7 +302,7 @@ public class GetMatchAnalysisHandlerTests
         };
         return new ReplayAnalysis(
             MatchIdOf(10), ReplayAnalysis.LaningPhaseEndsAtSeconds, players, ReplayBuilder.Timeline(players), deaths,
-            wards: [], damage);
+            wards: [], damage, purchases: []);
     }
 
     [Fact]
@@ -361,6 +361,56 @@ public class GetMatchAnalysisHandlerTests
                     Died: true, Kills: 1, Assists: 1, X: 200, Y: 200),
             ],
             fights);
+    }
+
+    [Fact]
+    public async Task ItemBuild_Ready_ThePlayersStartingItemsAndBuild_WithNames()
+    {
+        var players = new[] { ReplayBuilder.Hero(31, Team.Radiant, Lane.Bottom), ReplayBuilder.Hero(28, Team.Dire, Lane.Bottom) };
+        var replay = new ReplayAnalysis(
+            MatchIdOf(10), ReplayAnalysis.LaningPhaseEndsAtSeconds, players, ReplayBuilder.Timeline(players), deaths: [],
+            wards: [], damage: [],
+            purchases:
+            [
+                new ItemPurchase(31, -90, "tango"),
+                new ItemPurchase(31, 600, "ogre_axe"),
+                new ItemPurchase(28, 700, "blink"), // the enemy's
+                new ItemPurchase(31, 900, "mithril_hammer"),
+                new ItemPurchase(31, 1000, "recipe_black_king_bar"),
+                new ItemPurchase(31, 1003, "black_king_bar"), // logged when the parts came together
+            ]);
+        var items = new[]
+        {
+            new Item(44, "Tango") { Details = new ItemDetails("tango", 90, [], isConsumable: true) },
+            new Item(1, "Blink Dagger") { Details = new ItemDetails("blink", 2250, [], isConsumable: false) },
+            new Item(2, "Ogre Axe") { Details = new ItemDetails("ogre_axe", 1000, [], isConsumable: false) },
+            new Item(3, "Mithril Hammer") { Details = new ItemDetails("mithril_hammer", 1600, [], isConsumable: false) },
+            new Item(4, "Black King Bar Recipe") { Details = new ItemDetails("recipe_black_king_bar", 1450, [], isConsumable: false) },
+            new Item(116, "Black King Bar") { Details = new ItemDetails("black_king_bar", 4050, ["mithril_hammer", "ogre_axe"], isConsumable: false) },
+        };
+        var handler = CreateHandler(
+            new FakeReplayAnalyzer(UnparsedMatchWithMe()),
+            items: new FakeItemCatalog(items),
+            replays: new FakeReplayAnalysisRepository(SavedReplayAnalysis.Ready(replay, Now)));
+
+        var build = (await handler.HandleAsync(MatchIdOf(10), Me, CancellationToken.None))!.ItemBuild;
+
+        Assert.NotNull(build);
+        Assert.Equal([new StartingItemCount(44, "Tango", 1)], build.StartingItems);
+        Assert.Equal([new TimedItem(116, "Black King Bar", 1003, Assembled: true)], build.Items);
+    }
+
+    [Fact]
+    public async Task ItemBuild_CatalogWithoutDetails_IsNull()
+    {
+        var replay = ReplayBuilder.Analysis(10, ReplayBuilder.Hero(31, Team.Radiant, Lane.Bottom));
+        var handler = CreateHandler(
+            UnparsedMatchWithMe(), new FakeReplayAnalysisRepository(SavedReplayAnalysis.Ready(replay, Now)));
+
+        var analysis = await handler.HandleAsync(MatchIdOf(10), Me, CancellationToken.None);
+
+        Assert.Equal(ReplayStatus.Ready, analysis!.ReplayStatus);
+        Assert.Null(analysis.ItemBuild);
     }
 
     [Fact]
@@ -625,14 +675,16 @@ public class GetMatchAnalysisHandlerTests
         FakeMatchRepository? repository = null,
         FakeReplayAnalysisRepository? replays = null,
         FakeReplayParseQueue? queue = null,
-        TimeProvider? clock = null) =>
+        TimeProvider? clock = null,
+        FakeItemCatalog? items = null) =>
         new(
             analyzer,
             repository ?? new FakeMatchRepository(),
             replays ?? new FakeReplayAnalysisRepository(),
             queue ?? new FakeReplayParseQueue(),
             new FakeHeroCatalog(new Hero(31, "Lich")),
-            new FakeItemCatalog(new Item(1, "Blink Dagger"), new Item(2, "Trusty Shovel")),
+            // Names only by default (no details: no item build).
+            items ?? new FakeItemCatalog(new Item(1, "Blink Dagger"), new Item(2, "Trusty Shovel")),
             clock ?? new FixedTimeProvider(Now),
             NullLogger<GetMatchAnalysisHandler>.Instance);
 

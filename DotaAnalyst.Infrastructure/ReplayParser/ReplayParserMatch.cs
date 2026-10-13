@@ -1,3 +1,4 @@
+using System.Text.Json;
 using DotaAnalyst.Domain.Matches;
 using DotaAnalyst.Domain.Replays;
 
@@ -17,7 +18,13 @@ internal sealed record ReplayParserMatchResponse(
     ReplayParserLaning? Laning,
     IReadOnlyList<ReplayParserKill?>? Kills,
     ReplayParserVision? Vision,
-    ReplayParserCombat? Combat);
+    ReplayParserCombat? Combat,
+    ReplayParserItems? Items);
+
+internal sealed record ReplayParserItems(IReadOnlyList<ReplayParserPlayerItems?>? Purchases);
+
+// One player's purchases as [t, "item_name"] tuples (JSON arrays, read one by one in the mapping).
+internal sealed record ReplayParserPlayerItems(int? Player, IReadOnlyList<JsonElement>? Items);
 
 internal sealed record ReplayParserVision(IReadOnlyList<ReplayParserWard?>? Wards);
 
@@ -155,8 +162,35 @@ internal static class ReplayParserMappings
                 amount: row.Amount ?? throw Missing("damage.amount")))
             .ToList();
 
+        var purchases = Required(response.Items?.Purchases, "items.purchases")
+            .Select(entry => entry ?? throw Empty("purchases entry"))
+            .SelectMany(entry =>
+            {
+                var heroId = HeroOfPlayer(entry.Player ?? throw Missing("purchases.player"))!.Value;
+                return Required(entry.Items, "purchases.items").Select(tuple => ToPurchase(heroId, tuple));
+            })
+            .ToList();
+
         return new ReplayAnalysis(
-            matchId, endsAt, laningStats, new MatchTimeline(Seconds(count, duration), heroes), deaths, wards, damage);
+            matchId, endsAt, laningStats, new MatchTimeline(Seconds(count, duration), heroes), deaths, wards, damage,
+            purchases);
+    }
+
+    // [t, "item_name"] -> a purchase keyed like the item catalog (without "item_").
+    private static ItemPurchase ToPurchase(int heroId, JsonElement tuple)
+    {
+        if (tuple.ValueKind != JsonValueKind.Array || tuple.GetArrayLength() != 2
+            || tuple[0].ValueKind != JsonValueKind.Number || tuple[1].ValueKind != JsonValueKind.String)
+        {
+            throw new InvalidDataException("A purchase is not [t, \"item_name\"].");
+        }
+
+        var name = tuple[1].GetString()!;
+        const string Prefix = "item_";
+        return new ItemPurchase(
+            heroId,
+            (int)Math.Round(tuple[0].GetDouble()),
+            name.StartsWith(Prefix, StringComparison.Ordinal) ? name[Prefix.Length..] : name);
     }
 
     private static WardPlacement ToWard(ReplayParserWard ward, Dictionary<int, int> heroOf)

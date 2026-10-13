@@ -82,7 +82,7 @@ public static class OpenDotaMappings
             NeutralItemId: player.ItemNeutral is > 0 ? player.ItemNeutral : null,
             Benchmarks: ToBenchmarks(player.Benchmarks));
 
-    // Joins the two item constants (ID -> key and key -> data) into ID -> item.
+    // Joins the two item constants (ID -> key and key -> data) into ID -> item, with the item's details.
     // Entries without a key match or without a display name are skipped.
     public static IReadOnlyDictionary<int, Item> ToItems(
         IReadOnlyDictionary<int, string> itemIds, IReadOnlyDictionary<string, OpenDotaItem> items)
@@ -92,11 +92,27 @@ public static class OpenDotaMappings
         {
             if (items.TryGetValue(key, out var item) && !string.IsNullOrWhiteSpace(item?.Dname))
             {
-                result[id] = new Item(id, item.Dname);
+                result[id] = new Item(id, item.Dname) { Details = ToItemDetails(key, item) };
             }
         }
 
         return result;
+    }
+
+    // Details OpenDota can't give in a usable shape (a blank key, a negative cost) are left out: the item keeps its
+    // name, only the build loses it.
+    private static ItemDetails? ToItemDetails(string key, OpenDotaItem item)
+    {
+        if (string.IsNullOrWhiteSpace(key) || item.Cost is < 0)
+        {
+            return null;
+        }
+
+        return new ItemDetails(
+            key,
+            item.Cost ?? 0,
+            item.Components?.Where(component => !string.IsNullOrWhiteSpace(component)).Select(component => component!).ToList(),
+            isConsumable: item.Qual?.Contains("consumable", StringComparison.OrdinalIgnoreCase) == true);
     }
 
     private static Team? ToWinningTeam(bool? radiantWin) => radiantWin switch

@@ -1,4 +1,5 @@
 import { formatDuration, formatNumber, formatSignedNumber } from '../matches/format';
+import { HeroIcon } from '../heroes/HeroImage';
 
 const LANE_LABELS = {
     top: 'Top (rota de cima)',
@@ -30,6 +31,11 @@ const STATUS_TEXT = {
     failed: 'Não foi possível analisar o replay desta partida.',
     unavailable: 'A análise do replay está indisponível no momento.',
 };
+const STATUS_TITLE = {
+    expired: 'Replay indisponível',
+    failed: 'Não foi possível analisar o replay',
+    unavailable: 'Análise do replay indisponível',
+};
 
 // Falls back to the raw key so a lane added later on the back-end still shows up.
 function laneLabel(lane) {
@@ -40,7 +46,10 @@ function PlayerRow({ player, isCurrentPlayer }) {
     return (
         <tr className={isCurrentPlayer ? 'current-player' : undefined}>
             <th scope="row">
-                {player.heroName}
+                <span className="hero-cell">
+                    <HeroIcon heroId={player.heroId} />
+                    {player.heroName}
+                </span>
                 {isCurrentPlayer && <>{' '}<span className="you-badge">Você</span></>}
             </th>
             <td>{formatNumber(player.lastHits)} / {formatNumber(player.denies)}</td>
@@ -161,10 +170,25 @@ function LaningSection({ replayStatus, laning, pollingStopped }) {
         content = laning ? <LaningSummary laning={laning} /> : null;
         announcement = laning ? 'A fase de rotas está pronta.' : '';
     } else if (replayStatus === 'processing') {
-        content = <p className="notice">{processingText}</p>;
+        content = (
+            <div className={`replay-status replay-status-processing${pollingStopped ? ' replay-status-delayed' : ''}`}>
+                <span className="replay-status-indicator" aria-hidden="true" />
+                <div>
+                    <h2>Analisando o replay</h2>
+                    <p>{processingText}</p>
+                </div>
+            </div>
+        );
         announcement = processingText;
     } else if (STATUS_TEXT[replayStatus]) {
-        content = <p className="replay-status-note">{STATUS_TEXT[replayStatus]}</p>;
+        content = (
+            <div className={`replay-status replay-status-${replayStatus}`}>
+                <div>
+                    <h2>{STATUS_TITLE[replayStatus]}</h2>
+                    <p>{STATUS_TEXT[replayStatus]}</p>
+                </div>
+            </div>
+        );
         announcement = STATUS_TEXT[replayStatus];
     }
 

@@ -1,4 +1,5 @@
 import { formatDate, formatDuration, formatNumber } from '../matches/format';
+import { HeroPortrait } from '../heroes/HeroImage';
 
 // The result is from the user's point of view; without them in the match (or without a known winner) it is "—".
 function resultOf(won) {
@@ -22,7 +23,7 @@ function MatchHeader({ analysis }) {
     const result = resultOf(performance?.won);
 
     return (
-        <header className="match-header">
+        <header id="match-overview" className="match-header">
             <h1>
                 Partida {analysis.matchId}
                 {' · '}
@@ -56,7 +57,10 @@ function MatchHeader({ analysis }) {
                 {performance && (
                     <div>
                         <dt>Seu herói</dt>
-                        <dd>{performance.heroName} ({performance.isRadiant ? 'Radiant' : 'Dire'})</dd>
+                        <dd className="match-hero">
+                            <HeroPortrait heroId={performance.heroId} />
+                            <span>{performance.heroName} ({performance.isRadiant ? 'Radiant' : 'Dire'})</span>
+                        </dd>
                     </div>
                 )}
             </dl>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { fetchMatchAnalysis } from '../api/matches';
 
 // While the API says the replay is being analyzed, the analysis is fetched again every 10 s,
@@ -16,6 +16,13 @@ export function useMatchAnalysis(accountId, matchId, enabled) {
     // the key no longer matches and the page shows "loading" without a synchronous setState.
     // A refresh keeps the same key, so the page never goes back to "loading": only the data changes.
     const [result, setResult] = useState(null);
+    const [retryVersion, setRetryVersion] = useState(0);
+    const retry = useCallback(() => {
+        setResult(previous => (previous?.key === requestKey
+            ? { key: requestKey, status: 'loading' }
+            : previous));
+        setRetryVersion(version => version + 1);
+    }, [requestKey]);
 
     useEffect(() => {
         if (!enabled) {
@@ -81,7 +88,7 @@ export function useMatchAnalysis(accountId, matchId, enabled) {
             controller.abort();
             clearTimeout(refreshTimer);
         };
-    }, [accountId, matchId, enabled, requestKey]);
+    }, [accountId, matchId, enabled, requestKey, retryVersion]);
 
-    return result?.key === requestKey ? result : { status: 'loading' };
+    return result?.key === requestKey ? { ...result, retry } : { status: 'loading', retry };
 }

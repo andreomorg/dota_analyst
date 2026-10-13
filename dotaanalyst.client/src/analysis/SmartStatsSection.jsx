@@ -32,6 +32,16 @@ function insightText(insight, stats) {
             return `Você morreu ${insight.value} vezes na selva inimiga (${them}: ${insight.counterpart ?? 0} na sua). Entrar lá sem visão ou sem o time costuma custar caro.`;
         case 'shortObserverLife':
             return `Seus observers duraram em média ${lifetime(insight.value)} (o máximo é 6:00): o inimigo os encontrou cedo. Evite lugares óbvios e coloque sentries junto.`;
+        case 'lowFightPresence':
+            return `Você esteve perto de ${percent(insight.value)} das lutas do time (${them}: ${percent(insight.counterpart)}). Fique mais perto do time quando uma luta é provável.`;
+        case 'quickRedeaths':
+            return `Você morreu ${insight.value} vezes logo depois de voltar (até 1:30 depois de renascer). Antes de voltar para a luta, espere o time ou recupere o mapa.`;
+        case 'lostLaneTrades':
+            return `Na fase de rotas você recebeu ${formatNumber(insight.value)} de dano de heróis (${them}: ${formatNumber(insight.counterpart)}) e causou ${formatNumber(stats.player.laneDamageDealt)}. Você perdeu as trocas: cuidado com o posicionamento perto dos creeps inimigos.`;
+        case 'lowObserverUptime':
+            return `Seu time teve observer no mapa em ${percent(insight.value)} da partida; o inimigo, em ${percent(insight.counterpart)}. Como suporte, mantenha sempre um observer ativo.`;
+        case 'gapGrewAfterLane':
+            return `Aos 20:00 você tinha ${formatNumber(insight.value)} de patrimônio contra ${formatNumber(insight.counterpart)} de ${them}, e a diferença cresceu depois da fase de rotas. Reveja onde você farmou entre 10 e 20 minutos.`;
         default:
             return null;
     }
@@ -48,6 +58,22 @@ const GROUPS = [
             { key: 'deathsByRegion.river', label: 'Mortes no rio', format: plain },
             { key: 'aloneOnEnemySideShare', label: 'Tempo sozinho no lado inimigo', format: percent },
             { key: 'enemySideShare', label: 'Tempo no lado inimigo', format: percent },
+            { key: 'quickRedeaths', label: 'Mortes logo depois de voltar', format: plain },
+        ],
+    },
+    {
+        title: 'Lutas',
+        rows: [
+            {
+                key: 'fightsNearby',
+                label: 'Lutas do time em que esteve perto',
+                // "x de y" (the average row has fractions: one decimal).
+                value: summary => summary?.teamFights === null || summary?.teamFights === undefined
+                    ? null
+                    : `${plain(summary.fightsNearby)} de ${plain(summary.teamFights)}`,
+            },
+            { key: 'killParticipation', label: 'Participação em abates', format: percent },
+            { key: 'leadLostPerDeath', label: 'Vantagem do time perdida por morte', format: value => formatNumber(Math.round(value)) },
         ],
     },
     {
@@ -57,6 +83,8 @@ const GROUPS = [
             { key: 'netWorthAt10', label: 'Patrimônio aos 10:00', format: plain },
             { key: 'netWorthAt20', label: 'Patrimônio aos 20:00', format: plain },
             { key: 'netWorthShare', label: 'Parte do patrimônio do time', format: percent },
+            { key: 'laneDamageDealt', label: 'Dano causado em heróis até 10:00', format: plain },
+            { key: 'laneDamageTaken', label: 'Dano recebido de heróis até 10:00', format: plain },
         ],
     },
     {
@@ -67,6 +95,13 @@ const GROUPS = [
             { key: 'observerAverageLifetimeSeconds', label: 'Vida média dos observers', format: lifetime },
             { key: 'wardsLostToEnemy', label: 'Seus wards destruídos pelo inimigo', format: plain },
             { key: 'enemyWardsDestroyed', label: 'Wards inimigos destruídos', format: plain },
+            { key: 'teamObserverUptime', label: 'Tempo com observer do time', format: percent },
+        ],
+    },
+    {
+        title: 'Movimento',
+        rows: [
+            { key: 'estimatedMovementDistance', label: 'Deslocamento estimado', format: value => `${formatNumber(Math.round(value))} unidades de mapa` },
         ],
     },
 ];
@@ -91,16 +126,28 @@ const REGIONS = [
     { key: 'enemyBase', label: 'Base inimiga' },
 ];
 
+const PHASES = [
+    { key: 'earlyGame', label: 'Começo (0–10 min)' },
+    { key: 'midGame', label: 'Meio (10–20 min)' },
+    { key: 'lateGame', label: 'Fim (20+ min)' },
+];
+
+function movementTotal(movement) {
+    return movement
+        ? Object.values(movement).reduce((total, value) => total + value, 0)
+        : null;
+}
+
 // Where the time went: the player and the enemy of the same role, region by region, on one scale (0-100%).
 // Colour only tells the two apart (legend); the values are written.
-function RegionChart({ player, counterpart, counterpartName }) {
+function RegionChart({ player, counterpart, counterpartName, title, note }) {
     if (!player || !counterpart) {
         return null;
     }
 
     return (
         <div className="region-chart">
-            <h3>Onde você passou o tempo</h3>
+            <h3>{title ?? 'Onde você passou o tempo'}</h3>
             <ul className="chart-legend">
                 <li><span className="legend-swatch series-1" aria-hidden="true" /> Você</li>
                 <li><span className="legend-swatch series-2" aria-hidden="true" /> {counterpartName}</li>
@@ -124,9 +171,198 @@ function RegionChart({ player, counterpart, counterpartName }) {
                     </li>
                 ))}
             </ol>
+            <p className="laning-note">{note ?? (
+                <>
+                    Parte do tempo vivo (desde 0:00) em cada região do mapa. Rotas: uma faixa em volta do caminho de cada
+                    rota; rio: a água do minimapa do jogo.
+                </>
+            )}</p>
+        </div>
+    );
+}
+
+function PhaseDeathTable({ player, counterpart, matchAverage, counterpartName }) {
+    const series = [
+        { key: 'player', label: 'Você', values: player },
+        { key: 'counterpart', label: counterpartName, values: counterpart },
+        { key: 'average', label: 'Média da partida', values: matchAverage },
+    ];
+    if (!series.some(item => item.values)) {
+        return null;
+    }
+
+    return (
+        <div className="phase-deaths">
+            <h3>Mortes por região e fase</h3>
+            <div className="table-scroll">
+                <table className="smart-stats-table phase-deaths-table">
+                    <caption className="visually-hidden">
+                        Mortes em cada região por fase: você, {counterpartName} e a média da partida
+                    </caption>
+                    <thead>
+                        <tr>
+                            <th scope="col">Fase</th>
+                            <th scope="col">Jogador</th>
+                            {REGIONS.map(region => <th key={region.key} scope="col">{region.label}</th>)}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {PHASES.flatMap(phase => series.map(item => (
+                            <tr key={`${phase.key}-${item.key}`}>
+                                <th scope="row">{phase.label}</th>
+                                <th scope="row">{item.label}</th>
+                                {REGIONS.map(region => (
+                                    <td key={region.key}>{cell(item.values?.[phase.key]?.[region.key], plain)}</td>
+                                ))}
+                            </tr>
+                        )))}
+                    </tbody>
+                </table>
+            </div>
             <p className="laning-note">
-                Parte do tempo vivo (desde 0:00) em cada região do mapa. Rotas: uma faixa em volta do caminho de cada
-                rota; rio: a água do minimapa do jogo.
+                Contagem de eventos de morte do replay por coordenada; a média considera os dez heróis da partida.
+            </p>
+        </div>
+    );
+}
+
+function PhaseRegionCharts({ player, counterpart, counterpartName }) {
+    if (!player || !counterpart) {
+        return null;
+    }
+
+    return (
+        <>
+            {PHASES.map(phase => (
+                <RegionChart
+                    key={phase.key}
+                    player={player[phase.key]}
+                    counterpart={counterpart[phase.key]}
+                    counterpartName={counterpartName}
+                    title={`Tempo por região — ${phase.label}`}
+                    note="Parte das amostras em que o herói estava vivo nessa fase; cada fase é normalizada separadamente."
+                />
+            ))}
+        </>
+    );
+}
+
+// Gold per minute in the minutes spent mostly in each region (net worth gained ÷ those minutes): you and the enemy of
+// the same role. Only regions where one of you spent a minute; the minutes are written next to the rate.
+function FarmChart({ player, counterpart, counterpartName }) {
+    const rate = (summary, key) => {
+        const minutes = summary?.minutesByRegion?.[key];
+        return minutes > 0 ? { perMinute: summary.netWorthGainByRegion[key] / minutes, minutes } : null;
+    };
+    const rows = REGIONS
+        .map(region => ({ region, mine: rate(player, region.key), theirs: rate(counterpart, region.key) }))
+        .filter(row => row.mine || row.theirs);
+    if (rows.length === 0) {
+        return null;
+    }
+
+    const max = Math.max(1, ...rows.flatMap(row => [row.mine?.perMinute ?? 0, row.theirs?.perMinute ?? 0]));
+    return (
+        <div className="region-chart farm-chart">
+            <h3>Ganho de patrimônio por região</h3>
+            <ul className="chart-legend">
+                <li><span className="legend-swatch series-1" aria-hidden="true" /> Você</li>
+                <li><span className="legend-swatch series-2" aria-hidden="true" /> {counterpartName}</li>
+            </ul>
+            <ol className="bar-list">
+                {rows.map(({ region, mine, theirs }) => (
+                    <li key={region.key} className="region-row">
+                        <span className="bar-label">{region.label}</span>
+                        <span className="region-bars">
+                            {[{ who: 'Você', value: mine, slot: 1 }, { who: counterpartName, value: theirs, slot: 2 }].map(bar => (
+                                <span key={bar.slot} className="region-bar">
+                                    <span className="bar-track" aria-hidden="true">
+                                        {bar.value && (
+                                            <span
+                                                className={`bar-fill series-${bar.slot}`}
+                                                style={{ width: `${Math.max(0, bar.value.perMinute) / max * 100}%` }}
+                                            />
+                                        )}
+                                    </span>
+                                    <span className="bar-value">
+                                        <span className="visually-hidden">{bar.who}: </span>
+                                        {bar.value
+                                            ? `${formatNumber(Math.round(bar.value.perMinute))}/min (${bar.value.minutes} min)`
+                                            : '—'}
+                                    </span>
+                                </span>
+                            ))}
+                        </span>
+                    </li>
+                ))}
+            </ol>
+            <p className="laning-note">
+                Cada minuto vai para a região onde o herói passou a maior parte dele; o ganho inclui ouro de abates e o
+                ouro passivo. Mostra onde o seu farm rendeu mais, não onde você deveria estar.
+            </p>
+        </div>
+    );
+}
+
+function MovementChart({ player, counterpart, counterpartName }) {
+    const playerMovement = player?.estimatedMovementByRegion;
+    const counterpartMovement = counterpart?.estimatedMovementByRegion;
+    if (!playerMovement && !counterpartMovement) {
+        return null;
+    }
+
+    const values = [playerMovement, counterpartMovement]
+        .flatMap(movement => movement ? REGIONS.map(region => movement[region.key]) : [])
+        .filter(Number.isFinite);
+    const max = Math.max(1, ...values);
+    const series = [
+        { who: 'Você', movement: playerMovement, slot: 1 },
+        { who: counterpartName, movement: counterpartMovement, slot: 2 },
+    ];
+
+    return (
+        <div className="region-chart movement-chart">
+            <h3>Deslocamento estimado por região</h3>
+            <ul className="chart-legend">
+                {series.map(bar => (
+                    <li key={bar.slot}>
+                        <span className={`legend-swatch series-${bar.slot}`} aria-hidden="true" /> {bar.who}
+                        {bar.movement && ` · ${formatNumber(Math.round(movementTotal(bar.movement)))} unidades`}
+                    </li>
+                ))}
+            </ul>
+            <ol className="bar-list">
+                {REGIONS.map(region => (
+                    <li key={region.key} className="region-row">
+                        <span className="bar-label">{region.label}</span>
+                        <span className="region-bars">
+                            {series.map(bar => {
+                                const value = bar.movement?.[region.key];
+                                return (
+                                    <span key={bar.slot} className="region-bar">
+                                        <span className="bar-track" aria-hidden="true">
+                                            {Number.isFinite(value) && (
+                                                <span
+                                                    className={`bar-fill series-${bar.slot}`}
+                                                    style={{ width: `${value / max * 100}%` }}
+                                                />
+                                            )}
+                                        </span>
+                                        <span className="bar-value">
+                                            <span className="visually-hidden">{bar.who}: </span>
+                                            {Number.isFinite(value) ? formatNumber(Math.round(value)) : '—'}
+                                        </span>
+                                    </span>
+                                );
+                            })}
+                        </span>
+                    </li>
+                ))}
+            </ol>
+            <p className="laning-note">
+                Estimativa em unidades do mapa: soma a distância em linha reta entre posições consecutivas do replay
+                (amostradas a cada 2 s). Curvas podem ficar menores que o trajeto real; teleportes e Blinks ficam de
+                fora.
             </p>
         </div>
     );
@@ -144,6 +380,13 @@ const COMPARED = {
     sentriesPer30: { label: 'Sentries colocados', format: plain, per30: true },
     observerLifetime: { label: 'Vida média dos observers', format: lifetime },
     enemyWardsDestroyedPer30: { label: 'Wards inimigos destruídos', format: plain, per30: true },
+    fightPresence: { label: 'Presença nas lutas do time', format: percent },
+    killParticipation: { label: 'Participação em abates', format: percent },
+    quickRedeathsPer30: { label: 'Mortes logo depois de voltar', format: plain, per30: true },
+    laneDamageDealt: { label: 'Dano causado em heróis até 10:00', format: plain },
+    laneDamageTaken: { label: 'Dano recebido de heróis até 10:00', format: plain },
+    teamObserverUptime: { label: 'Tempo com observer do time', format: percent },
+    leadLostPerDeath: { label: 'Vantagem do time perdida por morte', format: value => formatNumber(Math.round(value)) },
 };
 
 const SOURCES = { pro: 'Profissionais', highRank: 'Alto nível' };
@@ -221,7 +464,7 @@ function BaselineTable({ baselines, role }) {
                 </p>
             ))}
             <p className="laning-note">
-                &quot;Melhor que&quot;: em quantas partidas da base você foi melhor (em mortes, menos é melhor). Contagens
+                &quot;Melhor que&quot;: em quantas partidas da base você foi melhor (em mortes, dano recebido e vantagem perdida, menos é melhor). Contagens
                 por 30 minutos de jogo, porque as partidas têm durações diferentes. Partidas dos últimos 60 dias; nas
                 profissionais a posição é deduzida pela rota e pelo patrimônio aos 10:00.
             </p>
@@ -238,6 +481,13 @@ function SmartStatsSection({ smartStats }) {
 
     const { player, counterpart, matchAverage, insights } = smartStats;
     const texts = insights.map(insight => insightText(insight, smartStats)).filter(Boolean);
+    const hasPhaseMetrics = Boolean(
+        player.timeByRegionByPhase
+        || player.deathsByRegionByPhase
+        || counterpart.timeByRegionByPhase
+        || counterpart.deathsByRegionByPhase
+        || matchAverage.deathsByRegionByPhase,
+    );
 
     return (
         <section className="smart-stats" aria-labelledby="smart-stats-title">
@@ -262,6 +512,32 @@ function SmartStatsSection({ smartStats }) {
                 counterpart={counterpart.timeByRegion}
                 counterpartName={smartStats.counterpartHeroName}
             />
+            <FarmChart player={player} counterpart={counterpart} counterpartName={smartStats.counterpartHeroName} />
+            <MovementChart
+                player={player}
+                counterpart={counterpart}
+                counterpartName={smartStats.counterpartHeroName}
+            />
+
+            {hasPhaseMetrics && (
+                <details className="smart-stats-phase-details">
+                    <summary>Ver tempo e mortes por fase da partida</summary>
+                    <p className="laning-note">
+                        Divisão do relógio de jogo: começo 0–10 min, meio 10–20 min e fim a partir de 20 min.
+                    </p>
+                    <PhaseRegionCharts
+                        player={player.timeByRegionByPhase}
+                        counterpart={counterpart.timeByRegionByPhase}
+                        counterpartName={smartStats.counterpartHeroName}
+                    />
+                    <PhaseDeathTable
+                        player={player.deathsByRegionByPhase}
+                        counterpart={counterpart.deathsByRegionByPhase}
+                        matchAverage={matchAverage.deathsByRegionByPhase}
+                        counterpartName={smartStats.counterpartHeroName}
+                    />
+                </details>
+            )}
 
             <div className="table-scroll">
                 <table className="smart-stats-table">
@@ -284,9 +560,11 @@ function SmartStatsSection({ smartStats }) {
                             {group.rows.map(row => (
                                 <tr key={row.key}>
                                     <th scope="row">{row.label}</th>
-                                    <td>{cell(valueOf(player, row.key), row.format)}</td>
-                                    <td>{cell(valueOf(counterpart, row.key), row.format)}</td>
-                                    <td>{cell(valueOf(matchAverage, row.key), row.format)}</td>
+                                    {[player, counterpart, matchAverage].map((summary, index) => (
+                                        <td key={index}>
+                                            {row.value ? (row.value(summary) ?? '—') : cell(valueOf(summary, row.key), row.format)}
+                                        </td>
+                                    ))}
                                 </tr>
                             ))}
                         </tbody>

@@ -895,6 +895,12 @@ a:focus-visible {
     gap: 0.5rem;
 }
 
+/* Farm by region: the value text ("362/min (8 min)") varies in width; a fixed column keeps every track the same length,
+   so the bars compare. */
+.farm-chart .bar-value {
+    min-width: 8.5rem;
+}
+
 .bar-fill.series-1 { background: var(--series-1); }
 .bar-fill.series-2 { background: var(--series-2); }
 
@@ -904,6 +910,110 @@ a:focus-visible {
 
 .smart-stats-table td {
     font-variant-numeric: tabular-nums;
+}
+
+.movement-chart .region-bars {
+    gap: 0.25rem;
+}
+
+.smart-stats-phase-details {
+    max-width: 1000px;
+    margin: 1rem auto;
+    text-align: left;
+}
+
+.smart-stats-phase-details > summary {
+    width: fit-content;
+    color: var(--text-h);
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.phase-deaths {
+    margin: 1rem auto;
+}
+
+.phase-deaths h3 {
+    text-align: center;
+}
+
+.phase-deaths-table {
+    min-width: 780px;
+}
+
+.phase-deaths-table th,
+.phase-deaths-table td {
+    white-space: nowrap;
+}
+
+.hero-image {
+    display: inline-block;
+    flex: 0 0 auto;
+    object-fit: cover;
+    border-radius: 4px;
+    vertical-align: middle;
+}
+
+.hero-icon {
+    width: 44px;
+    height: 25px;
+}
+
+.hero-portrait {
+    width: 120px;
+    height: 68px;
+}
+
+.item-image,
+.item-image-placeholder {
+    display: inline-block;
+    flex: 0 0 auto;
+    width: 28px;
+    height: 28px;
+    object-fit: contain;
+    border-radius: 4px;
+    vertical-align: middle;
+}
+
+.item-image-placeholder {
+    background: var(--surface-high);
+}
+
+.item-chip-list {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem 0.55rem;
+}
+
+.item-chip,
+.item-build-entry {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.hero-link,
+.hero-cell,
+.match-card-hero,
+.match-hero {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+}
+
+.hero-cell {
+    white-space: nowrap;
+}
+
+.match-hero {
+    flex-wrap: wrap;
+}
+
+.bar-label-with-icon {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
 }
 
 /* ----- Objectives: marks under the lead chart (TimelineSection) and ObjectivesSection ----- */

@@ -11,7 +11,7 @@ Analisador de partidas de Dota 2. Entre com a sua conta Steam (senha ou QR code 
 - **Desempenho** comparado com outros jogadores do mesmo herói (percentis do OpenDota): pontos fortes e pontos a melhorar.
 - **Fase de rotas** (até 10:00): sua rota, quem ganhou, last hits, patrimônio e experiência de quem estava nela.
 - **Como melhorar:** métricas de posicionamento, economia e visão (mortes sem aliado por perto, tempo sozinho no lado inimigo, onde você passou o tempo no mapa, observers…), comparadas com o adversário da mesma posição, com a média da partida e com **jogadores profissionais e de alto nível** do mesmo herói e posição — e a lista do que melhorar.
-- **Build de itens** com o horário em que cada item ficou pronto.
+- **Build de itens** com o horário em que cada item ficou pronto e ícones no inventário, na build e no dano causado por itens.
 - **Gráficos** de vantagem de patrimônio/experiência, com torres, barracks, Roshan e Tormentor marcados.
 - **Lutas** (com a sua participação) e **dano** por herói inimigo e por habilidade/item.
 - **Mapas** sobre o minimapa do jogo: onde você morreu e os wards dos dois times.
@@ -32,7 +32,7 @@ Analisador de partidas de Dota 2. Entre com a sua conta Steam (senha ou QR code 
 
 - **O processamento pesado fica na máquina do dono do projeto:** ler replays (dezenas de MB cada), coletar milhares de partidas, calcular distribuições, guardar os documentos brutos. **O Neon guarda só o que é mostrado, já refinado** — a base de comparação, por exemplo, ocupa alguns KB lá, por maior que seja a coleta local. O site local lê as mesmas tabelas prontas que a produção: o que aparece em `localhost` é o que vai ao ar.
 - Com essa máquina desligada o site continua no ar: o que já foi analisado aparece normalmente; replays novos ficam "indisponíveis" até ela voltar.
-- Dados: [OpenDota](https://www.opendota.com) (API pública) e replays dos servidores da Valve. O minimapa é a imagem do próprio jogo (arte da Valve; projeto de fã, não comercial).
+- Dados: [OpenDota](https://www.opendota.com) (API pública) e replays dos servidores da Valve. O minimapa e os retratos/ícones de heróis e itens são arte do próprio Dota 2, servida localmente; projeto de fã, não comercial. Rever os direitos antes de monetizar.
 
 ## Tecnologias
 

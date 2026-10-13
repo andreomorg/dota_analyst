@@ -1,5 +1,7 @@
 import { formatNumber } from '../matches/format';
+import { HeroIcon } from '../heroes/HeroImage';
 import { inflictorName } from './inflictors';
+import ItemIcon from '../items/ItemIcon';
 
 // The player's damage to and from enemy heroes, read from the replay: one measure per list, horizontal bars with
 // the value written next to them (the bar only helps to compare).
@@ -10,7 +12,7 @@ function sum(rows) {
     return rows.reduce((total, row) => total + row.amount, 0);
 }
 
-function BarList({ title, rows, max, labelOf, emptyText }) {
+function BarList({ title, rows, max, labelOf, iconOf, emptyText }) {
     return (
         <div className="bar-group">
             <h3>{title}</h3>
@@ -21,7 +23,10 @@ function BarList({ title, rows, max, labelOf, emptyText }) {
                         {/* Index keys: the list never reorders, and two heroes can share "Unknown hero". */}
                         {rows.map((row, index) => (
                             <li key={index} className="bar-row">
-                                <span className="bar-label">{labelOf(row)}</span>
+                                <span className="bar-label bar-label-with-icon">
+                                    {iconOf?.(row)}
+                                    {labelOf(row)}
+                                </span>
                                 <span className="bar-track" aria-hidden="true">
                                     <span className="bar-fill" style={{ width: `${max > 0 ? (row.amount / max) * 100 : 0}%` }} />
                                 </span>
@@ -36,7 +41,12 @@ function BarList({ title, rows, max, labelOf, emptyText }) {
 
 // The biggest inflictors, then the rest added up.
 function topInflictors(rows, heroName) {
-    const named = rows.map(row => ({ label: inflictorName(row.inflictor, heroName), amount: row.amount }));
+    // Items come with their ID and catalog name from the API; abilities get a readable name here.
+    const named = rows.map(row => ({
+        label: row.itemName ?? inflictorName(row.inflictor, heroName),
+        amount: row.amount,
+        itemId: row.itemId ?? null,
+    }));
     if (named.length <= TOP_INFLICTORS) {
         return named;
     }
@@ -70,6 +80,7 @@ function DamageSection({ damage, heroName }) {
                     rows={damage.toHeroes}
                     max={heroMax}
                     labelOf={row => row.heroName}
+                    iconOf={row => <HeroIcon heroId={row.heroId} />}
                     emptyText="Você não causou dano em heróis inimigos."
                 />
                 <BarList
@@ -77,6 +88,7 @@ function DamageSection({ damage, heroName }) {
                     rows={damage.fromHeroes}
                     max={heroMax}
                     labelOf={row => row.heroName}
+                    iconOf={row => <HeroIcon heroId={row.heroId} />}
                     emptyText="Você não recebeu dano de heróis inimigos."
                 />
             </div>
@@ -86,6 +98,7 @@ function DamageSection({ damage, heroName }) {
                     rows={inflictors}
                     max={inflictors.reduce((max, row) => Math.max(max, row.amount), 0)}
                     labelOf={row => row.label}
+                    iconOf={row => row.itemId && <ItemIcon itemId={row.itemId} />}
                 />
             )}
         </section>

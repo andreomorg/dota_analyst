@@ -8,7 +8,13 @@ function SiteHeader() {
 
     return (
         <header className="site-header">
-            <Link to="/" className="site-name">DotaAnalyst</Link>
+            <Link to="/" className="site-name">
+                <span className="site-mark" aria-hidden="true">D</span>
+                <span className="site-brand-copy">
+                    <span>DotaAnalyst</span>
+                    <span className="site-tagline">Histórico de partidas</span>
+                </span>
+            </Link>
             {status === 'authenticated' ? <UserMenu /> : status !== 'loading' && <LoginButton />}
         </header>
     );

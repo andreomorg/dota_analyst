@@ -30,6 +30,24 @@ function BackLink() {
     );
 }
 
+function MatchAnalysisSkeleton({ matchId }) {
+    return (
+        <section className="analysis-loading" role="status" aria-live="polite" aria-busy="true">
+            <h1>Partida {matchId}</h1>
+            <p>Carregando os dados da partida...</p>
+            <div className="skeleton-card skeleton-match" aria-hidden="true">
+                <span className="skeleton-line skeleton-title" />
+                <span className="skeleton-line skeleton-summary" />
+                <span className="skeleton-line skeleton-facts" />
+            </div>
+            <div className="skeleton-grid" aria-hidden="true">
+                <span className="skeleton-card" />
+                <span className="skeleton-card" />
+            </div>
+        </section>
+    );
+}
+
 function MatchAnalysisPage() {
     const { matchId } = useParams();
     const [searchParams] = useSearchParams();
@@ -80,16 +98,16 @@ function MatchAnalysisPage() {
             <BackLink />
 
             {state.status === 'loading' && (
-                <>
-                    <h1>Partida {matchId}</h1>
-                    <p>Carregando análise...</p>
-                </>
+                <MatchAnalysisSkeleton matchId={matchId} />
             )}
 
             {state.status === 'error' && (
                 <>
                     <h1>Partida {matchId}</h1>
                     <p className="error-message" role="alert">{state.message}</p>
+                    <button className="retry-button" type="button" onClick={state.retry}>
+                        Tentar novamente
+                    </button>
                 </>
             )}
 
@@ -109,57 +127,82 @@ function AnalysisContent({ analysis, accountId, replayPollingStopped }) {
     // null stays null for both teams: an unknown winner highlights nobody.
     const radiantWon = analysis.radiantWon ?? null;
     const direWon = radiantWon === null ? null : !radiantWon;
+    const sections = [
+        { id: 'performance-title', label: 'Desempenho', visible: Boolean(performance) },
+        {
+            id: 'laning-title',
+            label: 'Fase de rotas',
+            visible: analysis.replayStatus === 'ready' && Boolean(analysis.laning),
+        },
+        { id: 'smart-stats-title', label: 'Como melhorar', visible: Boolean(analysis.smartStats) },
+        { id: 'item-build-title', label: 'Build de itens', visible: Boolean(analysis.itemBuild) },
+        { id: 'timeline-title', label: 'Gráficos', visible: (analysis.timeline?.seconds?.length ?? 0) > 1 },
+        { id: 'objectives-title', label: 'Objetivos', visible: Boolean(analysis.objectives) },
+        { id: 'fights-title', label: 'Lutas', visible: Boolean(analysis.fights) },
+        { id: 'damage-title', label: 'Dano', visible: Boolean(analysis.damage) },
+        { id: 'death-map-title', label: 'Mortes', visible: Boolean(analysis.deaths) },
+        { id: 'ward-map-title', label: 'Wards', visible: (analysis.wards?.length ?? 0) > 0 },
+        { id: 'teams', label: 'Times', visible: true },
+    ].filter(section => section.visible);
 
     return (
         <>
             <MatchHeader analysis={analysis} />
+            <nav className="analysis-nav" aria-label="Seções da análise">
+                <a href="#match-overview">Resumo</a>
+                {sections.map(section => (
+                    <a key={section.id} href={`#${section.id}`}>{section.label}</a>
+                ))}
+            </nav>
 
-            {!analysis.isParsed && (
-                <p className="notice">
-                    Dados detalhados indisponíveis: o replay desta partida ainda não foi processado pelo OpenDota.
-                </p>
-            )}
-
-            {performance
-                ? <PerformanceSummary performance={performance} />
-                : (
+            <div className="analysis-sections">
+                {!analysis.isParsed && (
                     <p className="notice">
-                        O jogador {accountId} não aparece nesta partida, por isso não há análise de desempenho.
-                        Abra a partida pela lista de partidas desse jogador.
+                        Dados detalhados indisponíveis: o replay desta partida ainda não foi processado pelo OpenDota.
                     </p>
                 )}
 
-            <LaningSection
-                replayStatus={analysis.replayStatus}
-                laning={analysis.laning}
-                pollingStopped={replayPollingStopped}
-            />
+                {performance
+                    ? <PerformanceSummary performance={performance} />
+                    : (
+                        <p className="notice">
+                            O jogador {accountId} não aparece nesta partida, por isso não há análise de desempenho.
+                            Abra a partida pela lista de partidas desse jogador.
+                        </p>
+                    )}
 
-            {analysis.replayStatus === 'ready' && <SmartStatsSection smartStats={analysis.smartStats} />}
+                <LaningSection
+                    replayStatus={analysis.replayStatus}
+                    laning={analysis.laning}
+                    pollingStopped={replayPollingStopped}
+                />
 
-            {analysis.replayStatus === 'ready' && <ItemBuildSection itemBuild={analysis.itemBuild} />}
+                {analysis.replayStatus === 'ready' && <SmartStatsSection smartStats={analysis.smartStats} />}
 
-            {analysis.replayStatus === 'ready' && (
-                <TimelineSection timeline={analysis.timeline} objectives={analysis.objectives} />
-            )}
+                {analysis.replayStatus === 'ready' && <ItemBuildSection itemBuild={analysis.itemBuild} />}
 
-            {analysis.replayStatus === 'ready' && <ObjectivesSection objectives={analysis.objectives} />}
+                {analysis.replayStatus === 'ready' && (
+                    <TimelineSection timeline={analysis.timeline} objectives={analysis.objectives} />
+                )}
 
-            {analysis.replayStatus === 'ready' && (
-                <FightsSection fights={analysis.fights} isRadiant={performance ? performance.isRadiant : null} />
-            )}
+                {analysis.replayStatus === 'ready' && <ObjectivesSection objectives={analysis.objectives} />}
 
-            {analysis.replayStatus === 'ready' && (
-                <DamageSection damage={analysis.damage} heroName={performance?.heroName} />
-            )}
+                {analysis.replayStatus === 'ready' && (
+                    <FightsSection fights={analysis.fights} isRadiant={performance ? performance.isRadiant : null} />
+                )}
 
-            {analysis.replayStatus === 'ready' && <DeathMap deaths={analysis.deaths} />}
+                {analysis.replayStatus === 'ready' && (
+                    <DamageSection damage={analysis.damage} heroName={performance?.heroName} />
+                )}
 
-            {analysis.replayStatus === 'ready' && <WardMap wards={analysis.wards} />}
+                {analysis.replayStatus === 'ready' && <DeathMap deaths={analysis.deaths} />}
 
-            <div className="teams">
-                <TeamTable name="Radiant" players={analysis.radiant} won={radiantWon} />
-                <TeamTable name="Dire" players={analysis.dire} won={direWon} />
+                {analysis.replayStatus === 'ready' && <WardMap wards={analysis.wards} />}
+
+                <div id="teams" className="teams">
+                    <TeamTable name="Radiant" players={analysis.radiant} won={radiantWon} />
+                    <TeamTable name="Dire" players={analysis.dire} won={direWon} />
+                </div>
             </div>
         </>
     );

@@ -6,6 +6,7 @@ import SiteHeader from './layout/SiteHeader';
 import MatchesPage from './matches/MatchesPage';
 import NotFoundPage from './NotFoundPage';
 import './App.css';
+import './StitchDesign.css';
 
 function App() {
     return (

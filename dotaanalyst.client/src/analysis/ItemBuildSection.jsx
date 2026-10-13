@@ -1,9 +1,19 @@
 import { formatDuration } from '../matches/format';
+import ItemIcon from '../items/ItemIcon';
 
 // The player's item build, read from the replay purchases: the starting items, then when each item was ready.
 
-function startingText(items) {
-    return items.map(item => (item.count > 1 ? `${item.name} ×${item.count}` : item.name)).join(', ');
+function StartingItems({ items }) {
+    return (
+        <span className="item-chip-list">
+            {items.map((item, index) => (
+                <span className="item-chip" key={`${item.itemId}-${index}`}>
+                    <ItemIcon itemId={item.itemId} />
+                    {item.name}{item.count > 1 ? ` ×${item.count}` : ''}
+                </span>
+            ))}
+        </span>
+    );
 }
 
 // itemBuild comes from the API (null until the replay is read, without a point-of-view player or without the item
@@ -24,7 +34,7 @@ function ItemBuildSection({ itemBuild }) {
 
             {startingItems.length > 0 && (
                 <p className="item-build-start">
-                    <strong>Itens iniciais:</strong> {startingText(startingItems)}
+                    <strong>Itens iniciais:</strong> <StartingItems items={startingItems} />
                 </p>
             )}
 
@@ -35,7 +45,10 @@ function ItemBuildSection({ itemBuild }) {
                         {items.map((item, index) => (
                             <li key={`${item.itemId}-${index}`}>
                                 <span className="item-build-time">{formatDuration(item.seconds)}</span>
-                                <span className="item-build-name">{item.name}</span>
+                                <span className="item-build-name item-build-entry">
+                                    <ItemIcon itemId={item.itemId} />
+                                    {item.name}
+                                </span>
                             </li>
                         ))}
                     </ol>

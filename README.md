@@ -106,27 +106,27 @@ Os diagramas abaixo são exibidos diretamente no README. O arquivo-fonte editáv
 
 ### Arquitetura
 
-![Arquitetura do DotaAnalyst: processamento local e serviços em produção](docs/diagrams/images/architecture.svg)
+![Arquitetura do DotaAnalyst: processamento local e serviços em produção](docs/diagrams/images/architecture.png)
 
 ### Camadas DDD
 
-![Camadas DDD e dependências entre os projetos](docs/diagrams/images/ddd-layers.svg)
+![Camadas DDD e dependências entre os projetos](docs/diagrams/images/ddd-layers.png)
 
 ### Fluxo da análise
 
-![Fluxo de análise de uma partida, do React ao parser de replay](docs/diagrams/images/match-analysis.svg)
+![Fluxo de análise de uma partida, do React ao parser de replay](docs/diagrams/images/match-analysis.png)
 
 ### Base de comparação
 
-![Coleta local e publicação da base de comparação](docs/diagrams/images/comparison-baseline.svg)
+![Coleta local e publicação da base de comparação](docs/diagrams/images/comparison-baseline.png)
 
 ### Login com a Steam
 
-![Fluxo de autenticação com Steam OpenID](docs/diagrams/images/steam-login.svg)
+![Fluxo de autenticação com Steam OpenID](docs/diagrams/images/steam-login.png)
 
 ### Banco de dados
 
-![Tabelas principais nos bancos local e Neon](docs/diagrams/images/database.svg)
+![Tabelas principais nos bancos local e Neon](docs/diagrams/images/database.png)
 
 ## Versões e publicação
 

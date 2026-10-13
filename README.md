@@ -8,13 +8,20 @@ Analisador de partidas de Dota 2. Entre com a sua conta Steam (senha ou QR code 
 
 ## O que a análise mostra
 
-- **Desempenho** comparado com outros jogadores do mesmo herói (percentis do OpenDota): pontos fortes e pontos a melhorar.
-- **Fase de rotas** (até 10:00): sua rota, quem ganhou, last hits, patrimônio e experiência de quem estava nela.
-- **Como melhorar:** métricas de posicionamento, economia e visão (mortes sem aliado por perto, tempo sozinho no lado inimigo, onde você passou o tempo no mapa, observers…), comparadas com o adversário da mesma posição, com a média da partida e com **jogadores profissionais e de alto nível** do mesmo herói e posição — e a lista do que melhorar.
-- **Build de itens** com o horário em que cada item ficou pronto e ícones no inventário, na build e no dano causado por itens.
-- **Gráficos** de vantagem de patrimônio/experiência, com torres, barracks, Roshan e Tormentor marcados.
-- **Lutas** (com a sua participação) e **dano** por herói inimigo e por habilidade/item.
-- **Mapas** sobre o minimapa do jogo: onde você morreu e os wards dos dois times.
+A página de uma partida abre com o placar dos dois times e é dividida em **abas** (cada uma com o próprio endereço, `?tab=`, para compartilhar ou abrir em outra aba do navegador):
+
+| Aba | O que tem |
+|---|---|
+| **Visão geral** | O mais importante primeiro: os 3 destaques (ponto forte, ponto de atenção, fase de rotas), seu desempenho em números grandes (K/D/A, participação em abates, GPM/XPM, dano, patrimônio…), o gráfico de como a partida andou e atalhos para as outras abas. |
+| **Dicas** | O que melhorar — mortes sem aliado por perto, morrer logo depois de voltar, trocas perdidas na rota, presença nas lutas, visão… —, comparado com o adversário da mesma posição, com a média da partida e com **jogadores profissionais e de alto nível** do mesmo herói e posição; e os percentis do OpenDota contra outros jogadores do herói. |
+| **Fase de rotas** | Até 10:00: sua rota, quem ganhou, last hits, patrimônio e experiência de quem estava nela, e o gráfico só da sua rota. |
+| **Itens** | Itens iniciais e a linha do tempo de quando cada item ficou pronto. |
+| **Economia e objetivos** | Vantagem de patrimônio/experiência com torres, barracks, Roshan e Tormentor marcados, e o placar de objetivos. |
+| **Lutas e dano** | Cada luta com o resultado e a sua participação; dano causado e recebido por herói e por habilidade/item. |
+| **Mapas** | Sobre o minimapa do jogo: **mapa de calor** de onde você passou o tempo vivo (como os de futebol), ao lado do adversário da mesma posição, por período e com as suas mortes; onde você morreu; os wards dos dois times. |
+| **Jogadores** | Os 10 jogadores, com itens finais. |
+
+O visual segue o design "Obsidian Telemetry" feito no Google Stitch (tema escuro, números em fonte mono, verde/vermelho para bom/ruim, violeta para "você"), com as fontes servidas pelo próprio site.
 
 ## Como funciona
 
@@ -30,7 +37,8 @@ Analisador de partidas de Dota 2. Entre com a sua conta Steam (senha ou QR code 
  └──────────────────────────────────────────────────────────┘
 ```
 
-- **O processamento pesado fica na máquina do dono do projeto:** ler replays (dezenas de MB cada), coletar milhares de partidas, calcular distribuições, guardar os documentos brutos. **O Neon guarda só o que é mostrado, já refinado** — a base de comparação, por exemplo, ocupa alguns KB lá, por maior que seja a coleta local. O site local lê as mesmas tabelas prontas que a produção: o que aparece em `localhost` é o que vai ao ar.
+- **O processamento pesado fica na máquina do dono do projeto:** ler replays (dezenas de MB cada), coletar milhares de partidas, calcular distribuições, guardar os documentos brutos. **O Neon guarda só o que é mostrado, já refinado** — a base de comparação, por exemplo, ocupa alguns KB lá, por maior que seja a coleta local; o mapa de calor de uma partida são poucos KB (uma grade de 32 × 32 por fase do jogo), nunca as posições cruas. O site local lê as mesmas tabelas prontas que a produção: o que aparece em `localhost` é o que vai ao ar.
+- **A base de comparação cresce onde faz falta:** o coletor olha os heróis das últimas 20 partidas da conta foco e, enquanto algum tiver menos de 10 partidas de alto nível na base, busca primeiro partidas com esses heróis (o de menos dados antes); depois volta às profissionais.
 - Com essa máquina desligada o site continua no ar: o que já foi analisado aparece normalmente; replays novos ficam "indisponíveis" até ela voltar.
 - Dados: [OpenDota](https://www.opendota.com) (API pública) e replays dos servidores da Valve. O minimapa e os retratos/ícones de heróis e itens são arte do próprio Dota 2, servida localmente; projeto de fã, não comercial. Rever os direitos antes de monetizar.
 
@@ -38,7 +46,7 @@ Analisador de partidas de Dota 2. Entre com a sua conta Steam (senha ou QR code 
 
 - **Back-end:** ASP.NET Core (.NET 10) em DDD — `Domain` (regras do Dota), `Application` (casos de uso), `Infrastructure` (OpenDota, Steam, banco, parser, coletor) e `Server` (API).
 - **Banco:** PostgreSQL com EF Core — local no Docker; [Neon](https://neon.tech) em produção.
-- **Front-end:** React 19 + Vite.
+- **Front-end:** React 19 + Vite, CSS próprio (sem framework), gráficos e mapas em SVG/canvas feitos à mão.
 - **Leitura de replays:** serviço próprio em Go (`replay-parser/`).
 - **Login:** Steam OpenID — o site nunca vê senha nem token; recebe só o SteamID.
 - **Testes e entrega:** xUnit (com PostgreSQL real via [Testcontainers](https://dotnet.testcontainers.org)) e testes Go; GitHub Actions (CI e publicação da imagem `ghcr.io/andreomorg/dota_analyst`).
@@ -59,7 +67,7 @@ O `.env` define a porta da aplicação (`API_PORT`), a senha do PostgreSQL local
 Serviços opcionais, ligados por perfil (`COMPOSE_PROFILES` no `.env`, ex. `tunnel,collector`):
 
 - **`tunnel`** — túnel ngrok para a produção usar o parser desta máquina (`NGROK_AUTHTOKEN`, `NGROK_URL`).
-- **`collector`** — coletor da base de comparação: parseia partidas profissionais e de alto nível, guarda o bruto no PostgreSQL local e publica o resultado (`COLLECTOR_FOCUS_ACCOUNT_ID`; `MIRROR_DATABASE` para publicar também no Neon).
+- **`collector`** — coletor da base de comparação: parseia partidas profissionais e de alto nível, guarda o bruto no PostgreSQL local e publica o resultado (`COLLECTOR_FOCUS_ACCOUNT_ID`; `COLLECTOR_TARGET_PER_HERO`, padrão 10, e `COLLECTOR_DAILY_LIMIT`, padrão 600; `MIRROR_DATABASE` para publicar também no Neon).
 
 ## Rodando para desenvolver
 
@@ -90,12 +98,12 @@ dotnet ef migrations add <Nome> --project DotaAnalyst.Infrastructure --startup-p
 
 | Pasta | O que tem |
 |---|---|
-| `DotaAnalyst.Domain/` | Regras do Dota: partidas, métricas, regiões do mapa, lutas, build, comparações |
+| `DotaAnalyst.Domain/` | Regras do Dota: partidas, métricas, regiões do mapa, mapa de calor, lutas, build, comparações |
 | `DotaAnalyst.Application/` | Casos de uso e interfaces do que vem de fora |
 | `DotaAnalyst.Infrastructure/` | OpenDota, Steam, PostgreSQL, cliente do parser, coletor |
 | `DotaAnalyst.Server/` | API (`/api/v1/...`), login com a Steam, `Program.cs` |
 | `DotaAnalyst.Tests/` | Testes .NET, uma pasta por camada |
-| `dotaanalyst.client/` | Front-end React |
+| `dotaanalyst.client/` | Front-end React (`src/analysis/` as abas da análise, `src/ui/` peças comuns, `src/index.css` cores e fontes do design) |
 | `replay-parser/` | Serviço Go que lê os replays (`POST /v1/match`) |
 
 Regras de arquitetura, decisões e detalhes de cada parte: [`CLAUDE.md`](CLAUDE.md) e [`replay-parser/CLAUDE.md`](replay-parser/CLAUDE.md).

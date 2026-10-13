@@ -246,8 +246,16 @@ public static class DependencyInjection
         services.AddScoped<ICatalogStore, CatalogStore>();
         // Also when replay parsing is off: results saved while it was on are still shown.
         services.AddScoped<IReplayAnalysisRepository, ReplayAnalysisRepository>();
-        // Replay parsing only runs with a database (see AddReplayParsing), so only this one is needed.
-        services.AddScoped<IReplayDocumentArchive, ReplayDocumentArchive>();
+        // The raw documents only where heavy data lives (ReplayParser:KeepDocuments, on in the local compose): production
+        // keeps refined data only. Replay parsing only runs with a database (see AddReplayParsing).
+        if (configuration.GetSection(ReplayParserOptions.SectionName).GetValue<bool>(nameof(ReplayParserOptions.KeepDocuments)))
+        {
+            services.AddScoped<IReplayDocumentArchive, ReplayDocumentArchive>();
+        }
+        else
+        {
+            services.AddSingleton<IReplayDocumentArchive, NoReplayDocumentArchive>();
+        }
         // The comparison base: raw (written by the collector, on its machine only) and finished (read by every analysis;
         // in production a mirror published from the collector's machine).
         services.AddScoped<IBaselineRepository, BaselineRepository>();

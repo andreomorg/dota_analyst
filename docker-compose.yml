@@ -18,6 +18,8 @@ services:
       # Replay parser (Go service below), reached by its service name inside the compose network, with its token.
       ReplayParser__BaseUrl: "http://replay-parser:8081/"
       ReplayParser__ApiKey: "${REPLAY_PARSER_API_KEY}"
+      # This machine keeps the raw replay documents (replay_documents); production (Render) doesn't.
+      ReplayParser__KeepDocuments: "true"
     # No depends_on replay-parser on purpose: the API must work without it (the laning phase just shows as
     # unavailable), and waiting for its health check would let a broken parser keep the whole site down.
     depends_on:
@@ -50,6 +52,7 @@ services:
       ConnectionStrings__Mirror: "${MIRROR_DATABASE:-}"
       ReplayParser__BaseUrl: "http://replay-parser:8081/"
       ReplayParser__ApiKey: "${REPLAY_PARSER_API_KEY}"
+      ReplayParser__KeepDocuments: "true"
       Collector__Enabled: "true"
       Collector__DailyLimit: "${COLLECTOR_DAILY_LIMIT:-300}"
       # The account whose heroes the high-rank matches must have (0 = none: only pro matches).

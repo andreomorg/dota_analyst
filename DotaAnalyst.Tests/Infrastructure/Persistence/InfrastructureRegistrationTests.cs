@@ -135,10 +135,22 @@ public class InfrastructureRegistrationTests(PostgresFixture postgres) : IAsyncL
 
     private const string ParserUrl = "http://replay-parser:8081/";
 
+    [Theory]
+    [InlineData(false, typeof(NoReplayDocumentArchive))]
+    [InlineData(true, typeof(ReplayDocumentArchive))]
+    public async Task RawReplayDocuments_AreOnlyKeptWhenAskedFor(bool keepDocuments, Type expected)
+    {
+        // Production (Render) leaves it off: only refined data goes to Neon.
+        await using var services = BuildServices(postgres.ConnectionString, "http://parser:8081/", keepDocuments: keepDocuments);
+        await using var scope = services.CreateAsyncScope();
+
+        Assert.IsType(expected, scope.ServiceProvider.GetRequiredService<IReplayDocumentArchive>());
+    }
+
     private ServiceProvider BuildServices() => BuildServices(postgres.ConnectionString);
 
     private static ServiceProvider BuildServices(
-        string? connectionString, string? replayParserUrl = null, string? replayParserApiKey = "test-key")
+        string? connectionString, string? replayParserUrl = null, string? replayParserApiKey = "test-key", bool keepDocuments = false)
     {
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -148,6 +160,7 @@ public class InfrastructureRegistrationTests(PostgresFixture postgres) : IAsyncL
                 ["OpenDota:Timeout"] = "00:00:10",
                 ["ReplayParser:BaseUrl"] = replayParserUrl,
                 ["ReplayParser:ApiKey"] = replayParserApiKey,
+                ["ReplayParser:KeepDocuments"] = keepDocuments.ToString(),
             })
             .Build();
 

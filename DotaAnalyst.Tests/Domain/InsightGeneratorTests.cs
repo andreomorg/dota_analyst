@@ -44,6 +44,19 @@ public class InsightGeneratorTests
         Assert.Equal(expected, insights.Any(insight => insight.Kind == InsightKind.AloneOnEnemySide));
     }
 
+    [Theory]
+    [InlineData(2, 1, true)]
+    [InlineData(2, 2, false)] // the counterpart died as much in yours
+    [InlineData(1, 0, false)] // one death is not a pattern
+    public void DeathsInEnemyJungle_MoreThanTheCounterpart(int mine, int theirs, bool expected)
+    {
+        var insights = InsightGenerator.Generate(
+            Quiet with { DeathsByRegion = PerRegion<int>.Of(region => region == MapRegion.EnemyJungle ? mine : 0) },
+            Counterpart with { DeathsByRegion = PerRegion<int>.Of(region => region == MapRegion.EnemyJungle ? theirs : 0) });
+
+        Assert.Equal(expected, insights.Any(insight => insight.Kind == InsightKind.DeathsInEnemyJungle));
+    }
+
     [Fact]
     public void BehindAtTen_WithTheNumbers()
     {

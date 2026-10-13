@@ -861,6 +861,43 @@ a:focus-visible {
     color: var(--text-h);
 }
 
+.region-chart {
+    max-width: 560px;
+    margin: 0 auto 1rem;
+}
+
+.region-chart h3 {
+    font-size: 16px;
+    margin: 0.5rem 0;
+}
+
+.region-chart .chart-legend {
+    justify-content: center;
+}
+
+.region-row {
+    display: grid;
+    grid-template-columns: minmax(6.5rem, 8rem) 1fr;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.25rem 0;
+}
+
+.region-bars {
+    display: grid;
+    gap: 2px;
+}
+
+.region-bar {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.bar-fill.series-1 { background: var(--series-1); }
+.bar-fill.series-2 { background: var(--series-2); }
+
 .smart-stats-table {
     margin: 0.5rem auto 0;
 }

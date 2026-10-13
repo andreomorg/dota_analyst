@@ -34,7 +34,10 @@ internal sealed record StoredHeroMetrics(
     int HeroId, Team Team, int Role, int Deaths, int IsolatedDeaths, int DeathsOnEnemySide, double EnemySideShare,
     double AloneOnEnemySideShare, int? NetWorthAt10, int? NetWorthAt20, int LastHitsAt10, double NetWorthShare,
     int ObserversPlaced, int SentriesPlaced, int? ObserverAverageLifetimeSeconds, int WardsLostToEnemy,
-    int EnemyWardsDestroyed);
+    int EnemyWardsDestroyed,
+    // Added in sprint 19 (null in older rows: the analysis is then outdated and parsed again).
+    IReadOnlyDictionary<MapRegion, double>? TimeByRegion = null,
+    IReadOnlyDictionary<MapRegion, int>? DeathsByRegion = null);
 
 internal sealed record StoredMapObjective(
     ObjectiveKind Kind, int Seconds, Team TakenBy, int? KillerHeroId, Team? Owner, int? TowerTier, Lane? Lane,
@@ -178,7 +181,9 @@ internal static class StoredReplayMappings
                             hero.DeathsOnEnemySide, hero.EnemySideShare, hero.AloneOnEnemySideShare, hero.NetWorthAt10,
                             hero.NetWorthAt20, hero.LastHitsAt10, hero.NetWorthShare, hero.ObserversPlaced,
                             hero.SentriesPlaced, hero.ObserverAverageLifetimeSeconds, hero.WardsLostToEnemy,
-                            hero.EnemyWardsDestroyed))
+                            hero.EnemyWardsDestroyed,
+                            hero.TimeByRegion is { } time ? PerRegion<double>.Of(time.GetValueOrDefault) : null,
+                            hero.DeathsByRegion is { } deaths ? PerRegion<int>.Of(deaths.GetValueOrDefault) : null))
                     .ToList());
         }
         catch (ArgumentException ex)
@@ -229,6 +234,12 @@ internal static class StoredReplayMappings
                 .Select(hero => new StoredHeroMetrics(hero.HeroId, hero.Team, hero.Role, hero.Deaths, hero.IsolatedDeaths,
                     hero.DeathsOnEnemySide, hero.EnemySideShare, hero.AloneOnEnemySideShare, hero.NetWorthAt10,
                     hero.NetWorthAt20, hero.LastHitsAt10, hero.NetWorthShare, hero.ObserversPlaced, hero.SentriesPlaced,
-                    hero.ObserverAverageLifetimeSeconds, hero.WardsLostToEnemy, hero.EnemyWardsDestroyed))
+                    hero.ObserverAverageLifetimeSeconds, hero.WardsLostToEnemy, hero.EnemyWardsDestroyed,
+                    hero.TimeByRegion is { } time ? ByRegion(time) : null,
+                    hero.DeathsByRegion is { } deaths ? ByRegion(deaths) : null))
                 .ToList());
+
+    // Saved as { "OwnBase": 0.1, ... }: readable in the database and safe if a region is added later.
+    private static Dictionary<MapRegion, T> ByRegion<T>(PerRegion<T> values) =>
+        Enum.GetValues<MapRegion>().ToDictionary(region => region, region => values[region]);
 }

@@ -90,6 +90,19 @@ public class MatchMetricsCalculatorTests
     }
 
     [Fact]
+    public void Regions_TimeAndDeaths_FromTheHerosOwnSide()
+    {
+        // The Dire carry: 1 sample in its base, 1 in the middle lane, 2 in Radiant's jungle (its enemy jungle).
+        var positions = new[] { Path(6, (0, 7000, 7000), (2, 0, 0), (4, -3500, 0), (6, -3500, 100)) };
+        var deaths = new[] { new HeroDeath(6, 7, -3500, 100, KillerKind.Hero, 1, reincarnated: false) };
+
+        var dire = Metrics(positions, deaths: deaths).Single(hero => hero.HeroId == 6);
+
+        Assert.Equal(new PerRegion<double>(0.25, 0, 0, 0.25, 0, 0, 0, 0.5), dire.TimeByRegion);
+        Assert.Equal(new PerRegion<int>(0, 0, 0, 0, 0, 0, 0, 1), dire.DeathsByRegion);
+    }
+
+    [Fact]
     public void WithoutRoleQueue_ThereAreNoMetrics()
     {
         Assert.Null(MatchMetricsCalculator.Calculate(Players, Timeline, [], [], [], roles: null));

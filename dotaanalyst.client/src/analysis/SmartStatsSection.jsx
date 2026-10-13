@@ -28,6 +28,8 @@ function insightText(insight, stats) {
             return `Aos 10:00 você tinha ${formatNumber(insight.value)} de patrimônio, ${formatNumber(insight.counterpart - insight.value)} a menos que ${them} (${formatNumber(insight.counterpart)}). Vale rever a fase de rotas: last hits, trocas e mortes.`;
         case 'fewObservers':
             return `Você colocou ${insight.value} observers; ${them} colocou ${insight.counterpart}. Como suporte, visão é parte do seu trabalho.`;
+        case 'deathsInEnemyJungle':
+            return `Você morreu ${insight.value} vezes na selva inimiga (${them}: ${insight.counterpart ?? 0} na sua). Entrar lá sem visão ou sem o time costuma custar caro.`;
         case 'shortObserverLife':
             return `Seus observers duraram em média ${lifetime(insight.value)} (o máximo é 6:00): o inimigo os encontrou cedo. Evite lugares óbvios e coloque sentries junto.`;
         default:
@@ -42,6 +44,8 @@ const GROUPS = [
             { key: 'deaths', label: 'Mortes', format: plain },
             { key: 'isolatedDeaths', label: 'Mortes sem aliado por perto', format: plain },
             { key: 'deathsOnEnemySide', label: 'Mortes no lado inimigo', format: plain },
+            { key: 'deathsByRegion.enemyJungle', label: 'Mortes na selva inimiga', format: plain },
+            { key: 'deathsByRegion.river', label: 'Mortes no rio', format: plain },
             { key: 'aloneOnEnemySideShare', label: 'Tempo sozinho no lado inimigo', format: percent },
             { key: 'enemySideShare', label: 'Tempo no lado inimigo', format: percent },
         ],
@@ -67,8 +71,65 @@ const GROUPS = [
     },
 ];
 
+// key may go one level down ("deathsByRegion.river"); missing on metrics computed before the regions.
+function valueOf(summary, key) {
+    return key.split('.').reduce((value, part) => value?.[part], summary);
+}
+
 function cell(value, format) {
     return value === null || value === undefined ? '—' : format(value);
+}
+
+const REGIONS = [
+    { key: 'ownBase', label: 'Sua base' },
+    { key: 'topLane', label: 'Rota de cima' },
+    { key: 'middleLane', label: 'Rota do meio' },
+    { key: 'bottomLane', label: 'Rota de baixo' },
+    { key: 'ownJungle', label: 'Sua selva' },
+    { key: 'river', label: 'Rio' },
+    { key: 'enemyJungle', label: 'Selva inimiga' },
+    { key: 'enemyBase', label: 'Base inimiga' },
+];
+
+// Where the time went: the player and the enemy of the same role, region by region, on one scale (0-100%).
+// Colour only tells the two apart (legend); the values are written.
+function RegionChart({ player, counterpart, counterpartName }) {
+    if (!player || !counterpart) {
+        return null;
+    }
+
+    return (
+        <div className="region-chart">
+            <h3>Onde você passou o tempo</h3>
+            <ul className="chart-legend">
+                <li><span className="legend-swatch series-1" aria-hidden="true" /> Você</li>
+                <li><span className="legend-swatch series-2" aria-hidden="true" /> {counterpartName}</li>
+            </ul>
+            <ol className="bar-list">
+                {REGIONS.map(region => (
+                    <li key={region.key} className="region-row">
+                        <span className="bar-label">{region.label}</span>
+                        <span className="region-bars">
+                            {[{ who: 'Você', value: player[region.key], slot: 1 }, { who: counterpartName, value: counterpart[region.key], slot: 2 }].map(bar => (
+                                <span key={bar.slot} className="region-bar">
+                                    <span className="bar-track" aria-hidden="true">
+                                        <span className={`bar-fill series-${bar.slot}`} style={{ width: `${bar.value * 100}%` }} />
+                                    </span>
+                                    <span className="bar-value">
+                                        <span className="visually-hidden">{bar.who}: </span>{percent(bar.value)}
+                                    </span>
+                                </span>
+                            ))}
+                        </span>
+                    </li>
+                ))}
+            </ol>
+            <p className="laning-note">
+                Parte do tempo vivo (desde 0:00) em cada região do mapa. Rotas: uma faixa em volta do caminho de cada
+                rota; rio: a água do minimapa do jogo.
+            </p>
+        </div>
+    );
 }
 
 // smartStats comes from the API (null until the replay is read, without a point-of-view player, or for a match
@@ -97,6 +158,12 @@ function SmartStatsSection({ smartStats }) {
                     </ul>
                 )}
 
+            <RegionChart
+                player={player.timeByRegion}
+                counterpart={counterpart.timeByRegion}
+                counterpartName={smartStats.counterpartHeroName}
+            />
+
             <div className="table-scroll">
                 <table className="smart-stats-table">
                     <caption className="visually-hidden">
@@ -118,9 +185,9 @@ function SmartStatsSection({ smartStats }) {
                             {group.rows.map(row => (
                                 <tr key={row.key}>
                                     <th scope="row">{row.label}</th>
-                                    <td>{cell(player[row.key], row.format)}</td>
-                                    <td>{cell(counterpart[row.key], row.format)}</td>
-                                    <td>{cell(matchAverage[row.key], row.format)}</td>
+                                    <td>{cell(valueOf(player, row.key), row.format)}</td>
+                                    <td>{cell(valueOf(counterpart, row.key), row.format)}</td>
+                                    <td>{cell(valueOf(matchAverage, row.key), row.format)}</td>
                                 </tr>
                             ))}
                         </tbody>

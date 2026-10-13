@@ -107,7 +107,7 @@ public record ReplayAnalysis
     // (Analyses without damage were also read before deaths had assists.)
     public bool IsOutdated =>
         Timeline is null || Deaths is null || Wards is null || Damage is null || Purchases is null || Objectives is null
-        || Metrics is null;
+        || Metrics is null || Metrics.Any(hero => hero.TimeByRegion is null || hero.DeathsByRegion is null);
 
     public MatchId MatchId { get; }
 

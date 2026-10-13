@@ -114,7 +114,10 @@ public class GetMatchAnalysisHandler(
             SentriesPlaced: metrics.Average(hero => hero.SentriesPlaced),
             ObserverAverageLifetimeSeconds: Average(metrics.Select(hero => hero.ObserverAverageLifetimeSeconds)),
             WardsLostToEnemy: metrics.Average(hero => hero.WardsLostToEnemy),
-            EnemyWardsDestroyed: metrics.Average(hero => hero.EnemyWardsDestroyed));
+            EnemyWardsDestroyed: metrics.Average(hero => hero.EnemyWardsDestroyed),
+            // Each hero's own/enemy regions: "own jungle" averages every hero's own jungle.
+            TimeByRegion: AverageByRegion(metrics.Select(hero => hero.TimeByRegion)),
+            DeathsByRegion: AverageByRegion(metrics.Select(hero => hero.DeathsByRegion?.Select(count => (double)count))));
 
         return new SmartStats(
             Role: mine.Role,
@@ -131,7 +134,25 @@ public class GetMatchAnalysisHandler(
     private static MetricsSummary ToSummary(HeroMetrics hero) =>
         new(hero.Deaths, hero.IsolatedDeaths, hero.DeathsOnEnemySide, hero.EnemySideShare, hero.AloneOnEnemySideShare,
             hero.NetWorthAt10, hero.NetWorthAt20, hero.LastHitsAt10, hero.NetWorthShare, hero.ObserversPlaced,
-            hero.SentriesPlaced, hero.ObserverAverageLifetimeSeconds, hero.WardsLostToEnemy, hero.EnemyWardsDestroyed);
+            hero.SentriesPlaced, hero.ObserverAverageLifetimeSeconds, hero.WardsLostToEnemy, hero.EnemyWardsDestroyed,
+            hero.TimeByRegion is { } time ? ToRegionValues(time) : null,
+            hero.DeathsByRegion is { } deaths ? ToRegionValues(deaths.Select(count => (double)count)) : null);
+
+    private static RegionValues ToRegionValues(PerRegion<double> values) =>
+        new(values.OwnBase, values.EnemyBase, values.TopLane, values.MiddleLane, values.BottomLane, values.River,
+            values.OwnJungle, values.EnemyJungle);
+
+    // Null when any hero lacks the regions (metrics computed before them).
+    private static RegionValues? AverageByRegion(IEnumerable<PerRegion<double>?> heroes)
+    {
+        var all = heroes.ToList();
+        if (all.Count == 0 || all.Any(hero => hero is null))
+        {
+            return null;
+        }
+
+        return ToRegionValues(PerRegion<double>.Of(region => all.Average(hero => hero![region])));
+    }
 
     private static IReadOnlyList<MapObjectiveSummary> ToObjectives(
         IReadOnlyList<MapObjective> objectives, MatchPlayer? player, NameLookup names) =>

@@ -12,6 +12,9 @@ public enum InsightKind
     FewObservers,
     // Observers found and destroyed early on average.
     ShortObserverLife,
+    // Several deaths in the enemy's jungle, more than the enemy of the same role had in yours (added last, so the
+    // numbers of the others stay the same).
+    DeathsInEnemyJungle,
 }
 
 // One thing to improve: what it is and the numbers behind it (the text is the UI's). Counterpart: the same number
@@ -28,6 +31,7 @@ public static class InsightGenerator
     public const double MinAloneShare = 0.10;
     public const double AloneVersusCounterpart = 1.5;
     public const int MinDeathsOnEnemySide = 2;
+    public const int MinDeathsInEnemyJungle = 2;
     public const double BehindAtTenRatio = 0.8;
     public const int FewerObservers = 3;
     // Observers last 360 s in the game; half of it on average means they are found early.
@@ -49,6 +53,12 @@ public static class InsightGenerator
             && player.DeathsOnEnemySide >= MinDeathsOnEnemySide)
         {
             insights.Add(new Insight(InsightKind.AloneOnEnemySide, player.AloneOnEnemySideShare, counterpart.AloneOnEnemySideShare));
+        }
+
+        if (player.DeathsByRegion?.EnemyJungle is { } jungleDeaths && jungleDeaths >= MinDeathsInEnemyJungle
+            && jungleDeaths > (counterpart.DeathsByRegion?.EnemyJungle ?? 0))
+        {
+            insights.Add(new Insight(InsightKind.DeathsInEnemyJungle, jungleDeaths, counterpart.DeathsByRegion?.EnemyJungle));
         }
 
         if (player.NetWorthAt10 is { } mine && counterpart.NetWorthAt10 is { } theirs && mine <= BehindAtTenRatio * theirs)

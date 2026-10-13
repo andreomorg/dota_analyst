@@ -49,6 +49,13 @@ public static class MatchMetricsCalculator
             var samples = positionsOf.GetValueOrDefault(player.HeroId)?.Samples.Where(sample => sample.Seconds >= 0).ToList() ?? [];
             var onEnemySide = samples.Where(sample => IsEnemySide(player.Team, sample.X, sample.Y)).ToList();
             var alone = onEnemySide.Count(sample => !AllyNear(sample.Seconds, sample.X, sample.Y));
+            // Each point classified once, then counted per region.
+            var timeRegions = samples
+                .GroupBy(sample => MapRegions.RegionOf(player.Team, sample.X, sample.Y))
+                .ToDictionary(group => group.Key, group => group.Count());
+            var deathRegions = heroDeaths
+                .GroupBy(death => MapRegions.RegionOf(player.Team, death.X, death.Y))
+                .ToDictionary(group => group.Key, group => group.Count());
 
             var series = timeline.FindHero(player.HeroId);
             var teamNetWorth = timeline.Heroes.Where(hero => hero.Team == player.Team).Sum(hero => hero.NetWorth[^1]);
@@ -75,7 +82,9 @@ public static class MatchMetricsCalculator
                     ? null
                     : (int)Math.Round(observers.Average(ward => (ward.RemovedAt ?? matchEnd) - ward.PlacedAt)),
                 WardsLostToEnemy: placed.Count(ward => ward.Destroyed),
-                EnemyWardsDestroyed: wards.Count(ward => ward.Team != player.Team && ward.DestroyedByHeroId == player.HeroId));
+                EnemyWardsDestroyed: wards.Count(ward => ward.Team != player.Team && ward.DestroyedByHeroId == player.HeroId),
+                TimeByRegion: PerRegion<double>.Of(region => Share(timeRegions.GetValueOrDefault(region), samples.Count)),
+                DeathsByRegion: PerRegion<int>.Of(region => deathRegions.GetValueOrDefault(region)));
         }).ToList();
     }
 

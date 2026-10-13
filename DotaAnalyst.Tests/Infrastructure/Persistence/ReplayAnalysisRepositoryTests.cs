@@ -77,7 +77,8 @@ public class ReplayAnalysisRepositoryTests(PostgresFixture postgres) : IAsyncLif
             ],
             metrics:
             [
-                new HeroMetrics(31, Team.Radiant, 5, 4, 2, 1, 0.31, 0.12, 2900, null, 12, 0.18, 9, 6, 287, 3, 4),
+                new HeroMetrics(31, Team.Radiant, 5, 4, 2, 1, 0.31, 0.12, 2900, null, 12, 0.18, 9, 6, 287, 3, 4,
+                    new PerRegion<double>(0.1, 0, 0.3, 0.1, 0, 0.2, 0.2, 0.1), new PerRegion<int>(0, 1, 0, 0, 0, 1, 0, 2)),
             ]);
         var repository = CreateRepository();
 

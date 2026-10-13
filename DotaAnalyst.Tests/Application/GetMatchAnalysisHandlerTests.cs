@@ -430,7 +430,8 @@ public class GetMatchAnalysisHandlerTests
     }
 
     private static HeroMetrics HeroMetricsOf(int heroId, Team team, int role, int isolatedDeaths = 0, int deaths = 2) =>
-        new(heroId, team, role, deaths, isolatedDeaths, 0, 0.2, 0.02, 2000, null, 10, 0.2, 0, 0, null, 0, 0);
+        new(heroId, team, role, deaths, isolatedDeaths, 0, 0.2, 0.02, 2000, null, 10, 0.2, 0, 0, null, 0, 0,
+            PerRegion<double>.Of(_ => 0.125), PerRegion<int>.Of(_ => 0));
 
     [Fact]
     public async Task SmartStats_ComparedWithTheEnemyOfTheSameRole()
@@ -455,6 +456,9 @@ public class GetMatchAnalysisHandlerTests
         Assert.Equal((5, 3), (stats.Player.Deaths, stats.Counterpart.Deaths));
         Assert.Equal(10.0 / 3, stats.MatchAverage.Deaths, precision: 6);
         Assert.Null(stats.MatchAverage.NetWorthAt20);
+        Assert.Equal(0.125, stats.Player.TimeByRegion!.EnemyJungle);
+        Assert.Equal(0.125, stats.MatchAverage.TimeByRegion!.River);
+        Assert.Equal(0, stats.Counterpart.DeathsByRegion!.EnemyJungle);
         Assert.Equal([new InsightSummary(InsightKind.IsolatedDeaths, 3, 1)], stats.Insights);
     }
 

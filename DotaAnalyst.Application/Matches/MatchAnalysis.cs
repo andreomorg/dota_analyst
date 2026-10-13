@@ -342,6 +342,8 @@ public record SmartStats(
 /// <param name="ObserverAverageLifetimeSeconds">How long the observers lived on average (360 at most); null without observers.</param>
 /// <param name="WardsLostToEnemy">Own wards the enemy destroyed.</param>
 /// <param name="EnemyWardsDestroyed">Enemy wards destroyed.</param>
+/// <param name="TimeByRegion">Share (0..1) of the time alive from 0:00 in each region of the map; null for metrics computed before the regions.</param>
+/// <param name="DeathsByRegion">Deaths in each region of the map; null for metrics computed before the regions.</param>
 public record MetricsSummary(
     double Deaths,
     double IsolatedDeaths,
@@ -356,10 +358,25 @@ public record MetricsSummary(
     double SentriesPlaced,
     double? ObserverAverageLifetimeSeconds,
     double WardsLostToEnemy,
-    double EnemyWardsDestroyed);
+    double EnemyWardsDestroyed,
+    RegionValues? TimeByRegion = null,
+    RegionValues? DeathsByRegion = null);
 
 /// <summary>Something to improve, with the numbers behind it.</summary>
 /// <param name="Kind">isolatedDeaths, aloneOnEnemySide, behindAtTen, fewObservers or shortObserverLife.</param>
 /// <param name="Value">The player's number (deaths, share 0..1, net worth, observers or seconds).</param>
 /// <param name="Counterpart">The same number for the enemy of the same role; null when there is none.</param>
 public record InsightSummary(InsightKind Kind, double Value, double? Counterpart);
+
+/// <summary>One value per region of the map, seen from the hero's team (bases and jungles are its own or the enemy's; lanes: a band around each lane's path; river: the water of the game's minimap).</summary>
+/// <param name="OwnBase">The team's base (behind its tier-3 towers).</param>
+/// <param name="EnemyBase">The enemy's base.</param>
+/// <param name="TopLane">The top lane.</param>
+/// <param name="MiddleLane">The middle lane.</param>
+/// <param name="BottomLane">The bottom lane.</param>
+/// <param name="River">The river.</param>
+/// <param name="OwnJungle">The team's jungle (its side of the river, off the lanes).</param>
+/// <param name="EnemyJungle">The enemy's jungle.</param>
+public record RegionValues(
+    double OwnBase, double EnemyBase, double TopLane, double MiddleLane, double BottomLane, double River, double OwnJungle,
+    double EnemyJungle);

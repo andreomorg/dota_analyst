@@ -67,7 +67,13 @@ public class ReplayAnalysisRepositoryTests(PostgresFixture postgres) : IAsyncLif
                 new DamageRow(31, DamageRow.HeroKind, 28, DamageRow.HeroKind, "lich_frost_nova", 1200),
                 new DamageRow(null, "buildings", 31, DamageRow.HeroKind, null, 300),
             ],
-            purchases: [new ItemPurchase(31, -90, "tango"), new ItemPurchase(28, 1120, "recipe_black_king_bar")]);
+            purchases: [new ItemPurchase(31, -90, "tango"), new ItemPurchase(28, 1120, "recipe_black_king_bar")],
+            objectives:
+            [
+                new MapObjective(ObjectiveKind.Tower, 680, Team.Dire, 28, Team.Radiant, towerTier: 2, lane: Lane.Middle),
+                new MapObjective(ObjectiveKind.Barracks, 1668, Team.Dire, null, Team.Radiant, lane: Lane.Bottom, meleeBarracks: true),
+                new MapObjective(ObjectiveKind.Roshan, 1300, Team.Radiant, 31, aegisHeroId: 31),
+            ]);
         var repository = CreateRepository();
 
         await repository.SaveAsync(SavedReplayAnalysis.Ready(analysis, SavedAt), CancellationToken.None);
@@ -76,6 +82,7 @@ public class ReplayAnalysisRepositoryTests(PostgresFixture postgres) : IAsyncLif
         Assert.Equal(analysis.Deaths, found?.Analysis?.Deaths);
         Assert.Equal(analysis.Damage, found?.Analysis?.Damage);
         Assert.Equal(analysis.Purchases, found?.Analysis?.Purchases);
+        Assert.Equal(analysis.Objectives, found?.Analysis?.Objectives);
     }
 
     [Fact]

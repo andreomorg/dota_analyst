@@ -77,8 +77,26 @@ public class GetMatchAnalysisHandler(
             Fights: replay?.Deaths is { } fightDeaths && replay.Damage is not null ? ToFights(fightDeaths, match, currentPlayer) : null,
             ItemBuild: replay?.Purchases is { } purchases && currentPlayer is not null
                 ? ToItemBuild(purchases, currentPlayer, itemsTask.Result)
-                : null);
+                : null,
+            Objectives: replay?.Objectives is { } objectives ? ToObjectives(objectives, currentPlayer, names) : null);
     }
+
+    private static IReadOnlyList<MapObjectiveSummary> ToObjectives(
+        IReadOnlyList<MapObjective> objectives, MatchPlayer? player, NameLookup names) =>
+        objectives
+            .Select(objective => new MapObjectiveSummary(
+                Kind: objective.Kind,
+                Seconds: objective.Seconds,
+                TakenBy: objective.TakenBy,
+                IsPlayersTeam: player is null ? null : objective.TakenBy == player.Team,
+                Owner: objective.Owner,
+                TowerTier: objective.TowerTier,
+                Lane: objective.Lane,
+                MeleeBarracks: objective.MeleeBarracks,
+                Denied: objective.Denied,
+                KillerHeroName: objective.KillerHeroId is { } killer ? names.Hero(killer) : null,
+                AegisHeroName: objective.AegisHeroId is { } aegis ? names.Hero(aegis) : null))
+            .ToList();
 
     // Null when the catalog has no details (an old saved copy with OpenDota down): without components there is no
     // assembly to redo.

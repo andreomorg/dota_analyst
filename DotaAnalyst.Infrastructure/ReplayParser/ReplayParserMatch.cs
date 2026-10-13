@@ -1,4 +1,6 @@
+using System.Globalization;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using DotaAnalyst.Domain.Matches;
 using DotaAnalyst.Domain.Replays;
 
@@ -19,7 +21,19 @@ internal sealed record ReplayParserMatchResponse(
     IReadOnlyList<ReplayParserKill?>? Kills,
     ReplayParserVision? Vision,
     ReplayParserCombat? Combat,
-    ReplayParserItems? Items);
+    ReplayParserItems? Items,
+    ReplayParserObjectives? Objectives);
+
+internal sealed record ReplayParserObjectives(
+    IReadOnlyList<ReplayParserBuildingKill?>? Buildings,
+    IReadOnlyList<ReplayParserCreatureKill?>? Roshan,
+    IReadOnlyList<ReplayParserCreatureKill?>? Tormentors);
+
+// building is the combat log name (npc_dota_badguys_tower1_mid), team its owner; killer a player index.
+internal sealed record ReplayParserBuildingKill(double? T, string? Building, string? Team, int? Killer, bool? Denied);
+
+// A Roshan or Tormentor kill; team is the team that killed it. aegisPlayer only for Roshan.
+internal sealed record ReplayParserCreatureKill(double? T, string? Team, int? Killer, int? AegisPlayer);
 
 internal sealed record ReplayParserItems(IReadOnlyList<ReplayParserPlayerItems?>? Purchases);
 
@@ -171,10 +185,84 @@ internal static class ReplayParserMappings
             })
             .ToList();
 
+        var objectives = Required(response.Objectives, "objectives");
+        var mapObjectives = Required(objectives.Buildings, "objectives.buildings")
+            .Select(building => ToBuildingObjective(building ?? throw Empty("building"), HeroOfPlayer))
+            .OfType<MapObjective>()
+            .Concat(Required(objectives.Roshan, "objectives.roshan")
+                .Select(kill => ToCreatureObjective(ObjectiveKind.Roshan, kill ?? throw Empty("roshan"), HeroOfPlayer)))
+            .Concat(Required(objectives.Tormentors, "objectives.tormentors")
+                .Select(kill => ToCreatureObjective(ObjectiveKind.Tormentor, kill ?? throw Empty("tormentor"), HeroOfPlayer)))
+            .ToList();
+
         return new ReplayAnalysis(
             matchId, endsAt, laningStats, new MatchTimeline(Seconds(count, duration), heroes), deaths, wards, damage,
-            purchases);
+            purchases, mapObjectives);
     }
+
+    // npc_dota_goodguys_tower2_mid, npc_dota_badguys_tower4, npc_dota_goodguys_melee_rax_bot, npc_dota_badguys_fort.
+    private static readonly Regex BuildingName = new(
+        "^npc_dota_(?:goodguys|badguys)_(?:tower(?<tier>[1-4])(?:_(?<towerLane>top|mid|bot))?|(?<rax>melee|range)_rax_(?<raxLane>top|mid|bot)|(?<fort>fort))$",
+        RegexOptions.CultureInvariant);
+
+    // Null for a building that isn't an objective we show (fillers, or a name from a newer patch): skipped, the
+    // replay is still readable.
+    private static MapObjective? ToBuildingObjective(ReplayParserBuildingKill kill, Func<int?, int?> heroOf)
+    {
+        var match = BuildingName.Match(kill.Building ?? throw Missing("building.building"));
+        if (!match.Success)
+        {
+            return null;
+        }
+
+        var owner = ToTeam(kill.Team);
+        var denied = kill.Denied ?? false;
+        var takenBy = denied ? owner : owner == Team.Radiant ? Team.Dire : Team.Radiant;
+        var seconds = (int)Math.Round(kill.T ?? throw Missing("building.t"));
+        var killer = heroOf(kill.Killer);
+
+        if (match.Groups["fort"].Success)
+        {
+            return new MapObjective(ObjectiveKind.Ancient, seconds, takenBy, killer, owner, denied: denied);
+        }
+
+        if (match.Groups["rax"].Success)
+        {
+            return new MapObjective(
+                ObjectiveKind.Barracks, seconds, takenBy, killer, owner,
+                lane: ToBuildingLane(match.Groups["raxLane"].Value),
+                meleeBarracks: match.Groups["rax"].Value == "melee",
+                denied: denied);
+        }
+
+        var tier = int.Parse(match.Groups["tier"].Value, CultureInfo.InvariantCulture);
+        var towerLane = match.Groups["towerLane"];
+        // Towers 1-3 stand in a lane, tier 4 in the base: any other combination is a name we don't know.
+        if (towerLane.Success != (tier < 4))
+        {
+            return null;
+        }
+
+        return new MapObjective(
+            ObjectiveKind.Tower, seconds, takenBy, killer, owner, towerTier: tier,
+            lane: towerLane.Success ? ToBuildingLane(towerLane.Value) : null,
+            denied: denied);
+    }
+
+    private static MapObjective ToCreatureObjective(ObjectiveKind kind, ReplayParserCreatureKill kill, Func<int?, int?> heroOf) =>
+        new(
+            kind,
+            (int)Math.Round(kill.T ?? throw Missing($"{kind}.t")),
+            ToTeam(kill.Team),
+            heroOf(kill.Killer),
+            aegisHeroId: kind == ObjectiveKind.Roshan ? heroOf(kill.AegisPlayer) : null);
+
+    private static Lane ToBuildingLane(string lane) => lane switch
+    {
+        "top" => Lane.Top,
+        "mid" => Lane.Middle,
+        _ => Lane.Bottom,
+    };
 
     // [t, "item_name"] -> a purchase keyed like the item catalog (without "item_").
     private static ItemPurchase ToPurchase(int heroId, JsonElement tuple)

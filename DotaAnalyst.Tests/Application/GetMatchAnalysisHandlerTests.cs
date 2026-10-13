@@ -267,7 +267,7 @@ public class GetMatchAnalysisHandlerTests
                 new WardPlacement(WardKind.Sentry, Team.Dire, 28, 100, 200, 700, 760, destroyed: true, 31),
                 new WardPlacement(WardKind.Observer, Team.Radiant, 31, -3000, 1500, -60, null, destroyed: false, null),
             ],
-            damage: [], purchases: []);
+            damage: [], purchases: [], objectives: []);
         var handler = CreateHandler(
             UnparsedMatchWithMe(), new FakeReplayAnalysisRepository(SavedReplayAnalysis.Ready(replay, Now)));
 
@@ -302,7 +302,7 @@ public class GetMatchAnalysisHandlerTests
         };
         return new ReplayAnalysis(
             MatchIdOf(10), ReplayAnalysis.LaningPhaseEndsAtSeconds, players, ReplayBuilder.Timeline(players), deaths,
-            wards: [], damage, purchases: []);
+            wards: [], damage, purchases: [], objectives: []);
     }
 
     [Fact]
@@ -378,7 +378,8 @@ public class GetMatchAnalysisHandlerTests
                 new ItemPurchase(31, 900, "mithril_hammer"),
                 new ItemPurchase(31, 1000, "recipe_black_king_bar"),
                 new ItemPurchase(31, 1003, "black_king_bar"), // logged when the parts came together
-            ]);
+            ],
+            objectives: []);
         var items = new[]
         {
             new Item(44, "Tango") { Details = new ItemDetails("tango", 90, [], isConsumable: true) },
@@ -398,6 +399,33 @@ public class GetMatchAnalysisHandlerTests
         Assert.NotNull(build);
         Assert.Equal([new StartingItemCount(44, "Tango", 1)], build.StartingItems);
         Assert.Equal([new TimedItem(116, "Black King Bar", 1003, Assembled: true)], build.Items);
+    }
+
+    [Fact]
+    public async Task Objectives_Ready_BothTeamsWithTheirSideAndHeroNames()
+    {
+        var players = new[] { ReplayBuilder.Hero(31, Team.Radiant, Lane.Bottom), ReplayBuilder.Hero(28, Team.Dire, Lane.Bottom) };
+        var replay = new ReplayAnalysis(
+            MatchIdOf(10), ReplayAnalysis.LaningPhaseEndsAtSeconds, players, ReplayBuilder.Timeline(players), deaths: [],
+            wards: [], damage: [], purchases: [],
+            objectives:
+            [
+                new MapObjective(ObjectiveKind.Roshan, 1300, Team.Radiant, 31, aegisHeroId: 31),
+                new MapObjective(ObjectiveKind.Tower, 680, Team.Dire, 28, Team.Radiant, towerTier: 1, lane: Lane.Bottom),
+            ]);
+        var handler = CreateHandler(
+            UnparsedMatchWithMe(), new FakeReplayAnalysisRepository(SavedReplayAnalysis.Ready(replay, Now)));
+
+        var objectives = (await handler.HandleAsync(MatchIdOf(10), Me, CancellationToken.None))!.Objectives;
+
+        Assert.Equal(
+            [
+                new MapObjectiveSummary(ObjectiveKind.Tower, 680, Team.Dire, IsPlayersTeam: false, Team.Radiant, 1, Lane.Bottom,
+                    MeleeBarracks: null, Denied: false, GetMatchAnalysisHandler.UnknownHeroName, AegisHeroName: null),
+                new MapObjectiveSummary(ObjectiveKind.Roshan, 1300, Team.Radiant, IsPlayersTeam: true, Owner: null, TowerTier: null,
+                    Lane: null, MeleeBarracks: null, Denied: false, "Lich", "Lich"),
+            ],
+            objectives);
     }
 
     [Fact]

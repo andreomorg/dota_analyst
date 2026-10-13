@@ -22,6 +22,7 @@ namespace DotaAnalyst.Application.Matches;
 /// <param name="Wards">Every ward of both teams, read from the replay, in the order they were placed; null unless replayStatus is ready.</param>
 /// <param name="Damage">The player's damage to and from enemy heroes and by ability/item, read from the replay; null unless replayStatus is ready and the player is in the match.</param>
 /// <param name="Fights">The teamfights of the match (3+ deaths at most 15 s apart), in time order, with the player's part; null unless replayStatus is ready.</param>
+/// <param name="Objectives">Towers, barracks and Ancients that fell and Roshan/Tormentor kills of both teams, read from the replay, in time order (the buildings of the base besides towers 4 left out); null unless replayStatus is ready.</param>
 /// <param name="ItemBuild">The player's starting items and when each item of the build was ready (approximate: items sold or given away still count); null unless replayStatus is ready and the player is in the match, or when the item catalog is unavailable.</param>
 public record MatchAnalysis(
     long MatchId,
@@ -41,7 +42,8 @@ public record MatchAnalysis(
     IReadOnlyList<MapWard>? Wards = null,
     PlayerDamage? Damage = null,
     IReadOnlyList<FightSummary>? Fights = null,
-    PlayerItemBuild? ItemBuild = null);
+    PlayerItemBuild? ItemBuild = null,
+    IReadOnlyList<MapObjectiveSummary>? Objectives = null);
 
 /// <summary>One of the ten players of the match.</summary>
 /// <param name="AccountId">Dota account ID; null for players with an anonymous profile.</param>
@@ -280,3 +282,28 @@ public record StartingItemCount(int ItemId, string Name, int Count);
 /// <param name="Seconds">Game clock when it got into the inventory (for an assembled item, when its parts came together).</param>
 /// <param name="Assembled">Assembled from parts (true) or bought whole (false).</param>
 public record TimedItem(int ItemId, string Name, int Seconds, bool Assembled);
+
+/// <summary>A map objective taken: a building that fell, or Roshan/Tormentor killed.</summary>
+/// <param name="Kind">Tower, barracks, ancient, roshan or tormentor.</param>
+/// <param name="Seconds">Game clock when it fell or died.</param>
+/// <param name="TakenBy">The team that took it (destroyed the enemy's building, denied its own, or killed Roshan/Tormentor).</param>
+/// <param name="IsPlayersTeam">Taken by the player's team; null when the player is not in the match.</param>
+/// <param name="Owner">Buildings: the team that owned it; null otherwise.</param>
+/// <param name="TowerTier">Towers: 1 (outer) to 4 (by the Ancient); null otherwise.</param>
+/// <param name="Lane">Barracks and towers 1-3: top, middle or bottom; null otherwise.</param>
+/// <param name="MeleeBarracks">Barracks: melee (true) or ranged (false); null otherwise.</param>
+/// <param name="Denied">A building destroyed by its own team.</param>
+/// <param name="KillerHeroName">Hero that dealt the last hit; null when it wasn't a hero (creeps).</param>
+/// <param name="AegisHeroName">Roshan: the hero that picked up the Aegis; null otherwise or when nobody did.</param>
+public record MapObjectiveSummary(
+    ObjectiveKind Kind,
+    int Seconds,
+    Team TakenBy,
+    bool? IsPlayersTeam,
+    Team? Owner,
+    int? TowerTier,
+    Lane? Lane,
+    bool? MeleeBarracks,
+    bool Denied,
+    string? KillerHeroName,
+    string? AegisHeroName);

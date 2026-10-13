@@ -17,7 +17,8 @@ public record ReplayAnalysis
         IReadOnlyList<HeroDeath>? deaths = null,
         IReadOnlyList<WardPlacement>? wards = null,
         IReadOnlyList<DamageRow>? damage = null,
-        IReadOnlyList<ItemPurchase>? purchases = null)
+        IReadOnlyList<ItemPurchase>? purchases = null,
+        IReadOnlyList<MapObjective>? objectives = null)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(matchId.Value, nameof(matchId));
         ArgumentOutOfRangeException.ThrowIfNegative(endsAtSeconds);
@@ -64,7 +65,16 @@ public record ReplayAnalysis
 
         // OrderBy is stable: purchases in the same second keep the replay's order.
         Purchases = purchases?.OrderBy(purchase => purchase.Seconds).ToList();
+        if (objectives is not null && objectives.Any(objective => objective is null))
+        {
+            throw new ArgumentException("A replay analysis can't have an empty objective.", nameof(objectives));
+        }
+
+        Objectives = objectives?.OrderBy(objective => objective.Seconds).ToList();
     }
+
+    // Buildings that fell and Roshan/Tormentor kills, in time order; null for analyses made before they were read.
+    public IReadOnlyList<MapObjective>? Objectives { get; }
 
     // Every item purchase of every hero, in time order; null for analyses made before purchases were read.
     public IReadOnlyList<ItemPurchase>? Purchases { get; }
@@ -84,7 +94,7 @@ public record ReplayAnalysis
     // Made before everything the analysis page shows was read from the replay: worth parsing again.
     // (Analyses without damage were also read before deaths had assists.)
     public bool IsOutdated =>
-        Timeline is null || Deaths is null || Wards is null || Damage is null || Purchases is null;
+        Timeline is null || Deaths is null || Wards is null || Damage is null || Purchases is null || Objectives is null;
 
     public MatchId MatchId { get; }
 

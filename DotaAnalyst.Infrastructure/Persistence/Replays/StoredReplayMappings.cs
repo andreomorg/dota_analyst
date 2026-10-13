@@ -23,7 +23,13 @@ internal sealed record StoredReplayAnalysis(
     // Added in sprint 14, the same way.
     IReadOnlyList<StoredDamageRow>? Damage = null,
     // Added in sprint 15, the same way.
-    IReadOnlyList<StoredItemPurchase>? Purchases = null);
+    IReadOnlyList<StoredItemPurchase>? Purchases = null,
+    // Added in sprint 16, the same way.
+    IReadOnlyList<StoredMapObjective>? Objectives = null);
+
+internal sealed record StoredMapObjective(
+    ObjectiveKind Kind, int Seconds, Team TakenBy, int? KillerHeroId, Team? Owner, int? TowerTier, Lane? Lane,
+    bool? MeleeBarracks, bool Denied, int? AegisHeroId);
 
 internal sealed record StoredItemPurchase(int HeroId, int Seconds, string ItemKey);
 
@@ -150,6 +156,12 @@ internal static class StoredReplayMappings
                 stored.Purchases?.Select(purchase => purchase is null
                         ? throw new InvalidDataException("A saved replay analysis has an empty purchase.")
                         : new ItemPurchase(purchase.HeroId, purchase.Seconds, purchase.ItemKey))
+                    .ToList(),
+                stored.Objectives?.Select(objective => objective is null
+                        ? throw new InvalidDataException("A saved replay analysis has an empty objective.")
+                        : new MapObjective(objective.Kind, objective.Seconds, objective.TakenBy, objective.KillerHeroId,
+                            objective.Owner, objective.TowerTier, objective.Lane, objective.MeleeBarracks, objective.Denied,
+                            objective.AegisHeroId))
                     .ToList());
         }
         catch (ArgumentException ex)
@@ -190,5 +202,10 @@ internal static class StoredReplayMappings
                 .ToList(),
             Purchases: analysis.Purchases?
                 .Select(purchase => new StoredItemPurchase(purchase.HeroId, purchase.Seconds, purchase.ItemKey))
+                .ToList(),
+            Objectives: analysis.Objectives?
+                .Select(objective => new StoredMapObjective(objective.Kind, objective.Seconds, objective.TakenBy,
+                    objective.KillerHeroId, objective.Owner, objective.TowerTier, objective.Lane, objective.MeleeBarracks,
+                    objective.Denied, objective.AegisHeroId))
                 .ToList());
 }

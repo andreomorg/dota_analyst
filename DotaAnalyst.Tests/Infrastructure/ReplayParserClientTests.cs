@@ -44,7 +44,8 @@ public class ReplayParserClientTests
           "kills": [],
           "vision": { "wards": [] },
           "combat": { "damage": [], "healing": [], "perMinute": [] },
-          "items": { "purchases": [], "uses": [], "final": [] }
+          "items": { "purchases": [], "uses": [], "final": [] },
+          "objectives": { "buildings": [], "roshan": [], "tormentors": [], "couriers": [], "runes": [], "outposts": [] }
         }
         """;
 
@@ -195,6 +196,47 @@ public class ReplayParserClientTests
 
         await Assert.ThrowsAsync<ReplayUnreadableException>(() =>
             CreateClient(new FakeParser(Json(HttpStatusCode.OK, body, "application/json"))).ParseAsync(Match, ReplayUrl, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Parse_Objectives_BuildingsByName_RoshanAndTormentor()
+    {
+        // Building names as in match 9040879414; fillers and unknown names are skipped.
+        var body = MatchJson().Replace(
+            "\"objectives\": { \"buildings\": [], \"roshan\": [], \"tormentors\": []",
+            """
+            "objectives": {
+              "buildings": [
+                { "t": 679.6, "building": "npc_dota_goodguys_tower1_bot", "team": "radiant", "killer": 5, "killerUnit": "npc_dota_beastmaster_boar", "denied": false },
+                { "t": 1009.9, "building": "npc_dota_badguys_tower2_top", "team": "dire", "killer": null, "killerUnit": "npc_dota_creep_goodguys_melee", "denied": false },
+                { "t": 1100, "building": "npc_dota_badguys_tower3_mid", "team": "dire", "killer": 5, "denied": true },
+                { "t": 1668.3, "building": "npc_dota_goodguys_range_rax_bot", "team": "radiant", "killer": 5, "denied": false },
+                { "t": 1694.6, "building": "npc_dota_goodguys_melee_rax_mid", "team": "radiant", "killer": 5, "denied": false },
+                { "t": 1696.9, "building": "npc_dota_goodguys_fillers", "team": "radiant", "killer": 5, "denied": false },
+                { "t": 1700, "building": "npc_dota_goodguys_statue_of_a_new_patch", "team": "radiant", "killer": 5, "denied": false },
+                { "t": 1888.4, "building": "npc_dota_goodguys_tower4", "team": "radiant", "killer": 5, "denied": false },
+                { "t": 1905.9, "building": "npc_dota_goodguys_fort", "team": "radiant", "killer": 5, "denied": false }
+              ],
+              "roshan": [ { "t": 1300.2, "team": "radiant", "killer": 0, "aegisPlayer": 0 } ],
+              "tormentors": [ { "t": 1250, "team": "dire", "killer": null } ]
+            """);
+
+        var analysis = await CreateClient(new FakeParser(Json(HttpStatusCode.OK, body, "application/json")))
+            .ParseAsync(Match, ReplayUrl, CancellationToken.None);
+
+        Assert.Equal(
+            [
+                new MapObjective(ObjectiveKind.Tower, 680, Team.Dire, 28, Team.Radiant, towerTier: 1, lane: Lane.Bottom),
+                new MapObjective(ObjectiveKind.Tower, 1010, Team.Radiant, null, Team.Dire, towerTier: 2, lane: Lane.Top),
+                new MapObjective(ObjectiveKind.Tower, 1100, Team.Dire, 28, Team.Dire, towerTier: 3, lane: Lane.Middle, denied: true),
+                new MapObjective(ObjectiveKind.Tormentor, 1250, Team.Dire, null),
+                new MapObjective(ObjectiveKind.Roshan, 1300, Team.Radiant, 31, aegisHeroId: 31),
+                new MapObjective(ObjectiveKind.Barracks, 1668, Team.Dire, 28, Team.Radiant, lane: Lane.Bottom, meleeBarracks: false),
+                new MapObjective(ObjectiveKind.Barracks, 1695, Team.Dire, 28, Team.Radiant, lane: Lane.Middle, meleeBarracks: true),
+                new MapObjective(ObjectiveKind.Tower, 1888, Team.Dire, 28, Team.Radiant, towerTier: 4),
+                new MapObjective(ObjectiveKind.Ancient, 1906, Team.Dire, 28, Team.Radiant),
+            ],
+            analysis.Objectives);
     }
 
     [Fact]

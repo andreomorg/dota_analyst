@@ -39,7 +39,30 @@ internal sealed record StoredHeroMetrics(
     IReadOnlyDictionary<MapRegion, double>? TimeByRegion = null,
     IReadOnlyDictionary<MapRegion, int>? DeathsByRegion = null,
     // Added in sprint 20 (false in older rows: they all came from role queue).
-    bool RoleInferred = false);
+    bool RoleInferred = false,
+    // Added for estimated movement metrics; null identifies rows that predate these metrics.
+    double? EstimatedMovementDistance = null,
+    IReadOnlyDictionary<MapRegion, double>? EstimatedMovementByRegion = null,
+    int? MovementSampleSegments = null,
+    // Added after movement metrics; absent in older JSON, which remains readable and triggers a refresh.
+    StoredRegionPhases<double>? TimeByRegionByPhase = null,
+    StoredRegionPhases<int>? DeathsByRegionByPhase = null,
+    // Fights, kill participation and quick re-deaths (null in older rows: the analysis is then parsed again).
+    int? TeamFights = null,
+    int? FightsNearby = null,
+    double? KillParticipation = null,
+    int? QuickRedeaths = null,
+    int? LaneDamageDealt = null,
+    int? LaneDamageTaken = null,
+    double? TeamObserverUptime = null,
+    double? LeadLostPerDeath = null,
+    IReadOnlyDictionary<MapRegion, double>? NetWorthGainByRegion = null,
+    IReadOnlyDictionary<MapRegion, int>? MinutesByRegion = null);
+
+internal sealed record StoredRegionPhases<T>(
+    IReadOnlyDictionary<MapRegion, T> EarlyGame,
+    IReadOnlyDictionary<MapRegion, T> MidGame,
+    IReadOnlyDictionary<MapRegion, T> LateGame);
 
 internal sealed record StoredMapObjective(
     ObjectiveKind Kind, int Seconds, Team TakenBy, int? KillerHeroId, Team? Owner, int? TowerTier, Lane? Lane,
@@ -242,7 +265,16 @@ internal static class StoredReplayMappings
             hero.WardsLostToEnemy, hero.EnemyWardsDestroyed,
             hero.TimeByRegion is { } time ? PerRegion<double>.Of(time.GetValueOrDefault) : null,
             hero.DeathsByRegion is { } deaths ? PerRegion<int>.Of(deaths.GetValueOrDefault) : null,
-            hero.RoleInferred);
+            hero.RoleInferred,
+            hero.EstimatedMovementDistance,
+            hero.EstimatedMovementByRegion is { } movement ? PerRegion<double>.Of(movement.GetValueOrDefault) : null,
+            hero.MovementSampleSegments,
+            hero.TimeByRegionByPhase is { } timeByPhase ? ToDomain(timeByPhase) : null,
+            hero.DeathsByRegionByPhase is { } deathsByPhase ? ToDomain(deathsByPhase) : null,
+            hero.TeamFights, hero.FightsNearby, hero.KillParticipation, hero.QuickRedeaths, hero.LaneDamageDealt, hero.LaneDamageTaken,
+            hero.TeamObserverUptime, hero.LeadLostPerDeath,
+            hero.NetWorthGainByRegion is { } gain ? PerRegion<double>.Of(gain.GetValueOrDefault) : null,
+            hero.MinutesByRegion is { } minutes ? PerRegion<int>.Of(minutes.GetValueOrDefault) : null);
 
     public static StoredHeroMetrics ToStored(HeroMetrics hero) =>
         new(hero.HeroId, hero.Team, hero.Role, hero.Deaths, hero.IsolatedDeaths, hero.DeathsOnEnemySide,
@@ -251,7 +283,29 @@ internal static class StoredReplayMappings
             hero.WardsLostToEnemy, hero.EnemyWardsDestroyed,
             hero.TimeByRegion is { } time ? ByRegion(time) : null,
             hero.DeathsByRegion is { } deaths ? ByRegion(deaths) : null,
-            hero.RoleInferred);
+            hero.RoleInferred,
+            hero.EstimatedMovementDistance,
+            hero.EstimatedMovementByRegion is { } movement ? ByRegion(movement) : null,
+            hero.MovementSampleSegments,
+            hero.TimeByRegionByPhase is { } timeByPhase ? ToStored(timeByPhase) : null,
+            hero.DeathsByRegionByPhase is { } deathsByPhase ? ToStored(deathsByPhase) : null,
+            hero.TeamFights, hero.FightsNearby, hero.KillParticipation, hero.QuickRedeaths, hero.LaneDamageDealt, hero.LaneDamageTaken,
+            hero.TeamObserverUptime, hero.LeadLostPerDeath,
+            hero.NetWorthGainByRegion is { } gain ? ByRegion(gain) : null,
+            hero.MinutesByRegion is { } minutes ? ByRegion(minutes) : null);
+
+    private static PerGamePhase<PerRegion<T>> ToDomain<T>(StoredRegionPhases<T> phases) =>
+        new(ToRegion(phases.EarlyGame), ToRegion(phases.MidGame), ToRegion(phases.LateGame));
+
+    // A missing phase in a damaged row makes it unreadable (parsed again), never a NullReferenceException.
+    private static PerRegion<T> ToRegion<T>(IReadOnlyDictionary<MapRegion, T>? values) =>
+        values is null
+            ? throw new InvalidDataException("A saved phase split is missing a phase.")
+            : PerRegion<T>.Of(region => values.TryGetValue(region, out var value) ? value : default!);
+
+    private static StoredRegionPhases<T> ToStored<T>(PerGamePhase<PerRegion<T>> phases) =>
+        new(ByRegion(phases.EarlyGame), ByRegion(phases.MidGame), ByRegion(phases.LateGame));
+
     // Saved as { "OwnBase": 0.1, ... }: readable in the database and safe if a region is added later.
     private static Dictionary<MapRegion, T> ByRegion<T>(PerRegion<T> values) =>
         Enum.GetValues<MapRegion>().ToDictionary(region => region, region => values[region]);

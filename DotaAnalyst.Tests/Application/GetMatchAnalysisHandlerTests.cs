@@ -338,6 +338,29 @@ public class GetMatchAnalysisHandlerTests
     }
 
     [Fact]
+    public async Task Damage_ItemInflictors_ComeWithTheItemsIdAndName()
+    {
+        var replay = TeamfightReplay(
+            deaths: [],
+            damage:
+            [
+                new DamageRow(31, DamageRow.HeroKind, 28, DamageRow.HeroKind, "item_dagon_5", 800),
+                new DamageRow(31, DamageRow.HeroKind, 28, DamageRow.HeroKind, "lich_frost_nova", 500),
+            ]);
+        var items = new FakeItemCatalog(new Item(104, "Dagon 5") { Details = new ItemDetails("dagon_5", 7050, [], isConsumable: false) });
+        var handler = CreateHandler(
+            new FakeReplayAnalyzer(TeamfightMatch()),
+            replays: new FakeReplayAnalysisRepository(SavedReplayAnalysis.Ready(replay, Now)),
+            items: items);
+
+        var damage = (await handler.HandleAsync(MatchIdOf(10), Me, CancellationToken.None))!.Damage!;
+
+        Assert.Equal(
+            [new InflictorAmount("item_dagon_5", 800, 104, "Dagon 5"), new InflictorAmount("lich_frost_nova", 500)],
+            damage.ByInflictor);
+    }
+
+    [Fact]
     public async Task Fights_Ready_WithThePlayersPart()
     {
         var replay = TeamfightReplay(
@@ -432,7 +455,15 @@ public class GetMatchAnalysisHandlerTests
 
     private static HeroMetrics HeroMetricsOf(int heroId, Team team, int role, int isolatedDeaths = 0, int deaths = 2) =>
         new(heroId, team, role, deaths, isolatedDeaths, 0, 0.2, 0.02, 2000, null, 10, 0.2, 0, 0, null, 0, 0,
-            PerRegion<double>.Of(_ => 0.125), PerRegion<int>.Of(_ => 0));
+            PerRegion<double>.Of(_ => 0.125), PerRegion<int>.Of(_ => 0), EstimatedMovementDistance: 1000,
+            EstimatedMovementByRegion: PerRegion<double>.Of(_ => 125), MovementSampleSegments: 100,
+            TimeByRegionByPhase: new PerGamePhase<PerRegion<double>>(
+                PerRegion<double>.Of(_ => 0.25), PerRegion<double>.Of(_ => 0.5), PerRegion<double>.Of(_ => 0.75)),
+            DeathsByRegionByPhase: new PerGamePhase<PerRegion<int>>(
+                PerRegion<int>.Of(_ => 1), PerRegion<int>.Of(_ => 2), PerRegion<int>.Of(_ => 3)),
+            TeamFights: 4, FightsNearby: 2, KillParticipation: 0.5, QuickRedeaths: 0,
+            LaneDamageDealt: 2000, LaneDamageTaken: 2000, TeamObserverUptime: 0.6,
+            NetWorthGainByRegion: PerRegion<double>.Of(_ => 1000), MinutesByRegion: PerRegion<int>.Of(_ => 3));
 
     [Fact]
     public async Task SmartStats_ComparedWithTheEnemyOfTheSameRole()
@@ -460,6 +491,11 @@ public class GetMatchAnalysisHandlerTests
         Assert.Equal(0.125, stats.Player.TimeByRegion!.EnemyJungle);
         Assert.Equal(0.125, stats.MatchAverage.TimeByRegion!.River);
         Assert.Equal(0, stats.Counterpart.DeathsByRegion!.EnemyJungle);
+        Assert.Equal(0.25, stats.Player.TimeByRegionByPhase!.EarlyGame.OwnBase);
+        Assert.Equal(0.5, stats.Player.TimeByRegionByPhase.MidGame.OwnBase);
+        Assert.Equal(0.75, stats.MatchAverage.TimeByRegionByPhase!.LateGame.OwnBase);
+        Assert.Equal(2, stats.Player.DeathsByRegionByPhase!.MidGame.OwnBase);
+        Assert.Equal(1, stats.MatchAverage.DeathsByRegionByPhase!.EarlyGame.OwnBase);
         Assert.Equal([new InsightSummary(InsightKind.IsolatedDeaths, 3, 1)], stats.Insights);
     }
 

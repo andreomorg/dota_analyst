@@ -23,6 +23,13 @@ public enum ComparedMetric
     SentriesPer30,
     ObserverLifetime,
     EnemyWardsDestroyedPer30,
+    FightPresence,
+    KillParticipation,
+    QuickRedeathsPer30,
+    LaneDamageDealt,
+    LaneDamageTaken,
+    TeamObserverUptime,
+    LeadLostPerDeath,
 }
 
 // One hero's metrics in one match of the base, with the match's length (for the per-30-minutes numbers).
@@ -68,6 +75,13 @@ public static class BaselineComparer
         (ComparedMetric.SentriesPer30, (hero, seconds) => Per30(hero.SentriesPlaced, seconds), true),
         (ComparedMetric.ObserverLifetime, (hero, _) => hero.ObserverAverageLifetimeSeconds, true),
         (ComparedMetric.EnemyWardsDestroyedPer30, (hero, seconds) => Per30(hero.EnemyWardsDestroyed, seconds), true),
+        (ComparedMetric.FightPresence, (hero, _) => hero is { TeamFights: > 0 and var fights, FightsNearby: { } near } ? (double)near / fights : null, true),
+        (ComparedMetric.KillParticipation, (hero, _) => hero.KillParticipation, true),
+        (ComparedMetric.QuickRedeathsPer30, (hero, seconds) => hero.QuickRedeaths is { } quick ? Per30(quick, seconds) : null, false),
+        (ComparedMetric.LaneDamageDealt, (hero, _) => hero.LaneDamageDealt, true),
+        (ComparedMetric.LaneDamageTaken, (hero, _) => hero.LaneDamageTaken, false),
+        (ComparedMetric.TeamObserverUptime, (hero, _) => hero.TeamObserverUptime, true),
+        (ComparedMetric.LeadLostPerDeath, (hero, _) => hero.LeadLostPerDeath, false),
     ];
 
     // The distribution of each metric the base has at least MinSampleSize values of.

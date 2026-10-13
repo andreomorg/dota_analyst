@@ -78,7 +78,15 @@ public class ReplayAnalysisRepositoryTests(PostgresFixture postgres) : IAsyncLif
             metrics:
             [
                 new HeroMetrics(31, Team.Radiant, 5, 4, 2, 1, 0.31, 0.12, 2900, null, 12, 0.18, 9, 6, 287, 3, 4,
-                    new PerRegion<double>(0.1, 0, 0.3, 0.1, 0, 0.2, 0.2, 0.1), new PerRegion<int>(0, 1, 0, 0, 0, 1, 0, 2)),
+                    new PerRegion<double>(0.1, 0, 0.3, 0.1, 0, 0.2, 0.2, 0.1), new PerRegion<int>(0, 1, 0, 0, 0, 1, 0, 2),
+                    TimeByRegionByPhase: new PerGamePhase<PerRegion<double>>(
+                        new PerRegion<double>(0.1, 0, 0.3, 0.1, 0, 0.2, 0.2, 0.1),
+                        new PerRegion<double>(0.2, 0, 0.2, 0.1, 0, 0.2, 0.2, 0.1),
+                        new PerRegion<double>(0.3, 0, 0.1, 0.1, 0, 0.2, 0.2, 0.1)),
+                    DeathsByRegionByPhase: new PerGamePhase<PerRegion<int>>(
+                        new PerRegion<int>(0, 1, 0, 0, 0, 1, 0, 2),
+                        new PerRegion<int>(1, 0, 0, 0, 0, 1, 0, 1),
+                        new PerRegion<int>(0, 0, 0, 1, 0, 1, 0, 0))),
             ]);
         var repository = CreateRepository();
 
@@ -165,6 +173,57 @@ public class ReplayAnalysisRepositoryTests(PostgresFixture postgres) : IAsyncLif
 
         await repository.SaveAsync(SavedReplayAnalysis.Expired(Match, SavedAt), CancellationToken.None);
         Assert.Equal(SavedReplayState.Expired, (await repository.FindAsync(Match, CancellationToken.None))!.State);
+    }
+
+    [Fact]
+    public async Task Find_OldMetricJsonWithoutPhaseSlices_RemainsReadableAndOutdated()
+    {
+        const string oldJson = """
+            {
+              "version": 1,
+              "matchId": 9034320024,
+              "endsAtSeconds": 600,
+              "players": [],
+              "metrics": [{
+                "heroId": 31,
+                "team": "radiant",
+                "role": 5,
+                "deaths": 0,
+                "isolatedDeaths": 0,
+                "deathsOnEnemySide": 0,
+                "enemySideShare": 0,
+                "aloneOnEnemySideShare": 0,
+                "netWorthAt10": 0,
+                "netWorthAt20": null,
+                "lastHitsAt10": 0,
+                "netWorthShare": 0,
+                "observersPlaced": 0,
+                "sentriesPlaced": 0,
+                "observerAverageLifetimeSeconds": null,
+                "wardsLostToEnemy": 0,
+                "enemyWardsDestroyed": 0,
+                "timeByRegion": { "ownBase": 1, "enemyBase": 0, "topLane": 0, "middleLane": 0, "bottomLane": 0, "river": 0, "ownJungle": 0, "enemyJungle": 0 },
+                "deathsByRegion": { "ownBase": 0, "enemyBase": 0, "topLane": 0, "middleLane": 0, "bottomLane": 0, "river": 0, "ownJungle": 0, "enemyJungle": 0 },
+                "roleInferred": false,
+                "estimatedMovementDistance": 0,
+                "estimatedMovementByRegion": { "ownBase": 0, "enemyBase": 0, "topLane": 0, "middleLane": 0, "bottomLane": 0, "river": 0, "ownJungle": 0, "enemyJungle": 0 },
+                "movementSampleSegments": 0
+              }]
+            }
+            """;
+        await using (var db = await postgres.DbContextFactory.CreateDbContextAsync())
+        {
+            await db.Database.ExecuteSqlAsync(
+                $"INSERT INTO replay_analyses (match_id, status, data, saved_at) VALUES ({MatchIdValue}, 'ready', CAST({oldJson} AS jsonb), {SavedAt})");
+        }
+
+        var found = await CreateRepository().FindAsync(Match, CancellationToken.None);
+
+        Assert.NotNull(found?.Analysis);
+        var metrics = Assert.Single(found.Analysis.Metrics!);
+        Assert.Null(metrics.TimeByRegionByPhase);
+        Assert.Null(metrics.DeathsByRegionByPhase);
+        Assert.True(found.Analysis.IsOutdated);
     }
 
     private ReplayAnalysisRepository CreateRepository() =>

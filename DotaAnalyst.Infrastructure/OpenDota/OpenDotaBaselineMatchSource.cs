@@ -65,10 +65,34 @@ public class OpenDotaBaselineMatchSource(OpenDotaClient openDotaClient, TimeProv
                 break;
             }
 
-            lessThan = matches.Min(match => match.MatchId);
+            // At busy hours a page covers only a few minutes, so paging would never reach matches that ended
+            // ReplayDelay ago. After the first page, jump straight to about JumpBack ago instead: match IDs grow
+            // roughly linearly with time, and the page gives the rate.
+            lessThan = page == 0 && EstimateIdAt(matches, timeProvider.GetUtcNow() - JumpBack) is { } jump
+                ? jump
+                : matches.Min(match => match.MatchId);
         }
 
         return candidates;
+    }
+
+    // ReplayDelay plus a typical match (40 min) and some slack: the page there has matches whose replays are up.
+    public static readonly TimeSpan JumpBack = TimeSpan.FromMinutes(110);
+
+    // The match ID that started about at that time, from the IDs and start times of one page; null when the page can't
+    // tell (too few matches, or no time spread).
+    internal static long? EstimateIdAt(IReadOnlyList<OpenDotaPublicMatch> page, DateTimeOffset at)
+    {
+        var newest = page.MaxBy(match => match.MatchId);
+        var oldest = page.MinBy(match => match.MatchId);
+        if (newest is null || oldest is null || newest.StartTime <= oldest.StartTime)
+        {
+            return null;
+        }
+
+        var idsPerSecond = (double)(newest.MatchId - oldest.MatchId) / (newest.StartTime - oldest.StartTime);
+        var target = newest.MatchId - (long)(idsPerSecond * (newest.StartTime - at.ToUnixTimeSeconds()));
+        return target > 0 && target < oldest.MatchId ? target : null;
     }
 
     private static BaselineCandidate? ToCandidate(long matchId, BaselineSource source) =>

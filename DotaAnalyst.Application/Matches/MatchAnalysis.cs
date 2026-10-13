@@ -66,6 +66,8 @@ public record MatchAnalysis(
 /// <param name="Level">Hero level at the end of the match.</param>
 /// <param name="Items">Inventory item names (empty slots left out; "Unknown item" when the catalog doesn't know one).</param>
 /// <param name="NeutralItem">Neutral item name; null when there is none.</param>
+/// <param name="ItemIds">Inventory item IDs in the same order as Items.</param>
+/// <param name="NeutralItemId">Neutral item ID; null when there is none.</param>
 public record MatchPlayerSummary(
     long? AccountId,
     bool IsCurrentPlayer,
@@ -84,7 +86,9 @@ public record MatchPlayerSummary(
     int HeroHealing,
     int Level,
     IReadOnlyList<string> Items,
-    string? NeutralItem);
+    string? NeutralItem,
+    IReadOnlyList<int>? ItemIds = null,
+    int? NeutralItemId = null);
 
 /// <summary>How the player did compared to other players of the same hero.</summary>
 /// <param name="HeroId">Hero played.</param>
@@ -240,7 +244,9 @@ public record HeroAmount(int HeroId, string HeroName, int Amount);
 /// <summary>An amount for one ability or item.</summary>
 /// <param name="Inflictor">Internal name of the ability or item (lich_frost_nova, item_dagon_5); null for basic attacks.</param>
 /// <param name="Amount">The amount.</param>
-public record InflictorAmount(string? Inflictor, int Amount);
+/// <param name="ItemId">The item's ID when the inflictor is an item the catalog knows (for its icon); null otherwise.</param>
+/// <param name="ItemName">The item's name in the catalog; null when it isn't an item the catalog knows.</param>
+public record InflictorAmount(string? Inflictor, int Amount, int? ItemId = null, string? ItemName = null);
 
 /// <summary>One teamfight: hero deaths at most 15 s apart, at least 3 of them.</summary>
 /// <param name="StartSeconds">Game clock of the first death.</param>
@@ -346,6 +352,21 @@ public record SmartStats(
 /// <param name="EnemyWardsDestroyed">Enemy wards destroyed.</param>
 /// <param name="TimeByRegion">Share (0..1) of the time alive from 0:00 in each region of the map; null for metrics computed before the regions.</param>
 /// <param name="DeathsByRegion">Deaths in each region of the map; null for metrics computed before the regions.</param>
+/// <param name="EstimatedMovementDistance">Estimated straight-line displacement between adjacent position samples, in map units; null when no continuous samples were available.</param>
+/// <param name="MovementSampleSegments">Number of adjacent position-sample pairs used for the distance estimate; an average when this summarizes a team.</param>
+/// <param name="EstimatedMovementByRegion">Estimated displacement assigned to the region containing each segment midpoint; null when no continuous samples were available.</param>
+/// <param name="TimeByRegionByPhase">Share of alive position samples in each map region, split into 0-10, 10-20, and 20+ minute phases; null for older metrics.</param>
+/// <param name="DeathsByRegionByPhase">Deaths in each map region, split into 0-10, 10-20, and 20+ minute phases; null for older metrics.</param>
+/// <param name="TeamFights">Teamfights of the match (3+ deaths at most 15 s apart); null for older metrics.</param>
+/// <param name="FightsNearby">Teamfights the hero was within 2500 map units of (center = average of the fight's deaths); null for older metrics.</param>
+/// <param name="KillParticipation">(Kills + combat-log assists) / enemy hero deaths, 0..1; null when no enemy died or for older metrics.</param>
+/// <param name="QuickRedeaths">Deaths within 90 s of coming back from the previous death; null for older metrics.</param>
+/// <param name="LaneDamageDealt">Damage dealt to enemy heroes in minutes 0-9; null for older metrics.</param>
+/// <param name="LaneDamageTaken">Damage taken from enemy heroes in minutes 0-9; null for older metrics.</param>
+/// <param name="TeamObserverUptime">Share (0..1) of the match with at least one observer of the hero's team on the map; null for older metrics.</param>
+/// <param name="LeadLostPerDeath">Average fall of the team's net worth lead from the minute of each death to the next (positive = lost; correlation, not cause); null without such deaths or for older metrics.</param>
+/// <param name="NetWorthGainByRegion">Net worth gained in the minutes spent mostly in each region (divide by MinutesByRegion for a rate per minute); null for older metrics.</param>
+/// <param name="MinutesByRegion">Minutes spent mostly in each region (minutes dead all along left out); null for older metrics.</param>
 public record MetricsSummary(
     double Deaths,
     double IsolatedDeaths,
@@ -362,10 +383,28 @@ public record MetricsSummary(
     double WardsLostToEnemy,
     double EnemyWardsDestroyed,
     RegionValues? TimeByRegion = null,
-    RegionValues? DeathsByRegion = null);
+    RegionValues? DeathsByRegion = null,
+    double? EstimatedMovementDistance = null,
+    double? MovementSampleSegments = null,
+    RegionValues? EstimatedMovementByRegion = null,
+    RegionPhaseValues? TimeByRegionByPhase = null,
+    RegionPhaseValues? DeathsByRegionByPhase = null,
+    double? TeamFights = null,
+    double? FightsNearby = null,
+    double? KillParticipation = null,
+    double? QuickRedeaths = null,
+    double? LaneDamageDealt = null,
+    double? LaneDamageTaken = null,
+    double? TeamObserverUptime = null,
+    double? LeadLostPerDeath = null,
+    RegionValues? NetWorthGainByRegion = null,
+    RegionValues? MinutesByRegion = null);
+
+/// <summary>Values for each region, split into early game (0-10 minutes), mid game (10-20 minutes), and late game (20+ minutes).</summary>
+public record RegionPhaseValues(RegionValues EarlyGame, RegionValues MidGame, RegionValues LateGame);
 
 /// <summary>Something to improve, with the numbers behind it.</summary>
-/// <param name="Kind">isolatedDeaths, aloneOnEnemySide, behindAtTen, fewObservers or shortObserverLife.</param>
+/// <param name="Kind">isolatedDeaths, aloneOnEnemySide, behindAtTen, fewObservers, shortObserverLife, deathsInEnemyJungle, lowFightPresence (value = share 0..1 of the team's fights the player was near), quickRedeaths (value = count) lostLaneTrades (value = damage taken from heroes in minutes 0-9; counterpart = the same for the enemy of the same role) or lowObserverUptime (supports; value = share 0..1 of the match the team had an observer up; counterpart = the enemy team's) or gapGrewAfterLane (value = net worth at 20:00; counterpart = the same for the enemy of the same role).</param>
 /// <param name="Value">The player's number (deaths, share 0..1, net worth, observers or seconds).</param>
 /// <param name="Counterpart">The same number for the enemy of the same role; null when there is none.</param>
 public record InsightSummary(InsightKind Kind, double Value, double? Counterpart);

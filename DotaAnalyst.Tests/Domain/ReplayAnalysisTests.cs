@@ -1,3 +1,4 @@
+using DotaAnalyst.Domain.Analysis;
 using DotaAnalyst.Domain.Matches;
 using DotaAnalyst.Domain.Replays;
 using static DotaAnalyst.Tests.Domain.ReplayBuilder;
@@ -6,6 +7,43 @@ namespace DotaAnalyst.Tests.Domain;
 
 public class ReplayAnalysisTests
 {
+    [Fact]
+    public void IsOutdated_WhenMovementMetricsAreMissing()
+    {
+        var metrics = new HeroMetrics(
+            31, Team.Radiant, 1, 0, 0, 0, 0, 0, 1000, null, 10, 0.5, 0, 0, null, 0, 0,
+            PerRegion<double>.Of(_ => 0.125), PerRegion<int>.Of(_ => 0));
+        var replay = new ReplayAnalysis(
+            MatchIdOf(10), ReplayAnalysis.LaningPhaseEndsAtSeconds, [Hero(31, Team.Radiant, Lane.Bottom)],
+            timeline: Timeline(Hero(31, Team.Radiant, Lane.Bottom)), deaths: [], wards: [], damage: [], purchases: [],
+            objectives: [], metrics: [metrics]);
+
+        Assert.True(replay.IsOutdated);
+
+        var currentMetrics = metrics with
+        {
+            EstimatedMovementDistance = 0,
+            EstimatedMovementByRegion = PerRegion<double>.Of(_ => 0),
+            MovementSampleSegments = 0,
+            TimeByRegionByPhase = new PerGamePhase<PerRegion<double>>(
+                PerRegion<double>.Of(_ => 0), PerRegion<double>.Of(_ => 0), PerRegion<double>.Of(_ => 0)),
+            DeathsByRegionByPhase = new PerGamePhase<PerRegion<int>>(
+                PerRegion<int>.Of(_ => 0), PerRegion<int>.Of(_ => 0), PerRegion<int>.Of(_ => 0)),
+            TeamFights = 0,
+            FightsNearby = 0,
+            QuickRedeaths = 0,
+            LaneDamageTaken = 0,
+            TeamObserverUptime = 0,
+            MinutesByRegion = PerRegion<int>.Of(_ => 0),
+        };
+        var currentReplay = new ReplayAnalysis(
+            MatchIdOf(10), ReplayAnalysis.LaningPhaseEndsAtSeconds, [Hero(31, Team.Radiant, Lane.Bottom)],
+            timeline: Timeline(Hero(31, Team.Radiant, Lane.Bottom)), deaths: [], wards: [], damage: [], purchases: [],
+            objectives: [], metrics: [currentMetrics]);
+
+        Assert.False(currentReplay.IsOutdated);
+    }
+
     [Theory]
     [InlineData(0)]
     [InlineData(420)] // the match ended before 10:00

@@ -107,7 +107,9 @@ public record ReplayAnalysis
     // (Analyses without damage were also read before deaths had assists.)
     public bool IsOutdated =>
         Timeline is null || Deaths is null || Wards is null || Damage is null || Purchases is null || Objectives is null
-        || Metrics is null || Metrics.Any(hero => hero.TimeByRegion is null || hero.DeathsByRegion is null);
+        || Metrics is null || Metrics.Any(hero =>
+            hero.TimeByRegion is null || hero.DeathsByRegion is null || hero.MovementSampleSegments is null
+            || hero.TimeByRegionByPhase is null || hero.DeathsByRegionByPhase is null || hero.FightsNearby is null || hero.LaneDamageTaken is null || hero.TeamObserverUptime is null || hero.MinutesByRegion is null);
 
     public MatchId MatchId { get; }
 

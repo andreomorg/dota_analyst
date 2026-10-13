@@ -116,6 +116,11 @@ public class GetMatchAnalysisHandler(
             var known = values.OfType<int>().ToList();
             return known.Count == 0 ? null : known.Average();
         }
+        static double? AverageKnown(IEnumerable<double?> values)
+        {
+            var known = values.OfType<double>().ToList();
+            return known.Count == 0 ? null : known.Average();
+        }
 
         var matchAverage = new MetricsSummary(
             Deaths: metrics.Average(hero => hero.Deaths),
@@ -134,7 +139,24 @@ public class GetMatchAnalysisHandler(
             EnemyWardsDestroyed: metrics.Average(hero => hero.EnemyWardsDestroyed),
             // Each hero's own/enemy regions: "own jungle" averages every hero's own jungle.
             TimeByRegion: AverageByRegion(metrics.Select(hero => hero.TimeByRegion)),
-            DeathsByRegion: AverageByRegion(metrics.Select(hero => hero.DeathsByRegion?.Select(count => (double)count))));
+            DeathsByRegion: AverageByRegion(metrics.Select(hero => hero.DeathsByRegion?.Select(count => (double)count))),
+            EstimatedMovementDistance: AverageKnown(metrics.Select(hero => hero.EstimatedMovementDistance)),
+            MovementSampleSegments: AverageKnown(metrics.Select(hero =>
+                hero.MovementSampleSegments is { } count ? (double?)count : null)),
+            EstimatedMovementByRegion: AverageKnownByRegion(metrics.Select(hero => hero.EstimatedMovementByRegion)),
+            TimeByRegionByPhase: AverageByPhase(metrics.Select(hero => hero.TimeByRegionByPhase)),
+            DeathsByRegionByPhase: AverageByPhase(metrics.Select(hero =>
+                hero.DeathsByRegionByPhase?.Select(regionCounts => regionCounts.Select(count => (double)count)))),
+            TeamFights: AverageKnown(metrics.Select(hero => (double?)hero.TeamFights)),
+            FightsNearby: AverageKnown(metrics.Select(hero => (double?)hero.FightsNearby)),
+            KillParticipation: AverageKnown(metrics.Select(hero => hero.KillParticipation)),
+            QuickRedeaths: AverageKnown(metrics.Select(hero => (double?)hero.QuickRedeaths)),
+            LaneDamageDealt: AverageKnown(metrics.Select(hero => (double?)hero.LaneDamageDealt)),
+            LaneDamageTaken: AverageKnown(metrics.Select(hero => (double?)hero.LaneDamageTaken)),
+            TeamObserverUptime: AverageKnown(metrics.Select(hero => hero.TeamObserverUptime)),
+            LeadLostPerDeath: AverageKnown(metrics.Select(hero => hero.LeadLostPerDeath)),
+            NetWorthGainByRegion: AverageKnownByRegion(metrics.Select(hero => hero.NetWorthGainByRegion)),
+            MinutesByRegion: AverageKnownByRegion(metrics.Select(hero => hero.MinutesByRegion?.Select(count => (double)count))));
 
         return new SmartStats(
             Role: mine.Role,
@@ -153,7 +175,18 @@ public class GetMatchAnalysisHandler(
             hero.NetWorthAt10, hero.NetWorthAt20, hero.LastHitsAt10, hero.NetWorthShare, hero.ObserversPlaced,
             hero.SentriesPlaced, hero.ObserverAverageLifetimeSeconds, hero.WardsLostToEnemy, hero.EnemyWardsDestroyed,
             hero.TimeByRegion is { } time ? ToRegionValues(time) : null,
-            hero.DeathsByRegion is { } deaths ? ToRegionValues(deaths.Select(count => (double)count)) : null);
+            hero.DeathsByRegion is { } deaths ? ToRegionValues(deaths.Select(count => (double)count)) : null,
+            hero.EstimatedMovementDistance,
+            hero.MovementSampleSegments,
+            hero.EstimatedMovementByRegion is { } movement ? ToRegionValues(movement) : null,
+            hero.TimeByRegionByPhase is { } timeByPhase ? ToRegionPhaseValues(timeByPhase) : null,
+            hero.DeathsByRegionByPhase is { } deathsByPhase
+                ? ToRegionPhaseValues(deathsByPhase.Select(regionCounts => regionCounts.Select(count => (double)count)))
+                : null,
+            hero.TeamFights, hero.FightsNearby, hero.KillParticipation, hero.QuickRedeaths, hero.LaneDamageDealt,
+            hero.LaneDamageTaken, hero.TeamObserverUptime, hero.LeadLostPerDeath,
+            hero.NetWorthGainByRegion is { } gain ? ToRegionValues(gain) : null,
+            hero.MinutesByRegion is { } minutes ? ToRegionValues(minutes.Select(count => (double)count)) : null);
 
     private static RegionValues ToRegionValues(PerRegion<double> values) =>
         new(values.OwnBase, values.EnemyBase, values.TopLane, values.MiddleLane, values.BottomLane, values.River,
@@ -169,6 +202,31 @@ public class GetMatchAnalysisHandler(
         }
 
         return ToRegionValues(PerRegion<double>.Of(region => all.Average(hero => hero![region])));
+    }
+
+    private static RegionValues? AverageKnownByRegion(IEnumerable<PerRegion<double>?> heroes)
+    {
+        var known = heroes.OfType<PerRegion<double>>().ToList();
+        return known.Count == 0
+            ? null
+            : ToRegionValues(PerRegion<double>.Of(region => known.Average(hero => hero[region])));
+    }
+
+    private static RegionPhaseValues ToRegionPhaseValues(PerGamePhase<PerRegion<double>> values) =>
+        new(ToRegionValues(values.EarlyGame), ToRegionValues(values.MidGame), ToRegionValues(values.LateGame));
+
+    private static RegionPhaseValues? AverageByPhase(IEnumerable<PerGamePhase<PerRegion<double>>?> heroes)
+    {
+        var all = heroes.ToList();
+        if (all.Count == 0 || all.Any(hero => hero is null))
+        {
+            return null;
+        }
+
+        return new(
+            AverageByRegion(all.Select(hero => hero!.EarlyGame))!,
+            AverageByRegion(all.Select(hero => hero!.MidGame))!,
+            AverageByRegion(all.Select(hero => hero!.LateGame))!);
     }
 
     private static IReadOnlyList<MapObjectiveSummary> ToObjectives(
@@ -314,7 +372,9 @@ public class GetMatchAnalysisHandler(
                 .Select(row => (row.SourceHeroId!.Value, row.Amount))),
             ByInflictor: dealt
                 .GroupBy(row => row.Inflictor)
-                .Select(group => new InflictorAmount(group.Key, group.Sum(row => row.Amount)))
+                .Select(group => names.ItemOfInflictor(group.Key) is { } item
+                    ? new InflictorAmount(group.Key, group.Sum(row => row.Amount), item.Id, item.Name)
+                    : new InflictorAmount(group.Key, group.Sum(row => row.Amount)))
                 .OrderByDescending(inflictor => inflictor.Amount)
                 .ToList());
     }
@@ -504,7 +564,9 @@ public class GetMatchAnalysisHandler(
             HeroHealing: player.HeroHealing,
             Level: player.Level,
             Items: player.ItemIds.Select(names.Item).ToList(),
-            NeutralItem: player.NeutralItemId is { } neutralItemId ? names.Item(neutralItemId) : null);
+            NeutralItem: player.NeutralItemId is { } neutralItemId ? names.Item(neutralItemId) : null,
+            ItemIds: player.ItemIds,
+            NeutralItemId: player.NeutralItemId);
 
     private static PlayerPerformance ToPerformance(MatchDetails match, MatchPlayer player, NameLookup names)
     {
@@ -523,8 +585,28 @@ public class GetMatchAnalysisHandler(
 
     private sealed class NameLookup(IReadOnlyDictionary<int, Hero> heroes, IReadOnlyDictionary<int, Item> items)
     {
+        // Items by internal key (blink, dagon_5), built on first use: only the damage section needs it.
+        private Dictionary<string, Item>? byKey;
+
         public string Hero(int heroId) => heroes.GetValueOrDefault(heroId)?.Name ?? UnknownHeroName;
 
         public string Item(int itemId) => items.GetValueOrDefault(itemId)?.Name ?? UnknownItemName;
+
+        // The item behind a damage inflictor ("item_dagon_5"); null for abilities, basic attacks and items the catalog
+        // doesn't know (or has no details for).
+        public Item? ItemOfInflictor(string? inflictor)
+        {
+            const string Prefix = "item_";
+            if (inflictor is null || !inflictor.StartsWith(Prefix, StringComparison.Ordinal))
+            {
+                return null;
+            }
+
+            byKey ??= items.Values
+                .Where(item => item.Details is not null)
+                .DistinctBy(item => item.Details!.Key)
+                .ToDictionary(item => item.Details!.Key);
+            return byKey.GetValueOrDefault(inflictor[Prefix.Length..]);
+        }
     }
 }

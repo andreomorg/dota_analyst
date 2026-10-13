@@ -37,4 +37,39 @@ public record HeroMetrics(
     PerRegion<int>? DeathsByRegion = null,
     // The match had no role queue (pro matches): Role came from RoleInference. Good for the comparison base, not for
     // the player's own analysis.
-    bool RoleInferred = false);
+    bool RoleInferred = false,
+    // Estimated straight-line displacement between adjacent alive position samples, in map units. A gap longer than
+    // the replay's 2-second sample interval is skipped; teleports/blinks may still appear as displacement.
+    double? EstimatedMovementDistance = null,
+    // The segment's midpoint determines its region; this is an estimate, not the exact path traveled.
+    PerRegion<double>? EstimatedMovementByRegion = null,
+    // Number of adjacent sample pairs used; nullable so older stored metrics can be identified and refreshed.
+    int? MovementSampleSegments = null,
+    // Position samples by map region within each game-clock phase. Time values are shares of alive samples in that
+    // phase; deaths are counts. Null for metrics computed before phase splits existed.
+    PerGamePhase<PerRegion<double>>? TimeByRegionByPhase = null,
+    PerGamePhase<PerRegion<int>>? DeathsByRegionByPhase = null,
+    // Fights (TeamfightDetector) of the match, and how many of them the hero was near (FightPresenceRadius of the
+    // fight's center, from a little before the first death to the last). Null for metrics computed before them.
+    int? TeamFights = null,
+    int? FightsNearby = null,
+    // (kills + combat-log assists) / enemy hero deaths, 0..1; null when no enemy died. The combat log credits fewer
+    // assists than the scoreboard: consistent across matches, lower than the in-game number.
+    double? KillParticipation = null,
+    // Deaths within QuickRedeathSeconds of coming back from the previous death.
+    int? QuickRedeaths = null,
+    // Damage dealt to and taken from enemy heroes in the laning phase (minutes 0-9 of the game clock). Null for metrics
+    // computed before them.
+    int? LaneDamageDealt = null,
+    int? LaneDamageTaken = null,
+    // Share (0..1) of the match with at least one observer of the hero's team on the map (the team's, not only the
+    // hero's: vision is shared). Null for metrics computed before it.
+    double? TeamObserverUptime = null,
+    // Average fall of the team's net worth lead from the minute of each of the hero's deaths to the next minute
+    // (positive = lead lost). Correlation, not cause: the whole fight moves the lead. Null without deaths that have a
+    // next minute (Aegis deaths left out).
+    double? LeadLostPerDeath = null,
+    // Net worth gained in the minutes the hero spent mostly in each region, and how many minutes those were (rate =
+    // gain / minutes). Minutes the hero was dead all along are left out. Null for metrics computed before them.
+    PerRegion<double>? NetWorthGainByRegion = null,
+    PerRegion<int>? MinutesByRegion = null);

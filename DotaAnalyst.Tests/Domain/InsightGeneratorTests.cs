@@ -57,6 +57,82 @@ public class InsightGeneratorTests
         Assert.Equal(expected, insights.Any(insight => insight.Kind == InsightKind.DeathsInEnemyJungle));
     }
 
+    [Theory]
+    [InlineData(4, 1, 4, 3, true)]    // 25% against 75%
+    [InlineData(4, 1, 4, 1, false)]   // the counterpart was away too
+    [InlineData(2, 0, 2, 2, false)]   // two fights say little
+    [InlineData(4, 3, 4, 4, false)]   // 75%: present enough
+    public void LowFightPresence_AgainstTheCounterpart(int fights, int near, int theirFights, int theirNear, bool expected)
+    {
+        var insights = InsightGenerator.Generate(
+            Quiet with { TeamFights = fights, FightsNearby = near },
+            Counterpart with { TeamFights = theirFights, FightsNearby = theirNear });
+
+        Assert.Equal(expected, insights.Any(insight => insight.Kind == InsightKind.LowFightPresence));
+    }
+
+    [Theory]
+    [InlineData(2, 0, true)]
+    [InlineData(2, 2, false)]
+    [InlineData(1, 0, false)]
+    public void QuickRedeaths_MoreThanTheCounterpart(int mine, int theirs, bool expected)
+    {
+        var insights = InsightGenerator.Generate(Quiet with { QuickRedeaths = mine }, Counterpart with { QuickRedeaths = theirs });
+
+        Assert.Equal(expected, insights.Any(insight => insight.Kind == InsightKind.QuickRedeaths));
+    }
+
+    [Theory]
+    [InlineData(2000, 600, 1200, true)]
+    [InlineData(2000, 2100, 1200, false)] // dealt more than taken: a fair trade
+    [InlineData(2000, 600, 1500, false)]  // the counterpart took about as much
+    [InlineData(1400, 100, 200, false)]   // too little to matter
+    public void LostLaneTrades_AgainstTheCounterpart(int taken, int dealt, int theirTaken, bool expected)
+    {
+        var insights = InsightGenerator.Generate(
+            Quiet with { LaneDamageTaken = taken, LaneDamageDealt = dealt },
+            Counterpart with { LaneDamageTaken = theirTaken, LaneDamageDealt = 500 });
+
+        Assert.Equal(expected, insights.Any(insight => insight.Kind == InsightKind.LostLaneTrades));
+    }
+
+    [Theory]
+    [InlineData(1800, 4000, 2000, 6000, true)]   // 90% at 10:00, 67% at 20:00: the gap grew
+    [InlineData(1500, 4500, 2000, 6000, false)]  // 75% then 75%: behind, but it didn't grow
+    [InlineData(2000, 5000, 2000, 5500, false)]  // 91% at 20:00: close enough
+    public void GapGrewAfterLane_AgainstTheCounterpart(int mine10, int mine20, int theirs10, int theirs20, bool expected)
+    {
+        var insights = InsightGenerator.Generate(
+            Quiet with { NetWorthAt10 = mine10, NetWorthAt20 = mine20 },
+            Counterpart with { NetWorthAt10 = theirs10, NetWorthAt20 = theirs20 });
+
+        Assert.Equal(expected, insights.Any(insight => insight.Kind == InsightKind.GapGrewAfterLane));
+    }
+
+    [Fact]
+    public void FewObservers_NotWhenTheTeamStillHadMoreVision()
+    {
+        // The Dark Willow of 9042303984: 9 observers against 16, but her team had vision 97% of the match against 65%.
+        var insights = InsightGenerator.Generate(
+            Quiet with { ObserversPlaced = 9, TeamObserverUptime = 0.97 },
+            Counterpart with { ObserversPlaced = 16, TeamObserverUptime = 0.65 });
+
+        Assert.DoesNotContain(insights, insight => insight.Kind == InsightKind.FewObservers);
+    }
+
+    [Theory]
+    [InlineData(5, 0.66, 0.83, true)]  // the Lich of 9034320024
+    [InlineData(5, 0.60, 0.70, false)] // the enemy team had little vision too
+    [InlineData(5, 0.80, 0.98, false)] // 80% is enough
+    [InlineData(1, 0.10, 0.80, false)] // a carry isn't judged on the team's wards
+    public void LowObserverUptime_ForSupports(int role, double uptime, double theirUptime, bool expected)
+    {
+        var insights = InsightGenerator.Generate(
+            Quiet with { Role = role, TeamObserverUptime = uptime }, Counterpart with { Role = role, TeamObserverUptime = theirUptime });
+
+        Assert.Equal(expected, insights.Any(insight => insight.Kind == InsightKind.LowObserverUptime));
+    }
+
     [Fact]
     public void BehindAtTen_WithTheNumbers()
     {

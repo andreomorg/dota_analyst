@@ -53,7 +53,10 @@ internal sealed record ReplayParserKill(
     double? T, int? Victim, int? Killer, string? KillerUnit, int? X, int? Y, bool? Reincarnated,
     IReadOnlyList<int>? Assists);
 
-internal sealed record ReplayParserCombat(IReadOnlyList<ReplayParserDamage?>? Damage);
+internal sealed record ReplayParserCombat(IReadOnlyList<ReplayParserDamage?>? Damage, IReadOnlyList<ReplayParserCombatMinutes?>? PerMinute);
+
+// One player's damage with enemy heroes per minute (index i = minute i).
+internal sealed record ReplayParserCombatMinutes(int? Player, IReadOnlyList<int>? DamageToHeroes, IReadOnlyList<int>? DamageFromHeroes);
 
 // Aggregated damage from one source to one target with one inflictor; sourcePlayer/targetPlayer are player indexes
 // (null for a non-hero unit, then named by its kind).
@@ -213,9 +216,17 @@ internal static class ReplayParserMappings
         var queueRoles = players.All(player => player.Role is not null)
             ? players.ToDictionary(player => player.HeroId!.Value, player => player.Role!.Value)
             : null;
+        // Optional in the document as far as the metrics go: without it the lane damage just stays unknown.
+        var damageMinutes = (response.Combat?.PerMinute ?? [])
+            .Select(entry => entry ?? throw Empty("combat.perMinute entry"))
+            .Select(entry => new HeroDamageMinutes(
+                HeroOfPlayer(entry.Player ?? throw Missing("perMinute.player"))!.Value,
+                Required(entry.DamageToHeroes, "perMinute.damageToHeroes"),
+                Required(entry.DamageFromHeroes, "perMinute.damageFromHeroes")))
+            .ToList();
         var metrics = MatchMetricsCalculator.Calculate(
             laningStats, timeline, deaths, wards, positions, queueRoles ?? RoleInference.Infer(laningStats),
-            rolesInferred: queueRoles is null) ?? [];
+            rolesInferred: queueRoles is null, damageMinutes) ?? [];
 
         return new ReplayAnalysis(
             matchId, endsAt, laningStats, timeline, deaths, wards, damage, purchases, mapObjectives, metrics);

@@ -43,6 +43,56 @@ public class OpenDotaBaselineMatchSourceTests
         Assert.Empty(await source.GetCandidatesAsync(BaselineSource.HighRank, new HashSet<int>(), CancellationToken.None));
     }
 
+    [Fact]
+    public async Task HighRank_AtBusyHours_JumpsBackToMatchesWhoseReplaysAreUp()
+    {
+        // The first page only has matches of the last 10 minutes (IDs 100000..100100, one ID per 6 s): none ready.
+        // The source then asks for matches below the ID of about 110 minutes ago (1,100 IDs earlier), where they are.
+        var newest = Now.ToUnixTimeSeconds();
+        var tenMinutesAgo = Now.AddMinutes(-10).ToUnixTimeSeconds();
+        var first = $$"""
+            [ { "match_id": 100100, "start_time": {{newest}}, "duration": 60, "lobby_type": 7, "game_mode": 22, "num_rank_tier": 5, "radiant_team": [31], "dire_team": [] },
+              { "match_id": 100000, "start_time": {{tenMinutesAgo}}, "duration": 60, "lobby_type": 7, "game_mode": 22, "num_rank_tier": 5, "radiant_team": [31], "dire_team": [] } ]
+            """;
+        var older = $$"""
+            [ { "match_id": 98990, "start_time": {{Old}}, "duration": 2400, "lobby_type": 7, "game_mode": 22, "num_rank_tier": 5, "radiant_team": [31], "dire_team": [] } ]
+            """;
+        var openDota = new Pages(first, older);
+        var source = new OpenDotaBaselineMatchSource(
+            new OpenDotaClient(new HttpClient(openDota) { BaseAddress = new Uri("https://api.opendota.com/api/") }),
+            new FixedTimeProvider(Now));
+
+        var candidates = await source.GetCandidatesAsync(BaselineSource.HighRank, new HashSet<int> { 31 }, CancellationToken.None);
+
+        Assert.Equal([98990L], candidates.Select(candidate => candidate.MatchId.Value));
+        Assert.EndsWith("less_than_match_id=99000", openDota.Requests[1]);
+    }
+    [Fact]
+    public void EstimateIdAt_FromThePagesRate()
+    {
+        // 100 IDs in 600 s; 30 minutes before the newest start → 300 IDs earlier.
+        var page = new[]
+        {
+            new OpenDotaPublicMatch(10_000, 1_000_600, 60, 7, 22, 75, 5, [], []),
+            new OpenDotaPublicMatch(9_900, 1_000_000, 60, 7, 22, 75, 5, [], []),
+        };
+
+        Assert.Equal(9_700, OpenDotaBaselineMatchSource.EstimateIdAt(page, DateTimeOffset.FromUnixTimeSeconds(1_000_600 - 1_800)));
+        Assert.Null(OpenDotaBaselineMatchSource.EstimateIdAt(page[..1], DateTimeOffset.FromUnixTimeSeconds(0)));
+    }
+
+    // Answers the first request with the first page, every later one with the second; remembers the URLs.
+    private sealed class Pages(string first, string later) : HttpMessageHandler
+    {
+        public List<string> Requests { get; } = [];
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            Requests.Add(request.RequestUri!.ToString());
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(Requests.Count == 1 ? first : later) });
+        }
+    }
+
     private static OpenDotaBaselineMatchSource CreateSource(string body) =>
         new(new OpenDotaClient(new HttpClient(new Stub(body)) { BaseAddress = new Uri("https://api.opendota.com/api/") }),
             new FixedTimeProvider(Now));

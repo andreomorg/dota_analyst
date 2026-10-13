@@ -43,7 +43,7 @@ public class ReplayParserClientTests
           "laning": {{laning ?? """{ "endsAtSeconds": 600, "lanes": [ { "player": 0, "lane": "bottom" }, { "player": 5, "lane": "jungle" } ] }"""}},
           "kills": [],
           "vision": { "wards": [] },
-          "combat": { "damage": [], "healing": [], "perMinute": [] },
+          "combat": { "damage": [], "healing": [], "perMinute": [ { "player": 0, "damageToHeroes": [0,0,0,0,0,0,0,0,0,0,0,0], "damageFromHeroes": [0,0,0,0,0,0,0,0,0,0,0,0], "damageTaken": [], "healing": [] }, { "player": 5, "damageToHeroes": [0,0,0,0,0,0,0,0,0,0,0,0], "damageFromHeroes": [0,0,0,0,0,0,0,0,0,0,0,0], "damageTaken": [], "healing": [] } ] },
           "items": { "purchases": [], "uses": [], "final": [] },
           "objectives": { "buildings": [], "roshan": [], "tormentors": [], "couriers": [], "runes": [], "outposts": [] }
         }
@@ -273,9 +273,27 @@ public class ReplayParserClientTests
     }
 
     [Fact]
+    public async Task Parse_CombatPerMinute_GivesTheLaneDamage()
+    {
+        // Minutes 0..11 (the 11:30 match); the lane damage adds minutes 0..9 only.
+        var body = MatchJson().Replace("{ \"player\": 0, \"damageToHeroes\": [0,0,0,0,0,0,0,0,0,0,0,0], \"damageFromHeroes\": [0,0,0,0,0,0,0,0,0,0,0,0], \"damageTaken\": [], \"healing\": [] }", """
+            { "player": 0, "damageToHeroes": [0,100,100,100,100,100,100,100,100,100,999,999],
+              "damageFromHeroes": [0,50,50,50,50,50,50,50,50,50,999,999], "damageTaken": [], "healing": [] }
+            """);
+
+        var analysis = await CreateClient(new FakeParser(Json(HttpStatusCode.OK, body, "application/json")))
+            .ParseAsync(Match, ReplayUrl, CancellationToken.None);
+
+        var me = Assert.Single(analysis.Metrics!, hero => hero.HeroId == 31);
+        Assert.Equal((900, 450), (me.LaneDamageDealt, me.LaneDamageTaken));
+        Assert.Equal(0, analysis.Metrics!.Single(hero => hero.HeroId == 28).LaneDamageDealt);
+    }
+
+    [Fact]
     public async Task Parse_WithoutCombat_IsAnUnreadableReplay()
     {
-        var body = MatchJson().Replace("\"combat\": { \"damage\": [], \"healing\": [], \"perMinute\": [] }", "\"combat\": null");
+        // The whole combat object (one line in MatchJson) becomes null.
+        var body = System.Text.RegularExpressions.Regex.Replace(MatchJson(), "\"combat\": \\{[^\\n]*\\},", "\"combat\": null,");
 
         await Assert.ThrowsAsync<ReplayUnreadableException>(() =>
             CreateClient(new FakeParser(Json(HttpStatusCode.OK, body, "application/json"))).ParseAsync(Match, ReplayUrl, CancellationToken.None));

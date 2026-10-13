@@ -76,23 +76,32 @@ function HeatmapCard({ hero, label, phase, heatmaps, deaths }) {
 }
 
 // heatmaps, deaths, smartStats and laning come from the API (heatmaps is null until the replay is read and for
-// replays read before heatmaps existed: then nothing shows).
-function HeatmapSection({ heatmaps, deaths, smartStats, laning }) {
-    const [phaseKey, setPhaseKey] = useState('all');
+// replays read before heatmaps existed: then nothing shows). variant 'laning': only the first 10 minutes, compared
+// with the heroes of the player's lane (the "Fase de rotas" tab); otherwise every period and every hero.
+function HeatmapSection({ heatmaps, deaths, smartStats, laning, variant }) {
+    const isLaning = variant === 'laning';
+    const [phaseKey, setPhaseKey] = useState(isLaning ? 'early' : 'all');
     const [otherHeroId, setOtherHeroId] = useState(null);
     const [showDeaths, setShowDeaths] = useState(true);
     if (!heatmaps || heatmaps.heroes.length === 0) {
         return null;
     }
 
-    const phase = PHASES.find(candidate => candidate.key === phaseKey);
+    const phases = isLaning ? PHASES.filter(candidate => candidate.key === 'early') : PHASES;
+    const phase = phases.find(candidate => candidate.key === phaseKey) ?? phases[0];
     const player = heatmaps.heroes.find(hero => hero.isCurrentPlayer);
-    const others = heatmaps.heroes.filter(hero => hero !== player);
-    // The enemy of the same role, else the lane opponent, else the first enemy.
-    const defaultOtherId = smartStats?.counterpartHeroId
+    const laneHeroIds = new Set([...(laning?.opponents ?? []), ...(laning?.allies ?? [])].map(hero => hero.heroId));
+    const others = heatmaps.heroes.filter(hero => hero !== player && (!isLaning || laneHeroIds.has(hero.heroId)));
+    if (isLaning && others.length === 0) {
+        return null;
+    }
+    // The lane opponent in the laning tab; otherwise the enemy of the same role, else the lane opponent, else the
+    // first enemy.
+    const defaultOtherId = (isLaning ? laning?.opponents?.[0]?.heroId : smartStats?.counterpartHeroId)
         ?? laning?.opponents?.[0]?.heroId
         ?? others.find(hero => player && hero.team !== player.team)?.heroId
         ?? others[0]?.heroId;
+    const titleId = isLaning ? 'laning-heatmap-title' : 'heatmap-title';
     const other = others.find(hero => hero.heroId === (otherHeroId ?? defaultOtherId)) ?? others[0];
     const phaseDeaths = showDeaths && deaths
         ? deaths.filter(death => death.seconds >= phase.from && death.seconds < phase.to)
@@ -101,17 +110,19 @@ function HeatmapSection({ heatmaps, deaths, smartStats, laning }) {
     return (
         <div className="card heatmap-card">
             <div className="card-head">
-                <h3 id="heatmap-title">Mapa de calor</h3>
+                <h3 id={titleId}>{isLaning ? 'Mapa de calor dos primeiros 10 minutos' : 'Mapa de calor'}</h3>
                 <span className="card-aside">posição a cada {heatmaps.secondsPerSample} s, lida do replay</span>
             </div>
             <p className="section-intro">
-                Onde cada herói passou o tempo vivo, como nos mapas de calor do futebol: vermelho é onde ficou mais
-                tempo; verde, onde passou pouco.
+                {isLaning
+                    ? 'Onde você e os heróis da sua rota passaram a fase de rotas: vermelho é onde ficaram mais tempo; verde, onde passaram pouco.'
+                    : 'Onde cada herói passou o tempo vivo, como nos mapas de calor do futebol: vermelho é onde ficou mais tempo; verde, onde passou pouco.'}
             </p>
 
             <div className="heatmap-controls">
+                {phases.length > 1 && (
                 <div className="segmented" role="group" aria-label="Período">
-                    {PHASES.map(candidate => (
+                    {phases.map(candidate => (
                         <button
                             key={candidate.key}
                             type="button"
@@ -122,6 +133,7 @@ function HeatmapSection({ heatmaps, deaths, smartStats, laning }) {
                         </button>
                     ))}
                 </div>
+                )}
                 {others.length > 0 && (
                     <label className="heatmap-compare">
                         Comparar com
@@ -149,7 +161,9 @@ function HeatmapSection({ heatmaps, deaths, smartStats, laning }) {
                 {other && (
                     <HeatmapCard
                         hero={other}
-                        label={other.heroId === smartStats?.counterpartHeroId ? 'Mesma posição, time inimigo' : 'Comparação'}
+                        label={laning?.opponents?.some(hero => hero.heroId === other.heroId) && isLaning
+                            ? 'Adversário na sua rota'
+                            : other.heroId === smartStats?.counterpartHeroId ? 'Mesma posição, time inimigo' : 'Comparação'}
                         phase={phase}
                         heatmaps={heatmaps}
                     />

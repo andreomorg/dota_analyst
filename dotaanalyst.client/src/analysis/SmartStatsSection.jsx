@@ -1,7 +1,7 @@
 import { formatDuration, formatNumber } from '../matches/format';
 import SectionHead from '../ui/SectionHead';
-import Standing from '../ui/Standing';
 import { standingDetail, standingOf } from '../ui/standingLevels';
+import ComparisonCard from './ComparisonCard';
 
 const capitalize = text => text.charAt(0).toUpperCase() + text.slice(1);
 import { INSIGHT_TITLES, insightText, lifetime, percent, plain, ROLES } from './insights';
@@ -248,121 +248,6 @@ function PhaseDeathTable({ player, counterpart, matchAverage, counterpartName })
     );
 }
 
-// lower: less is better (the API already turns the comparison around; the label tells the reader).
-const COMPARED = {
-    deathsPer30: { label: 'Mortes', format: plain, per30: true, lower: true },
-    isolatedDeathsPer30: { label: 'Mortes sem aliado por perto', format: plain, per30: true, lower: true },
-    enemyJungleDeathsPer30: { label: 'Mortes na selva inimiga', format: plain, per30: true, lower: true },
-    aloneOnEnemySide: { label: 'Tempo sozinho no lado inimigo', format: percent, lower: true },
-    netWorthAt10: { label: 'Patrimônio aos 10:00', format: plain },
-    lastHitsAt10: { label: 'Last hits aos 10:00', format: plain },
-    netWorthAt20: { label: 'Patrimônio aos 20:00', format: plain },
-    observersPer30: { label: 'Observers colocados', format: plain, per30: true },
-    sentriesPer30: { label: 'Sentries colocados', format: plain, per30: true },
-    observerLifetime: { label: 'Vida média dos observers', format: lifetime },
-    enemyWardsDestroyedPer30: { label: 'Wards inimigos destruídos', format: plain, per30: true },
-    fightPresence: { label: 'Presença nas lutas do time', format: percent },
-    killParticipation: { label: 'Participação em abates', format: percent },
-    quickRedeathsPer30: { label: 'Mortes logo depois de voltar', format: plain, per30: true, lower: true },
-    laneDamageDealt: { label: 'Dano causado em heróis até 10:00', format: plain },
-    laneDamageTaken: { label: 'Dano recebido de heróis até 10:00', format: plain, lower: true },
-    teamObserverUptime: { label: 'Tempo com observer do time', format: percent },
-    leadLostPerDeath: { label: 'Vantagem do time perdida por morte', format: value => formatNumber(Math.round(value)), lower: true },
-    firstBigItemSeconds: { label: 'Primeiro item grande', format: value => formatDuration(Math.round(value)), lower: true },
-};
-
-const SOURCES = { pro: 'Profissionais', highRank: 'Alto nível' };
-
-// The player against other players of the same hero and role, from the comparison base (pro and high-rank matches):
-// for each metric, the player's value, the typical value (median) and how the player did, in words.
-function BaselineTable({ baselines, role, heroName, opponentHeroName }) {
-    if (!baselines) {
-        return null;
-    }
-
-    const usable = baselines.filter(baseline => baseline.metrics.length > 0);
-    const small = baselines.filter(baseline => baseline.metrics.length === 0);
-    const metrics = Object.keys(COMPARED).filter(key => usable.some(baseline => baseline.metrics.some(m => m.metric === key)));
-    const yours = key => usable.flatMap(baseline => baseline.metrics).find(m => m.metric === key)?.value;
-    const who = opponentHeroName ? `jogadores de ${heroName} contra ${opponentHeroName}` : `jogadores de ${heroName}`;
-
-    return (
-        <div className="card">
-            <h3 className="card-title">
-                {opponentHeroName
-                    ? `${heroName} contra ${opponentHeroName} na rota`
-                    : `Comparado com outros jogadores de ${heroName} como ${ROLES[role] ?? `posição ${role}`}`}
-            </h3>
-            {usable.length > 0 && (
-                <div className="table-scroll">
-                    <table className="data-table baseline-table">
-                        <caption className="visually-hidden">
-                            {opponentHeroName
-                                ? `Seus números de ${heroName} contra ${opponentHeroName} na rota`
-                                : 'Seus números contra os de outros jogadores do mesmo herói e posição'}
-                        </caption>
-                        <thead>
-                            <tr>
-                                <th scope="col">Métrica</th>
-                                <th scope="col" className="num-col">Você</th>
-                                {usable.map(baseline => (
-                                    <th key={baseline.source} scope="col">
-                                        {SOURCES[baseline.source] ?? baseline.source}
-                                        <span className="th-sub">valor típico e como você ficou · {baseline.matches} partidas</span>
-                                    </th>
-                                ))}
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {metrics.map(key => (
-                                <tr key={key}>
-                                    <th scope="row">
-                                        {COMPARED[key].label}{COMPARED[key].per30 ? ' (por 30 min)' : ''}
-                                        {COMPARED[key].lower && <span className="indicator-hint">menos é melhor</span>}
-                                    </th>
-                                    <td className="num-col mono">{cell(yours(key), COMPARED[key].format)}</td>
-                                    {usable.map(baseline => {
-                                        const metric = baseline.metrics.find(m => m.metric === key);
-                                        return (
-                                            <td key={baseline.source}>
-                                                {metric
-                                                    ? (
-                                                        <span className="baseline-cell">
-                                                            <span className="baseline-typical">
-                                                                Típico: <span className="mono">{COMPARED[key].format(metric.median)}</span>
-                                                            </span>
-                                                            <Standing share={metric.betterThan} />
-                                                        </span>
-                                                    )
-                                                    : '—'}
-                                            </td>
-                                        );
-                                    })}
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            )}
-            {small.map(baseline => (
-                <p key={baseline.source} className="section-note">
-                    {SOURCES[baseline.source] ?? baseline.source}: a base ainda tem {baseline.matches}{' '}
-                    {baseline.matches === 1 ? 'partida' : 'partidas'} deste herói
-                    {opponentHeroName ? ` contra ${opponentHeroName}` : ''} nesta posição (são precisas 10 para comparar).
-                    Ela cresce sozinha com o coletor.
-                </p>
-            ))}
-            <p className="section-note">
-                &quot;Típico&quot; é o valor do meio entre os {who} da base. &quot;À frente de 70 em cada 100&quot; quer dizer
-                que, em 100 partidas da base, você foi melhor que 70 (em mortes, dano recebido, vantagem perdida e tempo até
-                o primeiro item grande, menos é melhor). Contagens por 30 minutos de jogo, porque as partidas têm durações
-                diferentes. Partidas dos últimos 60 dias; nas profissionais a posição é deduzida pela rota e pelo
-                patrimônio aos 10:00.
-            </p>
-        </div>
-    );
-}
-
 function CounterpartTable({ smartStats }) {
     const { player, counterpart, matchAverage } = smartStats;
     return (
@@ -429,57 +314,53 @@ export function HighlightCards({ performance, laning, smartStats }) {
     );
 }
 
-// The "Dicas" tab: every finding of the API, then the numbers next to the enemy of the same role, the match average
-// and other players of the same hero. smartStats is null until the replay is read, without a point-of-view player,
-// and for matches without role queue: then nothing shows.
+// The "Como melhorar" tab: every finding of the API, one card comparing the player with other players of the hero
+// (OpenDota, our base, the lane matchup), then the numbers next to the enemy of the same role and the match average.
+// smartStats is null until the replay is read, without a point-of-view player and for matches without role queue:
+// then only OpenDota's comparison shows.
 function SmartStatsSection({ performance, smartStats }) {
-    if (!smartStats) {
+    if (!performance && !smartStats) {
         return null;
     }
 
-    const texts = smartStats.insights
+    const texts = (smartStats?.insights ?? [])
         .map(insight => ({ insight, text: insightText(insight, smartStats) }))
         .filter(entry => entry.text);
     const hasPhaseMetrics = Boolean(
-        smartStats.player.deathsByRegionByPhase
-        || smartStats.counterpart.deathsByRegionByPhase
-        || smartStats.matchAverage.deathsByRegionByPhase,
+        smartStats?.player.deathsByRegionByPhase
+        || smartStats?.counterpart.deathsByRegionByPhase
+        || smartStats?.matchAverage.deathsByRegionByPhase,
     );
 
     return (
         <section className="section" aria-labelledby="smart-stats-title">
             <SectionHead id="smart-stats-title" title="Como melhorar">
-                <span>Comparado com {smartStats.counterpartHeroName}, a mesma posição no time inimigo</span>
+                {smartStats && <span>Comparado com {smartStats.counterpartHeroName}, a mesma posição no time inimigo</span>}
             </SectionHead>
 
-            <p className="section-intro">
-                Você jogou de {ROLES[smartStats.role] ?? `posição ${smartStats.role}`}. Cada dica compara você com{' '}
-                {smartStats.counterpartHeroName} e com a média dos 10 jogadores; as mais importantes vêm primeiro.
-            </p>
-            {texts.length === 0
-                ? <p className="empty-state">Nada se destacou como ponto a melhorar nesta partida.</p>
-                : (
-                    <ol className="insight-list">
-                        {texts.map(({ insight, text }) => (
-                            <li key={insight.kind} className="insight-item">
-                                <strong>{INSIGHT_TITLES[insight.kind] ?? 'Dica'}</strong>
-                                <span>{text}</span>
-                            </li>
-                        ))}
-                    </ol>
-                )}
+            {smartStats && (
+                <>
+                    <p className="section-intro">
+                        Você jogou de {ROLES[smartStats.role] ?? `posição ${smartStats.role}`}. As dicas mais importantes vêm primeiro.
+                    </p>
+                    {texts.length === 0
+                        ? <p className="empty-state">Nada se destacou como ponto a melhorar nesta partida.</p>
+                        : (
+                            <ol className="insight-list">
+                                {texts.map(({ insight, text }) => (
+                                    <li key={insight.kind} className="insight-item">
+                                        <strong>{INSIGHT_TITLES[insight.kind] ?? 'Dica'}</strong>
+                                        <span>{text}</span>
+                                    </li>
+                                ))}
+                            </ol>
+                        )}
+                </>
+            )}
 
             <div className="stack">
-                <BaselineTable baselines={smartStats.baselines} role={smartStats.role} heroName={performance?.heroName ?? 'seu herói'} />
-                {smartStats.laneMatchupHeroName && smartStats.laneMatchupBaselines && (
-                    <BaselineTable
-                        baselines={smartStats.laneMatchupBaselines}
-                        role={smartStats.role}
-                        heroName={performance?.heroName ?? 'seu herói'}
-                        opponentHeroName={smartStats.laneMatchupHeroName}
-                    />
-                )}
-                <CounterpartTable smartStats={smartStats} />
+                <ComparisonCard performance={performance} smartStats={smartStats} />
+                {smartStats && <CounterpartTable smartStats={smartStats} />}
                 {hasPhaseMetrics && (
                     <details className="card">
                         <summary>

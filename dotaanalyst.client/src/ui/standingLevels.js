@@ -15,11 +15,11 @@ export function standingOf(share) {
     return LEVELS.find(level => share >= level.min);
 }
 
-// "à frente de 76 em cada 100" / "87 em cada 100 foram melhores"; who: "jogadores de Lich" (optional).
-export function standingDetail(share, who) {
+// "Você foi melhor que 76% dos jogadores de Lich" / "86% dos jogadores de Lich foram melhores que você";
+// who: "jogadores de Lich" (default "jogadores").
+export function standingDetail(share, who = 'jogadores') {
     const ahead = toPercent(share);
-    const people = who ? ` ${who}` : '';
     return ahead >= 50
-        ? `à frente de ${ahead} em cada 100${people}`
-        : `${100 - ahead} em cada 100${people} foram melhores`;
+        ? `Você foi melhor que ${ahead}% dos ${who}`
+        : `${100 - ahead}% dos ${who} foram melhores que você`;
 }

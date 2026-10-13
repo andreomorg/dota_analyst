@@ -12,7 +12,7 @@ import ItemBuildSection from './ItemBuildSection';
 import LaningSection, { ReplayStatusBanner } from './LaningSection';
 import MatchHeader from './MatchHeader';
 import ObjectivesSection from './ObjectivesSection';
-import PerformanceSummary, { PerformanceMetrics } from './PerformanceSummary';
+import PerformanceSummary from './PerformanceSummary';
 import SmartStatsSection, { HighlightCards } from './SmartStatsSection';
 import TeamTable from './TeamTable';
 import TimelineSection from './TimelineSection';
@@ -134,23 +134,28 @@ function MatchAnalysisPage() {
     );
 }
 
-// The tabs of the analysis, in priority order. Each is its own page (?tab=key in the URL, so a tab can be linked or
-// opened in a new tab); a tab without content for this match (replay not read yet, no point-of-view player) is
-// left out.
+// The tabs of the analysis, in priority order, each answering one question (each its own page: ?tab=key in the URL,
+// so a tab can be linked or opened in a new tab); a tab without content for this match (replay not read yet, no
+// point-of-view player) is left out.
+// - overview: how did the match go?        - tips: what to change?
+// - laning: how did the first 10 min go?    - positioning: where was I?
+// - fights: how did the fights go?          - build: what did I buy and level?
+// - players: and the other nine?
 function tabsOf(analysis) {
     const ready = analysis.replayStatus === 'ready';
     return [
-        { key: 'overview', label: 'Visão geral', visible: true },
-        { key: 'tips', label: 'Dicas', visible: Boolean(analysis.performance) || (ready && Boolean(analysis.smartStats)) },
+        { key: 'overview', label: 'Resumo', visible: true },
+        { key: 'tips', label: 'Como melhorar', visible: Boolean(analysis.performance) || (ready && Boolean(analysis.smartStats)) },
         { key: 'laning', label: 'Fase de rotas', visible: ready && Boolean(analysis.laning) },
-        { key: 'items', label: 'Itens', visible: ready && Boolean(analysis.itemBuild) },
-        { key: 'abilities', label: 'Habilidades', visible: ready && (analysis.abilityBuild?.upgrades?.length ?? 0) > 0 },
-        { key: 'economy', label: 'Economia e objetivos', visible: ready && ((analysis.timeline?.seconds?.length ?? 0) > 1 || Boolean(analysis.objectives)) },
-        { key: 'fights', label: 'Lutas e dano', visible: ready && (Boolean(analysis.fights) || Boolean(analysis.damage)) },
-        { key: 'maps', label: 'Mapas', visible: ready && ((analysis.heatmaps?.heroes?.length ?? 0) > 0 || Boolean(analysis.deaths) || (analysis.wards?.length ?? 0) > 0) },
+        { key: 'positioning', label: 'Posicionamento', visible: ready && ((analysis.heatmaps?.heroes?.length ?? 0) > 0 || Boolean(analysis.deaths) || (analysis.wards?.length ?? 0) > 0) },
+        { key: 'fights', label: 'Lutas e objetivos', visible: ready && (Boolean(analysis.fights) || Boolean(analysis.damage) || Boolean(analysis.objectives)) },
+        { key: 'build', label: 'Build', visible: ready && (Boolean(analysis.itemBuild) || (analysis.abilityBuild?.upgrades?.length ?? 0) > 0) },
         { key: 'players', label: 'Jogadores', visible: true },
     ].filter(tab => tab.visible);
 }
+
+// Links to the tabs of an earlier version still open the right page.
+const OLD_TABS = { maps: 'positioning', items: 'build', abilities: 'build', economy: 'overview' };
 
 function useTabLink() {
     const [searchParams] = useSearchParams();
@@ -205,7 +210,7 @@ function Shortcuts({ analysis, tabs }) {
     const items = [
         has('tips') && {
             key: 'tips',
-            label: 'Dicas',
+            label: 'Como melhorar',
             value: smartStats ? `${smartStats.insights.length} ${smartStats.insights.length === 1 ? 'dica' : 'dicas'}` : `${performance?.weaknesses.length ?? 0} pontos fracos`,
             sub: smartStats ? `contra ${smartStats.counterpartHeroName} e outros jogadores do herói` : 'percentis do OpenDota',
         },
@@ -216,23 +221,23 @@ function Shortcuts({ analysis, tabs }) {
             tone: { won: 'win', lost: 'loss' }[laning.outcome],
             sub: `${laning.player.lastHits} ${laning.player.lastHits === 1 ? 'last hit' : 'last hits'} aos 10:00`,
         },
-        has('items') && lastItem && {
-            key: 'items',
-            label: 'Itens',
-            value: `${itemBuild.items.length} itens`,
-            sub: `último: ${lastItem.name}`,
+        has('positioning') && {
+            key: 'positioning',
+            label: 'Posicionamento',
+            value: deaths ? `${deaths.length} ${deaths.length === 1 ? 'morte' : 'mortes'}` : 'Mapa de calor',
+            sub: 'mapa de calor, mortes e wards',
         },
         has('fights') && fights && {
             key: 'fights',
-            label: 'Lutas',
+            label: 'Lutas e objetivos',
             value: `${won} de ${fights.length} vencidas`,
             sub: `você participou de ${joined}`,
         },
-        has('maps') && {
-            key: 'maps',
-            label: 'Mapas',
-            value: deaths ? `${deaths.length} ${deaths.length === 1 ? 'morte' : 'mortes'}` : 'Mapa de calor',
-            sub: 'mapa de calor, mortes e wards',
+        has('build') && lastItem && {
+            key: 'build',
+            label: 'Build',
+            value: `${itemBuild.items.length} itens`,
+            sub: `último: ${lastItem.name}`,
         },
     ].filter(Boolean);
     if (items.length === 0) {
@@ -262,7 +267,8 @@ function AnalysisContent({ analysis, accountId, replayPollingStopped }) {
     const [searchParams] = useSearchParams();
     const { performance } = analysis;
     const tabs = tabsOf(analysis);
-    const requested = searchParams.get('tab') ?? 'overview';
+    const asked = searchParams.get('tab') ?? 'overview';
+    const requested = OLD_TABS[asked] ?? asked;
     // A tab this match doesn't have (or not yet: replay still being read) shows the overview.
     const active = tabs.some(tab => tab.key === requested) ? requested : 'overview';
     const ready = analysis.replayStatus === 'ready';
@@ -311,42 +317,28 @@ function AnalysisContent({ analysis, accountId, replayPollingStopped }) {
                 )}
 
                 {active === 'tips' && (
-                    <>
-                        <SmartStatsSection performance={performance} smartStats={ready ? analysis.smartStats : null} />
-                        <PerformanceMetrics performance={performance} />
-                    </>
+                    <SmartStatsSection performance={performance} smartStats={ready ? analysis.smartStats : null} />
                 )}
 
                 {active === 'laning' && (
                     <>
                         <LaningSection laning={analysis.laning} />
                         <TimelineSection timeline={analysis.timeline} objectives={analysis.objectives} charts="lane" />
+                        <section className="section" aria-labelledby="laning-heatmap-title">
+                            <HeatmapSection
+                                heatmaps={analysis.heatmaps}
+                                deaths={analysis.deaths}
+                                smartStats={analysis.smartStats}
+                                laning={analysis.laning}
+                                variant="laning"
+                            />
+                        </section>
                     </>
                 )}
 
-                {active === 'items' && <ItemBuildSection itemBuild={analysis.itemBuild} />}
-                {active === 'abilities' && <AbilityBuildSection abilityBuild={analysis.abilityBuild} heroName={performance?.heroName} />}
-
-                {active === 'economy' && (
-                    <>
-                        <TimelineSection timeline={analysis.timeline} objectives={analysis.objectives} />
-                        <ObjectivesSection objectives={analysis.objectives} />
-                    </>
-                )}
-
-                {active === 'fights' && (
-                    <section className="section" aria-labelledby="fights-damage-title">
-                        <SectionHead id="fights-damage-title" title="Lutas e dano" />
-                        <div className="split split-5-7">
-                            <FightsSection fights={analysis.fights} isRadiant={performance ? performance.isRadiant : null} />
-                            <DamageSection damage={analysis.damage} heroName={performance?.heroName} />
-                        </div>
-                    </section>
-                )}
-
-                {active === 'maps' && (
+                {active === 'positioning' && (
                     <section className="section" aria-labelledby="maps-title">
-                        <SectionHead id="maps-title" title="Mapas da partida">
+                        <SectionHead id="maps-title" title="Posicionamento">
                             <span>No minimapa do jogo, com as posições do replay</span>
                         </SectionHead>
                         <div className="stack">
@@ -362,6 +354,28 @@ function AnalysisContent({ analysis, accountId, replayPollingStopped }) {
                             </div>
                         </div>
                     </section>
+                )}
+
+                {active === 'fights' && (
+                    <>
+                        {(analysis.fights || analysis.damage) && (
+                            <section className="section" aria-labelledby="fights-damage-title">
+                                <SectionHead id="fights-damage-title" title="Lutas e dano" />
+                                <div className="split split-5-7">
+                                    <FightsSection fights={analysis.fights} isRadiant={performance ? performance.isRadiant : null} />
+                                    <DamageSection damage={analysis.damage} heroName={performance?.heroName} />
+                                </div>
+                            </section>
+                        )}
+                        <ObjectivesSection objectives={analysis.objectives} />
+                    </>
+                )}
+
+                {active === 'build' && (
+                    <>
+                        <ItemBuildSection itemBuild={analysis.itemBuild} />
+                        <AbilityBuildSection abilityBuild={analysis.abilityBuild} heroName={performance?.heroName} />
+                    </>
                 )}
 
                 {active === 'players' && (

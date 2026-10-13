@@ -341,8 +341,27 @@ function TimelineTable({ timeline, metric, teamName }) {
 const TITLES = {
     all: 'Vantagem de patrimônio e experiência',
     lead: 'Como a partida andou',
-    lane: 'Patrimônio e experiência na sua rota',
+    lane: 'Patrimônio e experiência na sua rota (até 15 min)',
 };
+
+// The lane chart of the laning tab stops a little after the laning phase, where the lane still matters.
+const LANE_CHART_END_SECONDS = 15 * 60;
+
+// The timeline up to a game clock (every per-point list cut at the same place).
+function upTo(timeline, lastSecond) {
+    const count = timeline.seconds.filter(second => second <= lastSecond).length;
+    if (count >= timeline.seconds.length) {
+        return timeline;
+    }
+    const cut = list => list.slice(0, count);
+    return {
+        ...timeline,
+        seconds: cut(timeline.seconds),
+        netWorthLead: cut(timeline.netWorthLead),
+        experienceLead: cut(timeline.experienceLead),
+        lane: timeline.lane.map(hero => ({ ...hero, netWorth: cut(hero.netWorth), experience: cut(hero.experience) })),
+    };
+}
 
 // timeline comes from the API (null until the replay is read; absent on older responses: then nothing shows).
 // objectives (null/absent on older responses) are marked under the lead chart. charts: 'all' (both charts and the
@@ -369,7 +388,9 @@ function TimelineSection({ timeline, objectives, charts = 'all' }) {
                 {charts !== 'lane' && (
                     <LeadChart timeline={timeline} metric={metric} teamName={teamName} objectives={objectives ?? []} />
                 )}
-                {charts !== 'lead' && timeline.lane.length > 0 && <LaneChart timeline={timeline} metric={metric} />}
+                {charts !== 'lead' && timeline.lane.length > 0 && (
+                    <LaneChart timeline={charts === 'lane' ? upTo(timeline, LANE_CHART_END_SECONDS) : timeline} metric={metric} />
+                )}
                 {charts === 'all' && <TimelineTable timeline={timeline} metric={metric} teamName={teamName} />}
             </div>
         </section>

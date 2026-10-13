@@ -2,12 +2,10 @@ import { formatNumber, toPercent } from '../matches/format';
 import { HeroPortrait } from '../heroes/HeroImage';
 import Kda from '../ui/Kda';
 import SectionHead from '../ui/SectionHead';
-import Standing from '../ui/Standing';
 import { standingDetail, standingOf } from '../ui/standingLevels';
-import { metricLabel } from './metrics';
 
 // "Seu desempenho" (the Stitch overview): who you played and how the lane went, and the match's big numbers; every
-// OpenDota percentile against other players of the same hero is in PerformanceMetrics (higher is always better; the
+// OpenDota percentile against other players of the same hero is in ComparisonCard (the "Como melhorar" tab) (higher is always better; the
 // API inverts deaths).
 
 const ROLES = { 1: 'Carry · posição 1', 2: 'Mid · posição 2', 3: 'Offlane · posição 3', 4: 'Suporte · posição 4', 5: 'Suporte · posição 5' };
@@ -104,16 +102,6 @@ function LaneBox({ laning }) {
     );
 }
 
-function MetricRow({ metric, heroName }) {
-    return (
-        <li className="metric-row">
-            <span className="metric-name">{metricLabel(metric.metric)}</span>
-            <span className="metric-value mono">{formatNumber(metric.value)}</span>
-            <Standing share={metric.percentile} who={`jogadores de ${heroName}`} />
-        </li>
-    );
-}
-
 // analysis comes from the API; only shown when the point-of-view player is in the match (performance not null).
 function PerformanceSummary({ analysis }) {
     const { performance, laning, smartStats } = analysis;
@@ -183,25 +171,6 @@ function PerformanceSummary({ analysis }) {
                 )}
             </div>
 
-        </section>
-    );
-}
-
-// Every OpenDota percentile of the player against other players of the same hero (the "Dicas" tab).
-export function PerformanceMetrics({ performance }) {
-    if (!performance || performance.metrics.length === 0) {
-        return null;
-    }
-    return (
-        <section className="section" aria-labelledby="percentiles-title">
-            <SectionHead id="percentiles-title" title={`Comparado com outros jogadores de ${performance.heroName}`}>
-                <span>Pelo OpenDota, contra outras partidas do mesmo herói</span>
-            </SectionHead>
-            <div className="card">
-                <ul className="metric-list">
-                    {performance.metrics.map(item => <MetricRow key={item.metric} metric={item} heroName={performance.heroName} />)}
-                </ul>
-            </div>
         </section>
     );
 }

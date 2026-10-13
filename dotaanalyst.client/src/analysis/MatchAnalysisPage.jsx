@@ -5,6 +5,7 @@ import { useCurrentUser } from '../auth/useCurrentUser';
 import DamageSection from './DamageSection';
 import DeathMap from './DeathMap';
 import FightsSection from './FightsSection';
+import ItemBuildSection from './ItemBuildSection';
 import LaningSection from './LaningSection';
 import MatchHeader from './MatchHeader';
 import PerformanceSummary from './PerformanceSummary';
@@ -131,6 +132,8 @@ function AnalysisContent({ analysis, accountId, replayPollingStopped }) {
                 laning={analysis.laning}
                 pollingStopped={replayPollingStopped}
             />
+
+            {analysis.replayStatus === 'ready' && <ItemBuildSection itemBuild={analysis.itemBuild} />}
 
             {analysis.replayStatus === 'ready' && <TimelineSection timeline={analysis.timeline} />}
 

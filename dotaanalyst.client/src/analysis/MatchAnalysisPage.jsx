@@ -14,6 +14,7 @@ import MatchHeader from './MatchHeader';
 import ObjectivesSection from './ObjectivesSection';
 import PerformanceSummary from './PerformanceSummary';
 import SmartStatsSection, { HighlightCards, PhaseDeathsCard } from './SmartStatsSection';
+import StatChart from './StatChart';
 import { useTabLink } from './tabLink';
 import TeamTable from './TeamTable';
 import ThemeStatsCard from './ThemeStatsCard';
@@ -250,6 +251,9 @@ function Shortcuts({ analysis, tabs }) {
     );
 }
 
+// How the lane chart names each hero of the lane (timeline.lane[].side).
+const LANE_SIDES = { player: 'você', ally: 'aliado', opponent: 'adversário' };
+
 function AnalysisContent({ analysis, accountId, replayPollingStopped }) {
     const [searchParams] = useSearchParams();
     const { performance } = analysis;
@@ -261,6 +265,12 @@ function AnalysisContent({ analysis, accountId, replayPollingStopped }) {
     const ready = analysis.replayStatus === 'ready';
     const smartStats = ready ? analysis.smartStats : null;
     const heroName = performance?.heroName;
+    const stats = ready ? analysis.stats : null;
+    const laneHeroes = (analysis.timeline?.lane ?? []).map(hero => ({ heroId: hero.heroId, side: LANE_SIDES[hero.side] }));
+    // The comparison chart of the players tab starts with you and the enemy of your role (or the first enemy).
+    const me = stats?.heroes.find(hero => hero.isCurrentPlayer);
+    const rivalHeroId = analysis.smartStats?.counterpartHeroId ?? stats?.heroes.find(hero => me && hero.team !== me.team)?.heroId;
+    const compareHeroes = [me?.heroId, rivalHeroId].filter(heroId => heroId !== undefined).map(heroId => ({ heroId }));
     // null stays null for both teams: an unknown winner highlights nobody.
     const radiantWon = analysis.radiantWon ?? null;
     const direWon = radiantWon === null ? null : !radiantWon;
@@ -300,7 +310,7 @@ function AnalysisContent({ analysis, accountId, replayPollingStopped }) {
                             smartStats={ready ? analysis.smartStats : null}
                         />
                         {performance && <PerformanceSummary analysis={analysis} />}
-                        {ready && <TimelineSection timeline={analysis.timeline} objectives={analysis.objectives} charts="lead" />}
+                        {ready && <TimelineSection timeline={analysis.timeline} objectives={analysis.objectives} />}
                         <Shortcuts analysis={analysis} tabs={tabs} />
                     </>
                 )}
@@ -312,7 +322,15 @@ function AnalysisContent({ analysis, accountId, replayPollingStopped }) {
                 {active === 'laning' && (
                     <>
                         <LaningSection laning={analysis.laning} />
-                        <TimelineSection timeline={analysis.timeline} objectives={analysis.objectives} charts="lane" />
+                        {laneHeroes.length > 0 && (
+                            <StatChart
+                                stats={stats}
+                                heroes={laneHeroes}
+                                upTo={15 * 60}
+                                title="Sua rota minuto a minuto (até 15 min)"
+                                titleId="lane-chart-title"
+                            />
+                        )}
                         <section className="section" aria-labelledby="laning-heatmap-title">
                             <HeatmapSection
                                 heatmaps={analysis.heatmaps}
@@ -325,6 +343,7 @@ function AnalysisContent({ analysis, accountId, replayPollingStopped }) {
                         <ThemeStatsCard
                             themes={['laning']}
                             smartStats={smartStats}
+                            stats={stats}
                             heroName={heroName}
                             title="Sua rota contra outros jogadores"
                         />
@@ -373,7 +392,7 @@ function AnalysisContent({ analysis, accountId, replayPollingStopped }) {
                 {active === 'build' && (
                     <>
                         <ItemBuildSection itemBuild={analysis.itemBuild} />
-                        <ThemeStatsCard themes={['economy']} smartStats={smartStats} heroName={heroName} />
+                        <ThemeStatsCard themes={['economy']} smartStats={smartStats} stats={stats} heroName={heroName} />
                         <AbilityBuildSection abilityBuild={analysis.abilityBuild} heroName={performance?.heroName} />
                     </>
                 )}
@@ -385,6 +404,14 @@ function AnalysisContent({ analysis, accountId, replayPollingStopped }) {
                             <TeamTable name="Radiant" side="radiant" players={analysis.radiant} won={radiantWon} score={analysis.radiantScore} />
                             <TeamTable name="Dire" side="dire" players={analysis.dire} won={direWon} score={analysis.direScore} />
                         </div>
+                        <StatChart
+                            stats={stats}
+                            heroes={compareHeroes}
+                            pickHeroes
+                            title="Compare qualquer estatística"
+                            titleId="compare-title"
+                            note="Escolha a estatística e até 5 heróis. Cada ponto é um minuto do relógio do jogo; o último é o fim da partida."
+                        />
                     </section>
                 )}
             </div>

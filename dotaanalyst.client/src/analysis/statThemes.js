@@ -7,14 +7,25 @@ import { lifetime, percent, plain } from './insights';
 
 const seconds = value => formatDuration(Math.round(value));
 
+// A row with `stat` reads the API's catalog (analysis.stats, src/stats/) at the moment picked above the card
+// (`moments`); `key` is then only the fallback for analyses read before the catalog, and the comparison base
+// (`compared`) only exists at `comparedAt`. A row without `stat` is a number of the whole match.
+const AT_TEN = 600;
+const AT_TWENTY = 1200;
+
 export const THEMES = {
     laning: {
         title: 'Números da fase de rotas',
+        moments: [
+            { key: 'at5', label: '5:00', at: 300 },
+            { key: 'at10', label: '10:00', at: AT_TEN, isDefault: true },
+            { key: 'at15', label: '15:00', at: 900 },
+        ],
         rows: [
-            { key: 'lastHitsAt10', label: 'Last hits aos 10:00', format: plain, compared: 'lastHitsAt10' },
-            { key: 'netWorthAt10', label: 'Patrimônio aos 10:00', format: plain, compared: 'netWorthAt10' },
-            { key: 'laneDamageDealt', label: 'Dano causado em heróis até 10:00', format: plain, compared: 'laneDamageDealt' },
-            { key: 'laneDamageTaken', label: 'Dano recebido de heróis até 10:00', format: plain, compared: 'laneDamageTaken', lower: true },
+            { stat: 'lastHits', key: 'lastHitsAt10', label: 'Last hits', format: plain, compared: 'lastHitsAt10', comparedAt: AT_TEN },
+            { stat: 'netWorth', key: 'netWorthAt10', label: 'Patrimônio', format: plain, compared: 'netWorthAt10', comparedAt: AT_TEN },
+            { stat: 'heroDamage', key: 'laneDamageDealt', label: 'Dano causado em heróis', format: plain, compared: 'laneDamageDealt', comparedAt: AT_TEN },
+            { stat: 'damageFromHeroes', key: 'laneDamageTaken', label: 'Dano recebido de heróis', format: plain, compared: 'laneDamageTaken', comparedAt: AT_TEN, lower: true },
         ],
     },
     deaths: {
@@ -56,10 +67,19 @@ export const THEMES = {
     },
     economy: {
         title: 'Economia',
+        moments: [
+            // From 20:00: up to 15:00 is the laning card's.
+            { key: 'at20', label: '20:00', at: AT_TWENTY, isDefault: true },
+            { key: 'at30', label: '30:00', at: 1800 },
+            { key: 'end', label: 'Fim', atEnd: true },
+            { key: 'gain10to20', label: 'De 10 a 20 min', from: AT_TEN, to: AT_TWENTY },
+        ],
         rows: [
+            { stat: 'netWorth', key: 'netWorthAt20', label: 'Patrimônio', format: plain, compared: 'netWorthAt20', comparedAt: AT_TWENTY },
+            { stat: 'gold', label: 'Ouro ganho', format: plain },
+            { stat: 'level', label: 'Nível', format: plain },
             { key: 'firstBigItemSeconds', label: 'Primeiro item grande (2.000+ de ouro)', format: seconds, compared: 'firstBigItemSeconds', lower: true },
-            { key: 'netWorthAt20', label: 'Patrimônio aos 20:00', format: plain, compared: 'netWorthAt20' },
-            { key: 'netWorthShare', label: 'Parte do patrimônio do time', format: percent },
+            { key: 'netWorthShare', label: 'Parte do patrimônio do time (fim)', format: percent },
         ],
     },
 };

@@ -2348,6 +2348,54 @@ details[open] > summary {
     margin: 0 0 0.75rem;
 }
 
+/* Time selector of the subject cards (ThemeStatsCard) and the statistic/hero pickers of StatChart. */
+.moment-picker {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 0.75rem;
+    margin: 0 0 0.75rem;
+}
+
+.moment-picker-label {
+    color: var(--text);
+    font-size: 13px;
+}
+
+.hero-picker {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin: 0 0 0.75rem;
+}
+
+.hero-chip {
+    padding: 0.25rem 0.65rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--surface-low);
+    color: var(--text);
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.hero-chip.dire {
+    border-style: dashed;
+}
+
+.hero-chip[aria-pressed='true'] {
+    border-color: var(--primary-border);
+    background: var(--primary-bg);
+    color: var(--text-h);
+}
+
+.hero-chip:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+.stat-picker,
 .heatmap-compare,
 .heatmap-toggle {
     display: inline-flex;
@@ -2357,6 +2405,7 @@ details[open] > summary {
     font-size: 13px;
 }
 
+.stat-picker select,
 .heatmap-compare select {
     max-width: 15rem;
     padding: 0.3rem 0.5rem;

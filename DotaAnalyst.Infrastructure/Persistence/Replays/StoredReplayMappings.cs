@@ -4,6 +4,7 @@ using System.Text.Json.Serialization;
 using DotaAnalyst.Application.Abstractions;
 using DotaAnalyst.Domain.Matches;
 using DotaAnalyst.Domain.Replays;
+using DotaAnalyst.Domain.Stats;
 
 namespace DotaAnalyst.Infrastructure.Persistence.Replays;
 
@@ -100,7 +101,11 @@ internal sealed record StoredHeroDeath(
 
 internal sealed record StoredTimeline(IReadOnlyList<int> Seconds, IReadOnlyList<StoredHeroTimeline> Heroes);
 
-internal sealed record StoredHeroTimeline(int HeroId, Team Team, IReadOnlyList<int> NetWorth, IReadOnlyList<int> Experience);
+// OtherSeries: the statistics saved per minute besides net worth and experience (StatCatalog), keyed by name
+// ("lastHits"); absent in rows saved before them (the analysis is then outdated and parsed again).
+internal sealed record StoredHeroTimeline(
+    int HeroId, Team Team, IReadOnlyList<int> NetWorth, IReadOnlyList<int> Experience,
+    IReadOnlyDictionary<StatKey, IReadOnlyList<int>>? OtherSeries = null);
 
 internal sealed record StoredLaningStats(
     int HeroId,
@@ -189,7 +194,8 @@ internal static class StoredReplayMappings
                         timeline.Seconds ?? throw new InvalidDataException("A saved timeline has no seconds."),
                         (timeline.Heroes ?? []).Select(hero => hero is null
                                 ? throw new InvalidDataException("A saved timeline has an empty hero.")
-                                : new HeroTimeline(hero.HeroId, hero.Team, hero.NetWorth ?? [], hero.Experience ?? []))
+                                : new HeroTimeline(hero.HeroId, hero.Team, hero.NetWorth ?? [], hero.Experience ?? [],
+                                    hero.OtherSeries))
                             .ToList())
                     : null,
                 stored.Deaths?.Select(death => death is null
@@ -253,7 +259,11 @@ internal static class StoredReplayMappings
                 ? new StoredTimeline(
                     timeline.Seconds,
                     timeline.Heroes
-                        .Select(hero => new StoredHeroTimeline(hero.HeroId, hero.Team, hero.NetWorth, hero.Experience))
+                        .Select(hero => new StoredHeroTimeline(
+                            hero.HeroId, hero.Team, hero.NetWorth, hero.Experience,
+                            hero.Series
+                                .Where(entry => entry.Key is not (StatKey.NetWorth or StatKey.Experience))
+                                .ToDictionary(entry => entry.Key, entry => entry.Value)))
                         .ToList())
                 : null,
             Deaths: analysis.Deaths?

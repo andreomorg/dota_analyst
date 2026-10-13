@@ -9,4 +9,8 @@ public interface IReplayDocumentArchive
     // Never throws for storage problems (they are logged): keeping the document must not fail the parse, whose
     // analysis is saved anyway. Replaces an earlier document of the same match.
     Task KeepAsync(MatchId matchId, int schemaVersion, string document, CancellationToken cancellationToken);
+
+    // The document kept for the match; null when there is none or the storage is unavailable (logged), so the
+    // replay is just parsed again.
+    Task<string?> FindAsync(MatchId matchId, CancellationToken cancellationToken);
 }

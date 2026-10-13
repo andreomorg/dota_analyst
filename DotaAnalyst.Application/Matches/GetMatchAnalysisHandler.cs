@@ -6,6 +6,7 @@ using DotaAnalyst.Domain.Items;
 using DotaAnalyst.Domain.Matches;
 using DotaAnalyst.Domain.Players;
 using DotaAnalyst.Domain.Replays;
+using DotaAnalyst.Domain.Stats;
 using Microsoft.Extensions.Logging;
 
 namespace DotaAnalyst.Application.Matches;
@@ -93,8 +94,32 @@ public class GetMatchAnalysisHandler(
                     .Where(upgrade => upgrade.HeroId == currentPlayer.HeroId)
                     .Select(upgrade => new AbilityBuildUpgrade(upgrade.Seconds, upgrade.AbilityName, upgrade.Level))
                     .ToList())
+                : null,
+            Stats: replay is not null && MatchStatTimeline.From(replay) is { } stats
+                ? ToStats(stats, match, currentPlayer, names)
                 : null);
     }
+
+    private static MatchStats ToStats(MatchStatTimeline stats, MatchDetails match, MatchPlayer? player, NameLookup names) =>
+        new(
+            StatCatalog.All
+                .Select(stat => new StatDefinitionView(stat.Key, stat.Source, stat.Kind, stat.Unit, stat.Better))
+                .ToList(),
+            stats.Seconds,
+            stats.Heroes
+                .Where(hero => match.Players.Any(candidate => candidate.HeroId == hero.HeroId))
+                .OrderBy(hero => hero.Team == Team.Radiant ? 0 : 1)
+                .Select(hero => new HeroStats(
+                    hero.HeroId,
+                    names.Hero(hero.HeroId),
+                    hero.Team,
+                    player is not null && hero.HeroId == player.HeroId,
+                    // In the catalog's order, so every hero lists them the same way.
+                    StatCatalog.All
+                        .Where(stat => hero.Series.ContainsKey(stat.Key))
+                        .Select(stat => new StatSeries(stat.Key, hero.Series[stat.Key]))
+                        .ToList()))
+                .ToList());
 
     private static HeatmapSet ToHeatmaps(
         IReadOnlyList<HeroHeatmap> heatmaps, MatchDetails match, MatchPlayer? player, NameLookup names)

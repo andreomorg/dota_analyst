@@ -1,4 +1,5 @@
 using DotaAnalyst.Domain.Matches;
+using DotaAnalyst.Domain.Stats;
 
 namespace DotaAnalyst.Domain.Replays;
 
@@ -38,35 +39,65 @@ public record MatchTimeline
     public HeroTimeline? FindHero(int heroId) => Heroes.FirstOrDefault(hero => hero.HeroId == heroId);
 }
 
-// One hero's values at each point of the MatchTimeline.
+// One hero's values at each point of the MatchTimeline: net worth and experience (every analysis with a timeline) and
+// the other statistics saved per minute (StatCatalog.SavedPerMinute; analyses saved before them only have the two).
 public record HeroTimeline
 {
-    public HeroTimeline(int heroId, Team team, IReadOnlyList<int> netWorth, IReadOnlyList<int> experience)
+    public HeroTimeline(
+        int heroId, Team team, IReadOnlyList<int> netWorth, IReadOnlyList<int> experience,
+        IReadOnlyDictionary<StatKey, IReadOnlyList<int>>? otherSeries = null)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(heroId);
         ArgumentNullException.ThrowIfNull(netWorth);
         ArgumentNullException.ThrowIfNull(experience);
-        if (netWorth.Count != experience.Count)
+        var series = new Dictionary<StatKey, IReadOnlyList<int>>
         {
-            throw new ArgumentException("Net worth and experience need the same points.", nameof(experience));
+            [StatKey.NetWorth] = netWorth.ToList(),
+            [StatKey.Experience] = experience.ToList(),
+        };
+        foreach (var (key, values) in otherSeries ?? new Dictionary<StatKey, IReadOnlyList<int>>())
+        {
+            if (key is StatKey.NetWorth or StatKey.Experience || StatCatalog.Get(key).Source != StatSource.ReplayMinutes)
+            {
+                throw new ArgumentException($"{key} is not one of the other statistics saved per minute.", nameof(otherSeries));
+            }
+
+            series[key] = values?.ToList() ?? throw new ArgumentException($"{key} has no values.", nameof(otherSeries));
         }
 
-        if (netWorth.Any(value => value < 0) || experience.Any(value => value < 0))
+        if (series.Values.Any(values => values.Count != netWorth.Count))
         {
-            throw new ArgumentException("Net worth and experience can't be negative.", nameof(netWorth));
+            throw new ArgumentException("Every statistic needs the same points.", nameof(otherSeries));
+        }
+
+        if (series.Values.Any(values => values.Any(value => value < 0)))
+        {
+            throw new ArgumentException("The statistics can't be negative.", nameof(netWorth));
         }
 
         HeroId = heroId;
         Team = team;
-        NetWorth = netWorth.ToList();
-        Experience = experience.ToList();
+        Series = series;
     }
 
     public int HeroId { get; }
 
     public Team Team { get; }
 
-    public IReadOnlyList<int> NetWorth { get; }
+    // Every statistic this hero has, one value per point of the timeline.
+    public IReadOnlyDictionary<StatKey, IReadOnlyList<int>> Series { get; }
 
-    public IReadOnlyList<int> Experience { get; }
+    public IReadOnlyList<int> NetWorth => Series[StatKey.NetWorth];
+
+    public IReadOnlyList<int> Experience => Series[StatKey.Experience];
+
+    // Saved before every statistic of the catalog was read per minute.
+    public bool HasEverySavedStat => StatCatalog.SavedPerMinute.All(Series.ContainsKey);
+
+    // Records compare their properties by reference; two timelines with the same values are the same.
+    public virtual bool Equals(HeroTimeline? other) =>
+        other is not null && HeroId == other.HeroId && Team == other.Team && Series.Count == other.Series.Count
+        && Series.All(entry => other.Series.TryGetValue(entry.Key, out var values) && values.SequenceEqual(entry.Value));
+
+    public override int GetHashCode() => HashCode.Combine(HeroId, Team, Series.Count);
 }

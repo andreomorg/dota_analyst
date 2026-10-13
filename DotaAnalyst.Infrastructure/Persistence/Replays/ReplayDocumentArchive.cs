@@ -41,4 +41,24 @@ public class ReplayDocumentArchive(
             logger.LogWarning(ex, "Could not keep the replay document of match {MatchId}", matchId);
         }
     }
+
+    public async Task<string?> FindAsync(MatchId matchId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await storageGuard.RunAsync($"reading the replay document of match {matchId}", async () =>
+            {
+                await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+                // A scalar query: EF Core reads the column named "Value".
+                return await db.Database
+                    .SqlQuery<string>($"""SELECT document::text AS "Value" FROM replay_documents WHERE match_id = {matchId.Value}""")
+                    .FirstOrDefaultAsync(cancellationToken);
+            });
+        }
+        catch (StorageUnavailableException ex)
+        {
+            logger.LogWarning(ex, "Could not read the replay document of match {MatchId}", matchId);
+            return null;
+        }
+    }
 }

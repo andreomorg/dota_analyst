@@ -7,4 +7,6 @@ internal sealed class NoReplayDocumentArchive : IReplayDocumentArchive
 {
     public Task KeepAsync(MatchId matchId, int schemaVersion, string document, CancellationToken cancellationToken) =>
         Task.CompletedTask;
+
+    public Task<string?> FindAsync(MatchId matchId, CancellationToken cancellationToken) => Task.FromResult<string?>(null);
 }

@@ -113,6 +113,34 @@ public class PlayersApiTests
         Assert.Equal(28, Assert.Single(laning.GetProperty("opponents").EnumerateArray()).GetProperty("heroId").GetInt32());
     }
 
+    [Fact]
+    public async Task MatchAnalysis_ReadyReplay_ReturnsEveryStatisticPerMinute()
+    {
+        using var factory = new ApiFactory();
+        factory.Analyzer.Matches[MatchIdValue] = CreateMatch();
+        var replay = ReplayBuilder.Analysis(
+            MatchIdValue,
+            new LaningStats(31, Team.Radiant, Lane.Bottom, lastHits: 12, denies: 9, netWorth: 2047, experience: 2609, deaths: 2),
+            ReplayBuilder.Hero(28, Team.Dire, Lane.Bottom, netWorth: 3797));
+        factory.ReplayAnalyses.Results[MatchIdValue] = SavedReplayAnalysis.Ready(replay, DateTimeOffset.UnixEpoch);
+
+        var response = await factory.CreateClient().GetAsync($"/api/v1/players/{MyAccountId}/matches/{MatchIdValue}");
+
+        // The contract the React page reads: the catalog, the points and each hero's series.
+        var stats = (await ReadJsonAsync(response)).GetProperty("stats");
+        Assert.Equal(["definitions", "seconds", "heroes"], stats.EnumerateObject().Select(property => property.Name));
+        var deaths = stats.GetProperty("definitions").EnumerateArray().Single(stat => stat.GetProperty("key").GetString() == "deaths");
+        Assert.Equal(
+            ("replayMinutes", "total", "count", "lower"),
+            (deaths.GetProperty("source").GetString(), deaths.GetProperty("kind").GetString(),
+                deaths.GetProperty("unit").GetString(), deaths.GetProperty("better").GetString()));
+        Assert.Equal([0, 600, 1200], stats.GetProperty("seconds").EnumerateArray().Select(value => value.GetInt32()));
+        var me = stats.GetProperty("heroes").EnumerateArray().Single(hero => hero.GetProperty("isCurrentPlayer").GetBoolean());
+        Assert.Equal(("Lich", "radiant"), (me.GetProperty("heroName").GetString(), me.GetProperty("team").GetString()));
+        var lastHits = me.GetProperty("series").EnumerateArray().Single(series => series.GetProperty("stat").GetString() == "lastHits");
+        Assert.Equal([0, 12, 24], lastHits.GetProperty("values").EnumerateArray().Select(value => value.GetInt32()));
+    }
+
     [Theory]
     [InlineData(MyAccountId, 0L, HttpStatusCode.BadRequest)]
     [InlineData(0L, MatchIdValue, HttpStatusCode.BadRequest)]

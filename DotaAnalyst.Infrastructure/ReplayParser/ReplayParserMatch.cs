@@ -4,6 +4,7 @@ using System.Text.RegularExpressions;
 using DotaAnalyst.Domain.Analysis;
 using DotaAnalyst.Domain.Matches;
 using DotaAnalyst.Domain.Replays;
+using DotaAnalyst.Domain.Stats;
 
 namespace DotaAnalyst.Infrastructure.ReplayParser;
 
@@ -60,8 +61,13 @@ internal sealed record ReplayParserKill(
 
 internal sealed record ReplayParserCombat(IReadOnlyList<ReplayParserDamage?>? Damage, IReadOnlyList<ReplayParserCombatMinutes?>? PerMinute);
 
-// One player's damage with enemy heroes per minute (index i = minute i).
-internal sealed record ReplayParserCombatMinutes(int? Player, IReadOnlyList<int>? DamageToHeroes, IReadOnlyList<int>? DamageFromHeroes);
+// One player's damage and healing in each minute (index i = minute i, from i:00 to i:59; one per started minute).
+internal sealed record ReplayParserCombatMinutes(
+    int? Player,
+    IReadOnlyList<int>? DamageToHeroes,
+    IReadOnlyList<int>? DamageFromHeroes,
+    IReadOnlyList<int>? DamageTaken = null,
+    IReadOnlyList<int>? Healing = null);
 
 // Aggregated damage from one source to one target with one inflictor; sourcePlayer/targetPlayer are player indexes
 // (null for a non-hero unit, then named by its kind).
@@ -79,14 +85,20 @@ internal sealed record ReplayParserTimelines(
 // One player's hero positions as [t, x, y] tuples (JSON arrays, read one by one in the mapping), while alive.
 internal sealed record ReplayParserPlayerPositions(int? Player, IReadOnlyList<JsonElement>? Samples);
 
-// One value per point: every minute of the game clock from 0:00, then the end of the match.
+// One value per point: every minute of the game clock from 0:00, then the end of the match. Totals so far (gold
+// earned, last hits...), except net worth and level (the value at that moment).
 internal sealed record ReplayParserPlayerMinutes(
     int? Player,
     IReadOnlyList<int>? NetWorth,
     IReadOnlyList<int>? Xp,
     IReadOnlyList<int>? LastHits,
     IReadOnlyList<int>? Denies,
-    IReadOnlyList<int>? Deaths);
+    IReadOnlyList<int>? Deaths,
+    IReadOnlyList<int>? Gold = null,
+    IReadOnlyList<int>? Level = null,
+    IReadOnlyList<int>? Kills = null,
+    IReadOnlyList<int>? Assists = null,
+    IReadOnlyList<int>? HeroDamage = null);
 
 internal sealed record ReplayParserLaning(int? EndsAtSeconds, IReadOnlyList<ReplayParserPlayerLane?>? Lanes);
 
@@ -145,6 +157,10 @@ internal static class ReplayParserMappings
             player => player.Player ?? throw Missing("players.player"),
             player => player.HeroId ?? throw Missing("players.heroId"));
 
+        var combatMinutes = (response.Combat?.PerMinute ?? [])
+            .Select(entry => entry ?? throw Empty("combat.perMinute entry"))
+            .ToDictionary(entry => entry.Player ?? throw Missing("perMinute.player"));
+
         var laningStats = new List<LaningStats>();
         var heroes = new List<HeroTimeline>();
         foreach (var player in players)
@@ -162,7 +178,9 @@ internal static class ReplayParserMappings
                 netWorth: Value(series.NetWorth, "netWorth", at),
                 experience: Value(series.Xp, "xp", at),
                 deaths: Value(series.Deaths, "deaths", at)));
-            heroes.Add(new HeroTimeline(heroId, team, Required(series.NetWorth, "netWorth"), Required(series.Xp, "xp")));
+            heroes.Add(new HeroTimeline(
+                heroId, team, Required(series.NetWorth, "netWorth"), Required(series.Xp, "xp"),
+                OtherSeries(series, combatMinutes.GetValueOrDefault(index), count)));
         }
 
         var deaths = Required(response.Kills, "kills")
@@ -257,6 +275,49 @@ internal static class ReplayParserMappings
                     && laningStats.FirstOrDefault(player => player.HeroId == other.HeroId)?.Team == team)
                 .ToList();
         }
+    }
+
+    // The statistics of the catalog saved per minute besides net worth and experience, one value per point. A list
+    // missing (or empty) in the document is left out: the analysis then counts as outdated and is read again.
+    private static Dictionary<StatKey, IReadOnlyList<int>> OtherSeries(
+        ReplayParserPlayerMinutes minutes, ReplayParserCombatMinutes? combat, int count)
+    {
+        var series = new Dictionary<StatKey, IReadOnlyList<int>>();
+
+        void Totals(StatKey key, IReadOnlyList<int>? values)
+        {
+            if (values is { Count: > 0 })
+            {
+                series[key] = values.Count == count
+                    ? values
+                    : throw new InvalidDataException($"perMinute {key} needs one value per point.");
+            }
+        }
+
+        // combat.perMinute has the amount of each minute: point i (minute i:00) is the sum of minutes 0 to i-1 and the
+        // last point (the end) the sum of all of them.
+        void PerMinute(StatKey key, IReadOnlyList<int>? values)
+        {
+            if (values is { Count: > 0 })
+            {
+                series[key] = Enumerable.Range(0, count)
+                    .Select(point => values.Take(point == count - 1 ? values.Count : point).Sum())
+                    .ToList();
+            }
+        }
+
+        Totals(StatKey.Gold, minutes.Gold);
+        Totals(StatKey.LastHits, minutes.LastHits);
+        Totals(StatKey.Denies, minutes.Denies);
+        Totals(StatKey.Level, minutes.Level);
+        Totals(StatKey.Kills, minutes.Kills);
+        Totals(StatKey.Deaths, minutes.Deaths);
+        Totals(StatKey.Assists, minutes.Assists);
+        Totals(StatKey.HeroDamage, minutes.HeroDamage);
+        PerMinute(StatKey.DamageFromHeroes, combat?.DamageFromHeroes);
+        PerMinute(StatKey.DamageTaken, combat?.DamageTaken);
+        PerMinute(StatKey.Healing, combat?.Healing);
+        return series;
     }
 
     // [t, "ability_name", level] -> one ability upgrade.

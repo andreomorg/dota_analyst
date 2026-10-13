@@ -5,6 +5,7 @@ using System.Text.Json;
 using DotaAnalyst.Application.Abstractions;
 using DotaAnalyst.Domain.Matches;
 using DotaAnalyst.Domain.Replays;
+using DotaAnalyst.Domain.Stats;
 using DotaAnalyst.Infrastructure.ReplayParser;
 using DotaAnalyst.Tests.Domain;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -35,15 +36,19 @@ public class ReplayParserClientTests
           "timelines": { "perMinute": [
             { "player": 0, "netWorth": [600,700,800,900,1000,1200,1400,1600,1800,2000,2900,3000],
               "xp": [0,100,200,300,400,500,600,700,800,900,3100,3300], "lastHits": [0,1,2,3,4,5,6,7,8,9,12,13],
-              "denies": [0,0,0,0,1,1,1,2,2,2,3,3], "deaths": [0,0,0,0,0,0,1,1,1,1,1,1] },
+              "denies": [0,0,0,0,1,1,1,2,2,2,3,3], "deaths": [0,0,0,0,0,0,1,1,1,1,1,1],
+              "gold": [600,700,800,900,1000,1200,1400,1600,1800,2000,2900,3000], "level": [1,1,2,2,3,3,4,4,5,5,6,6],
+              "kills": [0,0,0,0,0,0,0,0,0,0,1,1], "assists": [0,0,0,0,0,0,0,0,0,0,0,0], "heroDamage": [0,10,20,30,40,50,60,70,80,90,900,950] },
             { "player": 5, "netWorth": [600,800,1000,1200,1400,1600,1800,2000,2200,2400,3500,3600],
               "xp": [0,150,300,450,600,750,900,1050,1200,1350,2800,2900], "lastHits": [0,3,6,9,12,15,18,21,24,27,40,41],
-              "denies": [0,0,0,0,0,0,0,0,0,0,0,0], "deaths": [0,0,0,0,0,0,0,0,0,0,0,0] }
+              "denies": [0,0,0,0,0,0,0,0,0,0,0,0], "deaths": [0,0,0,0,0,0,0,0,0,0,0,0],
+              "gold": [600,800,1000,1200,1400,1600,1800,2000,2200,2400,3500,3600], "level": [1,2,2,3,3,4,4,5,5,6,6,7],
+              "kills": [0,0,0,0,0,0,1,1,1,1,1,1], "assists": [0,0,0,0,0,0,0,0,0,0,0,0], "heroDamage": [0,0,0,0,0,0,200,200,200,200,300,300] }
           ], "positionIntervalSeconds": 2, "positions": [] },
           "laning": {{laning ?? """{ "endsAtSeconds": 600, "lanes": [ { "player": 0, "lane": "bottom" }, { "player": 5, "lane": "jungle" } ] }"""}},
           "kills": [],
           "vision": { "wards": [] },
-          "combat": { "damage": [], "healing": [], "perMinute": [ { "player": 0, "damageToHeroes": [0,0,0,0,0,0,0,0,0,0,0,0], "damageFromHeroes": [0,0,0,0,0,0,0,0,0,0,0,0], "damageTaken": [], "healing": [] }, { "player": 5, "damageToHeroes": [0,0,0,0,0,0,0,0,0,0,0,0], "damageFromHeroes": [0,0,0,0,0,0,0,0,0,0,0,0], "damageTaken": [], "healing": [] } ] },
+          "combat": { "damage": [], "healing": [], "perMinute": [ { "player": 0, "damageToHeroes": [0,0,0,0,0,0,0,0,0,0,0,0], "damageFromHeroes": [0,0,0,0,0,0,0,0,0,0,0,0], "damageTaken": [0,0,0,0,0,0,0,0,0,0,0,0], "healing": [0,0,0,0,0,0,0,0,0,0,0,0] }, { "player": 5, "damageToHeroes": [0,0,0,0,0,0,0,0,0,0,0,0], "damageFromHeroes": [0,0,0,0,0,0,0,0,0,0,0,0], "damageTaken": [0,0,0,0,0,0,0,0,0,0,0,0], "healing": [0,0,0,0,0,0,0,0,0,0,0,0] } ] },
           "items": { "purchases": [], "uses": [], "final": [] },
           "objectives": { "buildings": [], "roshan": [], "tormentors": [], "couriers": [], "runes": [], "outposts": [] },
           "abilities": { "upgrades": [
@@ -85,6 +90,9 @@ public class ReplayParserClientTests
         Assert.Equal([0, 60, 120, 180, 240, 300, 360, 420, 480, 540, 600, 690], timeline.Seconds);
         Assert.Equal(3000, timeline.FindHero(31)!.NetWorth[^1]);
         Assert.Equal(2900, timeline.FindHero(28)!.Experience[^1]);
+        // Every statistic of the catalog saved per minute comes along.
+        Assert.All(timeline.Heroes, hero => Assert.True(hero.HasEverySavedStat));
+        Assert.Equal(7, timeline.FindHero(28)!.Series[StatKey.Level][^1]);
 
         // The whole document is kept as it came.
         var kept = Assert.Single(archive.Kept);
@@ -288,9 +296,9 @@ public class ReplayParserClientTests
     public async Task Parse_CombatPerMinute_GivesTheLaneDamage()
     {
         // Minutes 0..11 (the 11:30 match); the lane damage adds minutes 0..9 only.
-        var body = MatchJson().Replace("{ \"player\": 0, \"damageToHeroes\": [0,0,0,0,0,0,0,0,0,0,0,0], \"damageFromHeroes\": [0,0,0,0,0,0,0,0,0,0,0,0], \"damageTaken\": [], \"healing\": [] }", """
+        var body = MatchJson().Replace("{ \"player\": 0, \"damageToHeroes\": [0,0,0,0,0,0,0,0,0,0,0,0], \"damageFromHeroes\": [0,0,0,0,0,0,0,0,0,0,0,0], \"damageTaken\": [0,0,0,0,0,0,0,0,0,0,0,0], \"healing\": [0,0,0,0,0,0,0,0,0,0,0,0] }", """
             { "player": 0, "damageToHeroes": [0,100,100,100,100,100,100,100,100,100,999,999],
-              "damageFromHeroes": [0,50,50,50,50,50,50,50,50,50,999,999], "damageTaken": [], "healing": [] }
+              "damageFromHeroes": [0,50,50,50,50,50,50,50,50,50,999,999], "damageTaken": [0,0,0,0,0,0,0,0,0,0,0,0], "healing": [0,0,0,0,0,0,0,0,0,0,0,0] }
             """);
 
         var analysis = await CreateClient(new FakeParser(Json(HttpStatusCode.OK, body, "application/json")))
@@ -299,6 +307,37 @@ public class ReplayParserClientTests
         var me = Assert.Single(analysis.Metrics!, hero => hero.HeroId == 31);
         Assert.Equal((900, 450), (me.LaneDamageDealt, me.LaneDamageTaken));
         Assert.Equal(0, analysis.Metrics!.Single(hero => hero.HeroId == 28).LaneDamageDealt);
+
+        // The statistic per minute adds the minutes up: 10:00 = minutes 0..9, the end = every minute.
+        var taken = analysis.Timeline!.FindHero(31)!.Series[StatKey.DamageFromHeroes];
+        Assert.Equal((0, 50, 450, 2448), (taken[0], taken[2], taken[10], taken[^1]));
+    }
+
+    [Fact]
+    public async Task Parse_WithAnUpToDateKeptDocument_ReadsItWithoutCallingTheParser()
+    {
+        var parser = new FakeParser(Problem(HttpStatusCode.InternalServerError));
+        var archive = new FakeArchive { Stored = MatchJson() };
+
+        var analysis = await CreateClient(parser, archive: archive).ParseAsync(Match, ReplayUrl, CancellationToken.None);
+
+        Assert.Empty(parser.Requests);
+        Assert.False(analysis.IsOutdated);
+        Assert.Equal(950, analysis.Timeline!.FindHero(31)!.Series[StatKey.HeroDamage][^1]);
+    }
+
+    [Fact]
+    public async Task Parse_WithAnOutdatedKeptDocument_AsksTheParser()
+    {
+        // A document from before the parser sent the gold per minute: the analysis made from it would be outdated.
+        var archive = new FakeArchive { Stored = MatchJson().Replace("\"gold\":", "\"goldz\":") };
+        var parser = new FakeParser(Json(HttpStatusCode.OK, MatchJson(), "application/json"));
+
+        var analysis = await CreateClient(parser, archive: archive).ParseAsync(Match, ReplayUrl, CancellationToken.None);
+
+        Assert.Single(parser.Requests);
+        Assert.False(analysis.IsOutdated);
+        Assert.Single(archive.Kept);
     }
 
     [Fact]
@@ -334,6 +373,11 @@ public class ReplayParserClientTests
             .Replace("[600,800,1000,1200,1400,1600,1800,2000,2200,2400,3500,3600]", "[600,800,1000,1200,1400,1600,1800,1900]")
             .Replace("[0,150,300,450,600,750,900,1050,1200,1350,2800,2900]", "[0,150,300,450,600,750,900,950]")
             .Replace("[0,3,6,9,12,15,18,21,24,27,40,41]", "[0,3,6,9,12,15,18,20]")
+            .Replace("[1,1,2,2,3,3,4,4,5,5,6,6]", "[1,1,2,2,3,3,4,4]")
+            .Replace("[1,2,2,3,3,4,4,5,5,6,6,7]", "[1,2,2,3,3,4,4,5]")
+            .Replace("[0,0,0,0,0,0,0,0,0,0,1,1]", "[0,0,0,0,0,0,0,0]")
+            .Replace("[0,10,20,30,40,50,60,70,80,90,900,950]", "[0,10,20,30,40,50,60,70]")
+            .Replace("[0,0,0,0,0,0,200,200,200,200,300,300]", "[0,0,0,0,0,0,200,200]")
             .Replace("[0,0,0,0,0,0,0,0,0,0,0,0]", "[0,0,0,0,0,0,0,0]")
             .Replace("690.4", "400.2");
 
@@ -562,6 +606,7 @@ public class ReplayParserClientTests
         { "points differ between players", MatchJson().Replace("2400,3500,3600]", "2400,3500]") },
         { "no xp", MatchJson().Replace("\"xp\": [0,100,", "\"xq\": [0,100,") },
         { "same hero twice", MatchJson().Replace("\"heroId\": 28", "\"heroId\": 31") },
+        { "gold with fewer points than the timeline", MatchJson().Replace("2000,2900,3000], \"level\"", "2000,2900], \"level\"") },
         { "same player index twice", MatchJson().Replace("{ \"player\": 5, \"netWorth\"", "{ \"player\": 0, \"netWorth\"") },
     };
 
@@ -590,6 +635,11 @@ public class ReplayParserClientTests
     private sealed class FakeArchive : IReplayDocumentArchive
     {
         public List<(long MatchId, int SchemaVersion, string Document)> Kept { get; } = [];
+
+        // The document FindAsync returns (one kept before this test).
+        public string? Stored { get; init; }
+
+        public Task<string?> FindAsync(MatchId matchId, CancellationToken cancellationToken) => Task.FromResult(Stored);
 
         public Task KeepAsync(MatchId matchId, int schemaVersion, string document, CancellationToken cancellationToken)
         {

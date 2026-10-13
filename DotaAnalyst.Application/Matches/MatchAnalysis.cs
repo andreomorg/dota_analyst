@@ -1,6 +1,7 @@
 using DotaAnalyst.Domain.Analysis;
 using DotaAnalyst.Domain.Matches;
 using DotaAnalyst.Domain.Replays;
+using DotaAnalyst.Domain.Stats;
 
 namespace DotaAnalyst.Application.Matches;
 
@@ -27,6 +28,7 @@ namespace DotaAnalyst.Application.Matches;
 /// <param name="ItemBuild">The player's starting items and when each item of the build was ready (approximate: items sold or given away still count); null unless replayStatus is ready and the player is in the match, or when the item catalog is unavailable.</param>
 /// <param name="Heatmaps">Where each of the ten heroes spent its time alive, per game phase, read from the replay; null unless replayStatus is ready (and for replays read before heatmaps existed).</param>
 /// <param name="AbilityBuild">The player's ability level-ups in replay order; null unless replayStatus is ready and the player is in the match.</param>
+/// <param name="Stats">Every statistic of every hero minute by minute, read from the replay, so any moment or period can be shown; null unless replayStatus is ready (and for replays read before the timeline existed).</param>
 public record MatchAnalysis(
     long MatchId,
     int DurationSeconds,
@@ -49,7 +51,35 @@ public record MatchAnalysis(
     IReadOnlyList<MapObjectiveSummary>? Objectives = null,
     SmartStats? SmartStats = null,
     HeatmapSet? Heatmaps = null,
-    PlayerAbilityBuild? AbilityBuild = null);
+    PlayerAbilityBuild? AbilityBuild = null,
+    MatchStats? Stats = null);
+
+/// <summary>Every statistic of every hero, one value per point of the match (each minute, then the end): the value at any moment is the last point at or before it, and what happened in a period is the difference between two points.</summary>
+/// <param name="Definitions">What each statistic is (the same catalog for every match).</param>
+/// <param name="Seconds">Game clock of each point, in seconds: 0, 60, 120, ... and the end of the match.</param>
+/// <param name="Heroes">The ten heroes, Radiant first.</param>
+public record MatchStats(IReadOnlyList<StatDefinitionView> Definitions, IReadOnlyList<int> Seconds, IReadOnlyList<HeroStats> Heroes);
+
+/// <summary>One statistic of the catalog.</summary>
+/// <param name="Key">Its name, as used in the heroes' series.</param>
+/// <param name="Source">replayMinutes: read from the replay each minute; replayEvents: counted from events of the replay (wards...).</param>
+/// <param name="Kind">total: adds up during the match (the difference between two points is the count in the period); state: the value at that moment (net worth, level).</param>
+/// <param name="Unit">What the number counts.</param>
+/// <param name="Better">Whether more (higher) or less (lower) is better; neither when it depends on the hero.</param>
+public record StatDefinitionView(StatKey Key, StatSource Source, StatKind Kind, StatUnit Unit, BetterWhen Better);
+
+/// <summary>The statistics of one hero.</summary>
+/// <param name="HeroId">Hero, as OpenDota's hero ID.</param>
+/// <param name="HeroName">Hero name, or "Unknown hero".</param>
+/// <param name="Team">The hero's team.</param>
+/// <param name="IsCurrentPlayer">True for the hero of the player whose point of view the analysis uses.</param>
+/// <param name="Series">One list per statistic the hero has, with one value per point.</param>
+public record HeroStats(int HeroId, string HeroName, Team Team, bool IsCurrentPlayer, IReadOnlyList<StatSeries> Series);
+
+/// <summary>One statistic of one hero over the match.</summary>
+/// <param name="Stat">The statistic (a key of the definitions).</param>
+/// <param name="Values">One value per point of seconds.</param>
+public record StatSeries(StatKey Stat, IReadOnlyList<int> Values);
 
 /// <summary>The ability level-ups of the player whose point of view the analysis uses.</summary>
 /// <param name="Upgrades">Ability names and levels in the order recorded by the replay.</param>

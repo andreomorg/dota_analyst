@@ -34,13 +34,30 @@ public class ReplayDocumentArchiveTests(PostgresFixture postgres) : IAsyncLifeti
     }
 
     [Fact]
-    public async Task Keep_WithTheDatabaseDown_DoesNotThrow()
+    public async Task Find_ReturnsTheKeptDocument_OrNull()
+    {
+        var archive = new ReplayDocumentArchive(
+            postgres.DbContextFactory, new StorageGuard(TimeProvider.System), TimeProvider.System,
+            NullLogger<ReplayDocumentArchive>.Instance);
+
+        Assert.Null(await archive.FindAsync(Match, CancellationToken.None));
+
+        await archive.KeepAsync(Match, 1, """{"schemaVersion": 1, "kills": [{"t": 12.5}]}""", CancellationToken.None);
+        var found = await archive.FindAsync(Match, CancellationToken.None);
+
+        Assert.NotNull(found);
+        Assert.Equal(12.5, System.Text.Json.JsonDocument.Parse(found).RootElement.GetProperty("kills")[0].GetProperty("t").GetDouble());
+    }
+
+    [Fact]
+    public async Task KeepAndFind_WithTheDatabaseDown_DoNotThrow()
     {
         var archive = new ReplayDocumentArchive(
             new BrokenFactory(), new StorageGuard(TimeProvider.System), TimeProvider.System,
             NullLogger<ReplayDocumentArchive>.Instance);
 
         await archive.KeepAsync(Match, 1, "{}", CancellationToken.None);
+        Assert.Null(await archive.FindAsync(Match, CancellationToken.None));
     }
 
     private sealed class BrokenFactory : IDbContextFactory<AppDbContext>

@@ -119,7 +119,8 @@ public record ReplayAnalysis
     // Every ward of both teams, in the order they were placed; null for analyses made before wards were read.
     public IReadOnlyList<WardPlacement>? Wards { get; }
 
-    // Null for analyses made before the timeline existed (they only have the laning phase).
+    // Every statistic per minute (StatCatalog). Null for analyses made before the timeline existed (they only have
+    // the laning phase).
     public MatchTimeline? Timeline { get; }
 
     // Every hero death of the match, in time order; null for analyses made before deaths were read.
@@ -128,7 +129,7 @@ public record ReplayAnalysis
     // Made before everything the analysis page shows was read from the replay: worth parsing again.
     // (Analyses without damage were also read before deaths had assists.)
     public bool IsOutdated =>
-        Timeline is null || Deaths is null || Wards is null || Damage is null || Purchases is null || Objectives is null
+        Timeline is null || Timeline.Heroes.Any(hero => !hero.HasEverySavedStat) || Deaths is null || Wards is null || Damage is null || Purchases is null || Objectives is null
         || Heatmaps is null || Heatmaps.Any(heatmap => heatmap.Proximity is null) || AbilityUpgrades is null
         || Metrics is null || Metrics.Any(hero =>
             hero.TimeByRegion is null || hero.DeathsByRegion is null || hero.MovementSampleSegments is null

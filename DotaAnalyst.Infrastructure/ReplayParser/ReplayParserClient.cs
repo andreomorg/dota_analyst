@@ -48,6 +48,11 @@ public class ReplayParserClient(
 
     public async Task<ReplayAnalysis> ParseAsync(MatchId matchId, Uri replayUrl, CancellationToken cancellationToken)
     {
+        if (await FromKeptDocumentAsync(matchId, cancellationToken) is { } kept)
+        {
+            return kept;
+        }
+
         for (var attempt = 1; ; attempt++)
         {
             TimeSpan wait;
@@ -77,6 +82,33 @@ public class ReplayParserClient(
             // Through the app's clock, so tests don't really wait. Cancelled when the app stops.
             await Task.Delay(wait, timeProvider, cancellationToken);
         }
+    }
+
+    // A match whose whole document is already kept (the owner's machine) is read again from it, without downloading
+    // and parsing the replay: what the API reads from a document grows (new statistics) while the document stays the
+    // same. Only an up-to-date analysis is used; otherwise (an older document, unreadable) the parser is asked.
+    private async Task<ReplayAnalysis?> FromKeptDocumentAsync(MatchId matchId, CancellationToken cancellationToken)
+    {
+        if (await archive.FindAsync(matchId, cancellationToken) is not { } document)
+        {
+            return null;
+        }
+
+        try
+        {
+            var analysis = JsonSerializer.Deserialize<ReplayParserMatchResponse>(document, JsonOptions)?.ToReplayAnalysis(matchId);
+            if (analysis is { IsOutdated: false })
+            {
+                logger.LogInformation("Match {MatchId} was read again from its kept replay document", matchId);
+                return analysis;
+            }
+        }
+        catch (Exception ex) when (ex is JsonException or InvalidDataException or NotSupportedException)
+        {
+            logger.LogWarning(ex, "The kept replay document of match {MatchId} could not be used; the replay is parsed again", matchId);
+        }
+
+        return null;
     }
 
     // A new HttpRequestMessage each time: one can't be sent twice.

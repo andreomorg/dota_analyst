@@ -2,7 +2,9 @@ import { useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router';
 import { readSavedAccountId } from '../accountStorage';
 import { useCurrentUser } from '../auth/useCurrentUser';
+import DamageSection from './DamageSection';
 import DeathMap from './DeathMap';
+import FightsSection from './FightsSection';
 import LaningSection from './LaningSection';
 import MatchHeader from './MatchHeader';
 import PerformanceSummary from './PerformanceSummary';
@@ -131,6 +133,14 @@ function AnalysisContent({ analysis, accountId, replayPollingStopped }) {
             />
 
             {analysis.replayStatus === 'ready' && <TimelineSection timeline={analysis.timeline} />}
+
+            {analysis.replayStatus === 'ready' && (
+                <FightsSection fights={analysis.fights} isRadiant={performance ? performance.isRadiant : null} />
+            )}
+
+            {analysis.replayStatus === 'ready' && (
+                <DamageSection damage={analysis.damage} heroName={performance?.heroName} />
+            )}
 
             {analysis.replayStatus === 'ready' && <DeathMap deaths={analysis.deaths} />}
 

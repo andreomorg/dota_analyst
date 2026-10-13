@@ -853,6 +853,77 @@ a:focus-visible {
     margin: 0.5rem auto 0;
 }
 
+/* ----- Fights (FightsSection) ----- */
+.fights-section {
+    margin: 1.5rem 0;
+}
+
+.fights-table {
+    margin: 0.5rem auto;
+}
+
+/* ----- Damage (DamageSection): horizontal bars, one measure each, the value written beside ----- */
+.damage-section {
+    margin: 1.5rem 0;
+}
+
+.bar-groups {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 0 1.5rem;
+}
+
+.bar-group {
+    margin-bottom: 1rem;
+}
+
+.bar-group h3 {
+    font-size: 16px;
+    margin: 0.5rem 0;
+}
+
+.bar-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    text-align: left;
+}
+
+.bar-row {
+    display: grid;
+    grid-template-columns: minmax(6.5rem, 9rem) 1fr auto;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.2rem 0;
+}
+
+.bar-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text-h);
+}
+
+.bar-track {
+    height: 12px;
+    background: var(--chart-grid);
+    border-radius: 3px;
+}
+
+.bar-fill {
+    display: block;
+    height: 100%;
+    min-width: 2px;
+    background: var(--series-1);
+    border-radius: 3px;
+}
+
+.bar-value {
+    font-variant-numeric: tabular-nums;
+    min-width: 3.5rem;
+    text-align: right;
+}
+
 /* ----- Ward map (WardMap) ----- */
 .map-filters {
     display: flex;

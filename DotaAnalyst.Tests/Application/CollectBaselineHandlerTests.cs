@@ -1,6 +1,7 @@
 using DotaAnalyst.Application.Abstractions;
 using DotaAnalyst.Application.Baseline;
 using DotaAnalyst.Domain.Analysis;
+using DotaAnalyst.Domain.Items;
 using DotaAnalyst.Domain.Matches;
 using DotaAnalyst.Domain.Players;
 using DotaAnalyst.Domain.Replays;
@@ -28,6 +29,26 @@ public class CollectBaselineHandlerTests
         Assert.Equal((2L, BaselineSource.Pro, BaselineMatchStatus.Collected), (saved.MatchId.Value, saved.Source, saved.Status));
         Assert.Single(saved.Metrics);
         Assert.Equal([2L], parser.Parsed);
+    }
+
+    [Fact]
+    public async Task CollectingMatch_AddsFirstBigItemTimingToBaselineMetrics()
+    {
+        var parser = new FakeParser
+        {
+            Purchases = [new ItemPurchase(31, 900, "blink")],
+        };
+        var items = new FakeItemCatalog(
+            new Item(1, "Blink Dagger")
+            {
+                Details = new ItemDetails("blink", 2250, [], isConsumable: false),
+            });
+        var repository = new FakeBaseline();
+        var handler = CreateHandler(repository, parser, pro: [2], itemCatalog: items);
+
+        await handler.CollectNextAsync(CancellationToken.None);
+
+        Assert.Equal(900, Assert.Single(Assert.Single(repository.Saved).Metrics).FirstBigItemSeconds);
     }
 
     [Fact]
@@ -112,17 +133,20 @@ public class CollectBaselineHandlerTests
     }
 
     private static CollectBaselineHandler CreateHandler(
-        FakeBaseline repository, FakeParser parser, long[] pro, long[]? highRank = null, bool withReplay = true) =>
-        CreateHandler(repository, parser, new FakeSource(pro, highRank ?? []), withReplay: withReplay);
+        FakeBaseline repository, FakeParser parser, long[] pro, long[]? highRank = null, bool withReplay = true,
+        IItemCatalog? itemCatalog = null) =>
+        CreateHandler(repository, parser, new FakeSource(pro, highRank ?? []), withReplay: withReplay, itemCatalog: itemCatalog);
 
     private static CollectBaselineHandler CreateHandler(
-        FakeBaseline repository, FakeParser parser, FakeSource source, int[]? recentHeroes = null, bool withReplay = true) =>
+        FakeBaseline repository, FakeParser parser, FakeSource source, int[]? recentHeroes = null, bool withReplay = true,
+        IItemCatalog? itemCatalog = null) =>
         new(
             source,
             repository,
             new FakeAnalyzer(withReplay ? ReplayUrl : null),
             parser,
             new FakeMatches(recentHeroes ?? []),
+            itemCatalog ?? new FakeItemCatalog(),
             new BaselineCollectorSettings(300, recentHeroes is null ? [] : [FocusAccount]),
             new FixedTimeProvider(Now),
             NullLogger<CollectBaselineHandler>.Instance);
@@ -198,6 +222,8 @@ public class CollectBaselineHandlerTests
     {
         public Exception? Throw { get; init; }
 
+        public IReadOnlyList<ItemPurchase> Purchases { get; init; } = [];
+
         public List<long> Parsed { get; } = [];
 
         public Task<ReplayAnalysis> ParseAsync(MatchId matchId, Uri replayUrl, CancellationToken cancellationToken)
@@ -210,9 +236,16 @@ public class CollectBaselineHandlerTests
             Parsed.Add(matchId.Value);
             var player = ReplayBuilder.Hero(31, Team.Radiant, Lane.Bottom);
             return Task.FromResult(new ReplayAnalysis(
-                matchId, ReplayAnalysis.LaningPhaseEndsAtSeconds, [player], ReplayBuilder.Timeline([player]), [], [], [], [], [],
-                [new HeroMetrics(31, Team.Radiant, 5, 1, 0, 0, 0, 0, 2000, null, 10, 1, 0, 0, null, 0, 0, RoleInferred: true)]));
+                matchId, ReplayAnalysis.LaningPhaseEndsAtSeconds, [player], ReplayBuilder.Timeline([player]),
+                deaths: [], wards: [], damage: [], purchases: Purchases, objectives: [],
+                metrics: [new HeroMetrics(31, Team.Radiant, 5, 1, 0, 0, 0, 0, 2000, null, 10, 1, 0, 0, null, 0, 0, RoleInferred: true)]));
         }
+    }
+
+    private sealed class FakeItemCatalog(params Item[] items) : IItemCatalog
+    {
+        public Task<IReadOnlyDictionary<int, Item>> GetItemsAsync(CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyDictionary<int, Item>>(items.ToDictionary(item => item.Id));
     }
 
     private static AccountId FocusAccount => AccountId.TryCreate(99517715, out var account) ? account : default;

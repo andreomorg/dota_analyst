@@ -39,7 +39,7 @@ public class ReplayAnalysisTests
         var currentReplay = new ReplayAnalysis(
             MatchIdOf(10), ReplayAnalysis.LaningPhaseEndsAtSeconds, [Hero(31, Team.Radiant, Lane.Bottom)],
             timeline: Timeline(Hero(31, Team.Radiant, Lane.Bottom)), deaths: [], wards: [], damage: [], purchases: [],
-            objectives: [], metrics: [currentMetrics], heatmaps: []);
+            objectives: [], metrics: [currentMetrics], heatmaps: [], abilityUpgrades: []);
 
         Assert.False(currentReplay.IsOutdated);
     }
@@ -54,6 +54,32 @@ public class ReplayAnalysisTests
 
         Assert.False(replay.IsOutdated);
         Assert.True(withoutHeatmaps.IsOutdated);
+    }
+
+    [Fact]
+    public void IsOutdated_WhenAbilityUpgradesAreMissing()
+    {
+        var current = Analysis(10, Hero(31, Team.Radiant, Lane.Bottom));
+        var old = new ReplayAnalysis(
+            current.MatchId, current.EndsAtSeconds, current.Players, current.Timeline, current.Deaths, current.Wards,
+            current.Damage, current.Purchases, current.Objectives, current.Metrics, current.Heatmaps);
+
+        Assert.False(current.IsOutdated);
+        Assert.True(old.IsOutdated);
+    }
+
+    [Fact]
+    public void AbilityUpgrades_AreKeptInTimeOrder()
+    {
+        var replay = new ReplayAnalysis(
+            MatchIdOf(10), 600, [Hero(31, Team.Radiant, Lane.Bottom)],
+            abilityUpgrades:
+            [
+                new AbilityUpgrade(31, 120, "lich_frost_shield", 2),
+                new AbilityUpgrade(31, -60, "lich_frost_nova", 1),
+            ]);
+
+        Assert.Equal([-60, 120], replay.AbilityUpgrades!.Select(upgrade => upgrade.Seconds));
     }
 
     [Fact]

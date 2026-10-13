@@ -86,14 +86,16 @@ public class ReplayAnalysisRepositoryTests(PostgresFixture postgres) : IAsyncLif
                     DeathsByRegionByPhase: new PerGamePhase<PerRegion<int>>(
                         new PerRegion<int>(0, 1, 0, 0, 0, 1, 0, 2),
                         new PerRegion<int>(1, 0, 0, 0, 0, 1, 0, 1),
-                        new PerRegion<int>(0, 0, 0, 1, 0, 1, 0, 0))),
+                        new PerRegion<int>(0, 0, 0, 1, 0, 1, 0, 0)),
+                    FirstBigItemSeconds: 900),
             ],
             heatmaps:
             [
                 new HeroHeatmap(31, new PerGamePhase<IReadOnlyList<HeatCell>>(
                     [new HeatCell(3, 28, 140), new HeatCell(4, 28, 60)], [new HeatCell(16, 16, 2)], []),
                     new PerGamePhase<TeamProximity>(new TeamProximity(120, 40), new TeamProximity(2, 1), default)),
-            ]);
+            ],
+            abilityUpgrades: [new AbilityUpgrade(31, 60, "lich_frost_nova", 1), new AbilityUpgrade(31, 300, "lich_chain_frost", 2)]);
         var repository = CreateRepository();
 
         await repository.SaveAsync(SavedReplayAnalysis.Ready(analysis, SavedAt), CancellationToken.None);
@@ -110,6 +112,7 @@ public class ReplayAnalysisRepositoryTests(PostgresFixture postgres) : IAsyncLif
         Assert.Equal(analysis.Heatmaps[0].Phases.MidGame, heatmap.Phases.MidGame);
         Assert.Empty(heatmap.Phases.LateGame);
         Assert.Equal(analysis.Heatmaps[0].Proximity, heatmap.Proximity);
+        Assert.Equal(analysis.AbilityUpgrades, found.Analysis.AbilityUpgrades);
     }
 
     [Fact]
@@ -233,6 +236,7 @@ public class ReplayAnalysisRepositoryTests(PostgresFixture postgres) : IAsyncLif
 
         Assert.NotNull(found?.Analysis);
         var metrics = Assert.Single(found.Analysis.Metrics!);
+        Assert.Null(metrics.FirstBigItemSeconds);
         Assert.Null(metrics.TimeByRegionByPhase);
         Assert.Null(metrics.DeathsByRegionByPhase);
         Assert.True(found.Analysis.IsOutdated);

@@ -72,4 +72,7 @@ public record HeroMetrics(
     // Net worth gained in the minutes the hero spent mostly in each region, and how many minutes those were (rate =
     // gain / minutes). Minutes the hero was dead all along are left out. Null for metrics computed before them.
     PerRegion<double>? NetWorthGainByRegion = null,
-    PerRegion<int>? MinutesByRegion = null);
+    PerRegion<int>? MinutesByRegion = null,
+    // Time when the first non-consumable, non-recipe build item worth at least 2000 gold was ready; null when none
+    // was recorded or the item catalog was unavailable.
+    int? FirstBigItemSeconds = null);

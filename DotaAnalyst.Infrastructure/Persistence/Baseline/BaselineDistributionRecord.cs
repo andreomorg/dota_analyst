@@ -11,6 +11,9 @@ public class BaselineDistributionRecord
 
     public int Role { get; set; }
 
+    // 0 is the general same-hero base; positive values are lane-opponent hero IDs.
+    public int OpponentHeroId { get; set; }
+
     // "pro" or "highRank".
     public string Source { get; set; } = "";
 
@@ -27,7 +30,8 @@ internal sealed class BaselineDistributionRecordConfiguration : IEntityTypeConfi
 {
     public void Configure(EntityTypeBuilder<BaselineDistributionRecord> builder)
     {
-        builder.HasKey(set => new { set.HeroId, set.Role, set.Source });
+        builder.HasKey(set => new { set.HeroId, set.Role, set.OpponentHeroId, set.Source });
+        builder.Property(set => set.OpponentHeroId).HasDefaultValue(0);
         builder.Property(set => set.Source).HasMaxLength(16);
         builder.Property(set => set.Distributions).HasColumnType("jsonb");
     }

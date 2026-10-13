@@ -21,7 +21,8 @@ public record ReplayAnalysis
         IReadOnlyList<ItemPurchase>? purchases = null,
         IReadOnlyList<MapObjective>? objectives = null,
         IReadOnlyList<HeroMetrics>? metrics = null,
-        IReadOnlyList<HeroHeatmap>? heatmaps = null)
+        IReadOnlyList<HeroHeatmap>? heatmaps = null,
+        IReadOnlyList<AbilityUpgrade>? abilityUpgrades = null)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(matchId.Value, nameof(matchId));
         ArgumentOutOfRangeException.ThrowIfNegative(endsAtSeconds);
@@ -87,11 +88,20 @@ public record ReplayAnalysis
         }
 
         Heatmaps = heatmaps?.ToList();
+        if (abilityUpgrades is not null && abilityUpgrades.Any(upgrade => upgrade is null))
+        {
+            throw new ArgumentException("A replay analysis can't have an empty ability upgrade.", nameof(abilityUpgrades));
+        }
+
+        AbilityUpgrades = abilityUpgrades?.OrderBy(upgrade => upgrade.Seconds).ToList();
     }
 
     // Where each hero spent its time alive (every match with positions, Turbo included); null for analyses made
     // before heatmaps existed.
     public IReadOnlyList<HeroHeatmap>? Heatmaps { get; }
+
+    // Every ability level-up from the replay, in time order; null for analyses saved before skill upgrades were read.
+    public IReadOnlyList<AbilityUpgrade>? AbilityUpgrades { get; }
 
     // The metrics of every hero (MatchMetricsCalculator); empty for a match without role queue (Turbo, unranked: no
     // metrics, by choice), null for analyses made before metrics existed.
@@ -119,7 +129,8 @@ public record ReplayAnalysis
     // (Analyses without damage were also read before deaths had assists.)
     public bool IsOutdated =>
         Timeline is null || Deaths is null || Wards is null || Damage is null || Purchases is null || Objectives is null
-        || Heatmaps is null || Heatmaps.Any(heatmap => heatmap.Proximity is null) || Metrics is null || Metrics.Any(hero =>
+        || Heatmaps is null || Heatmaps.Any(heatmap => heatmap.Proximity is null) || AbilityUpgrades is null
+        || Metrics is null || Metrics.Any(hero =>
             hero.TimeByRegion is null || hero.DeathsByRegion is null || hero.MovementSampleSegments is null
             || hero.TimeByRegionByPhase is null || hero.DeathsByRegionByPhase is null || hero.FightsNearby is null || hero.LaneDamageTaken is null || hero.TeamObserverUptime is null || hero.MinutesByRegion is null);
 

@@ -30,3 +30,6 @@ appsettings.*.local.json
 
 # Git worktrees created by Claude Code agents
 .claude/worktrees/
+
+# Local MCP servers of the editor (draw.io); not part of the project.
+.mcp.json

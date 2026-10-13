@@ -3,6 +3,7 @@ import { Link, useParams, useSearchParams } from 'react-router';
 import { readSavedAccountId } from '../accountStorage';
 import { useCurrentUser } from '../auth/useCurrentUser';
 import SectionHead from '../ui/SectionHead';
+import AbilityBuildSection from './AbilityBuildSection';
 import DamageSection from './DamageSection';
 import DeathMap from './DeathMap';
 import FightsSection from './FightsSection';
@@ -143,6 +144,7 @@ function tabsOf(analysis) {
         { key: 'tips', label: 'Dicas', visible: Boolean(analysis.performance) || (ready && Boolean(analysis.smartStats)) },
         { key: 'laning', label: 'Fase de rotas', visible: ready && Boolean(analysis.laning) },
         { key: 'items', label: 'Itens', visible: ready && Boolean(analysis.itemBuild) },
+        { key: 'abilities', label: 'Habilidades', visible: ready && (analysis.abilityBuild?.upgrades?.length ?? 0) > 0 },
         { key: 'economy', label: 'Economia e objetivos', visible: ready && ((analysis.timeline?.seconds?.length ?? 0) > 1 || Boolean(analysis.objectives)) },
         { key: 'fights', label: 'Lutas e dano', visible: ready && (Boolean(analysis.fights) || Boolean(analysis.damage)) },
         { key: 'maps', label: 'Mapas', visible: ready && ((analysis.heatmaps?.heroes?.length ?? 0) > 0 || Boolean(analysis.deaths) || (analysis.wards?.length ?? 0) > 0) },
@@ -323,6 +325,7 @@ function AnalysisContent({ analysis, accountId, replayPollingStopped }) {
                 )}
 
                 {active === 'items' && <ItemBuildSection itemBuild={analysis.itemBuild} />}
+                {active === 'abilities' && <AbilityBuildSection abilityBuild={analysis.abilityBuild} heroName={performance?.heroName} />}
 
                 {active === 'economy' && (
                     <>
@@ -376,4 +379,3 @@ function AnalysisContent({ analysis, accountId, replayPollingStopped }) {
 }
 
 export default MatchAnalysisPage;
-

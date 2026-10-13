@@ -30,7 +30,9 @@ internal sealed record StoredReplayAnalysis(
     // Added in sprint 17, the same way (empty: a match without role queue).
     IReadOnlyList<StoredHeroMetrics>? Metrics = null,
     // Added with the heatmaps, the same way.
-    IReadOnlyList<StoredHeatmap>? Heatmaps = null);
+    IReadOnlyList<StoredHeatmap>? Heatmaps = null,
+    // Added when the match page began showing the player's skill build; older rows are re-read from the replay.
+    IReadOnlyList<StoredAbilityUpgrade>? AbilityUpgrades = null);
 
 // Each phase as a flat list [column, row, samples, column, row, samples, ...]: a match's heatmaps are about 30
 // lists of a few hundred cells, and objects per cell would triple the size of the row.
@@ -39,6 +41,8 @@ internal sealed record StoredReplayAnalysis(
 internal sealed record StoredHeatmap(
     int HeroId, IReadOnlyList<int> EarlyGame, IReadOnlyList<int> MidGame, IReadOnlyList<int> LateGame,
     IReadOnlyList<int>? Proximity = null);
+
+internal sealed record StoredAbilityUpgrade(int HeroId, int Seconds, string AbilityName, int Level);
 
 internal sealed record StoredHeroMetrics(
     int HeroId, Team Team, int Role, int Deaths, int IsolatedDeaths, int DeathsOnEnemySide, double EnemySideShare,
@@ -67,7 +71,9 @@ internal sealed record StoredHeroMetrics(
     double? TeamObserverUptime = null,
     double? LeadLostPerDeath = null,
     IReadOnlyDictionary<MapRegion, double>? NetWorthGainByRegion = null,
-    IReadOnlyDictionary<MapRegion, int>? MinutesByRegion = null);
+    IReadOnlyDictionary<MapRegion, int>? MinutesByRegion = null,
+    // Added after the first-item timing metric; null in older metric rows.
+    int? FirstBigItemSeconds = null);
 
 internal sealed record StoredRegionPhases<T>(
     IReadOnlyDictionary<MapRegion, T> EarlyGame,
@@ -220,6 +226,10 @@ internal static class StoredReplayMappings
                         : new HeroHeatmap(heatmap.HeroId, new PerGamePhase<IReadOnlyList<HeatCell>>(
                             ToCells(heatmap.EarlyGame), ToCells(heatmap.MidGame), ToCells(heatmap.LateGame)),
                             ToProximity(heatmap.Proximity)))
+                    .ToList(),
+                stored.AbilityUpgrades?.Select(upgrade => upgrade is null
+                    ? throw new InvalidDataException("A saved replay analysis has an empty ability upgrade.")
+                    : new AbilityUpgrade(upgrade.HeroId, upgrade.Seconds, upgrade.AbilityName, upgrade.Level))
                     .ToList());
         }
         catch (ArgumentException ex)
@@ -276,6 +286,10 @@ internal static class StoredReplayMappings
                         ? [proximity.EarlyGame.NearAlly, proximity.EarlyGame.Grouped, proximity.MidGame.NearAlly,
                             proximity.MidGame.Grouped, proximity.LateGame.NearAlly, proximity.LateGame.Grouped]
                         : null))
+                .ToList(),
+            AbilityUpgrades: analysis.AbilityUpgrades?
+                .Select(upgrade => new StoredAbilityUpgrade(
+                    upgrade.HeroId, upgrade.Seconds, upgrade.AbilityName, upgrade.Level))
                 .ToList());
 
     private static PerGamePhase<TeamProximity>? ToProximity(IReadOnlyList<int>? flat) => flat switch
@@ -316,7 +330,8 @@ internal static class StoredReplayMappings
             hero.TeamFights, hero.FightsNearby, hero.KillParticipation, hero.QuickRedeaths, hero.LaneDamageDealt, hero.LaneDamageTaken,
             hero.TeamObserverUptime, hero.LeadLostPerDeath,
             hero.NetWorthGainByRegion is { } gain ? PerRegion<double>.Of(gain.GetValueOrDefault) : null,
-            hero.MinutesByRegion is { } minutes ? PerRegion<int>.Of(minutes.GetValueOrDefault) : null);
+            hero.MinutesByRegion is { } minutes ? PerRegion<int>.Of(minutes.GetValueOrDefault) : null,
+            hero.FirstBigItemSeconds);
 
     public static StoredHeroMetrics ToStored(HeroMetrics hero) =>
         new(hero.HeroId, hero.Team, hero.Role, hero.Deaths, hero.IsolatedDeaths, hero.DeathsOnEnemySide,
@@ -334,7 +349,8 @@ internal static class StoredReplayMappings
             hero.TeamFights, hero.FightsNearby, hero.KillParticipation, hero.QuickRedeaths, hero.LaneDamageDealt, hero.LaneDamageTaken,
             hero.TeamObserverUptime, hero.LeadLostPerDeath,
             hero.NetWorthGainByRegion is { } gain ? ByRegion(gain) : null,
-            hero.MinutesByRegion is { } minutes ? ByRegion(minutes) : null);
+            hero.MinutesByRegion is { } minutes ? ByRegion(minutes) : null,
+            hero.FirstBigItemSeconds);
 
     private static PerGamePhase<PerRegion<T>> ToDomain<T>(StoredRegionPhases<T> phases) =>
         new(ToRegion(phases.EarlyGame), ToRegion(phases.MidGame), ToRegion(phases.LateGame));

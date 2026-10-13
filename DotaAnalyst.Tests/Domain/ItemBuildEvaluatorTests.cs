@@ -67,6 +67,34 @@ public class ItemBuildEvaluatorTests
         Assert.Equal(
             [new BuildItem("bottle", 400, Assembled: false), new BuildItem("swift_blink", 1600, Assembled: true)],
             build.Items);
+        Assert.Equal(1600, build.FirstBigItemSeconds);
+    }
+
+    [Fact]
+    public void FirstBigItem_IsFirstBuildStepWorthAtLeastTwoThousand()
+    {
+        var build = Evaluate(
+            Buy(400, "bottle"), Buy(500, "blink"), Buy(700, "eagle"),
+            Buy(800, "recipe_swift_blink"), Buy(900, "swift_blink"));
+
+        // Blink is later consumed to assemble Swift Blink, so the first qualifying surviving build item is Swift Blink.
+        Assert.Equal(900, build.FirstBigItemSeconds);
+    }
+
+    [Fact]
+    public void FirstBigItem_UsesAnInclusiveTwoThousandGoldThreshold()
+    {
+        var catalog = new[]
+        {
+            Item("below_threshold", 1999),
+            Item("at_threshold", 2000),
+        }.ToDictionary(item => item.Key);
+
+        var build = ItemBuildEvaluator.Evaluate(
+            [Buy(500, "below_threshold"), Buy(800, "at_threshold")],
+            catalog);
+
+        Assert.Equal(800, build.FirstBigItemSeconds);
     }
 
     [Fact]

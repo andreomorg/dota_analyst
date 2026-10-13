@@ -31,6 +31,8 @@ public class BaselineMetricsRecord
 
     public int Role { get; set; }
 
+    public int? OpponentHeroId { get; set; }
+
     public string Source { get; set; } = "";
 
     public DateTimeOffset StartTime { get; set; }
@@ -63,5 +65,6 @@ internal sealed class BaselineMetricsRecordConfiguration : IEntityTypeConfigurat
         builder.Property(metrics => metrics.Metrics).HasColumnType("jsonb");
         // The comparison's query.
         builder.HasIndex(metrics => new { metrics.HeroId, metrics.Role, metrics.Source, metrics.StartTime });
+        builder.HasIndex(metrics => new { metrics.HeroId, metrics.Role, metrics.OpponentHeroId, metrics.Source, metrics.StartTime });
     }
 }

@@ -17,9 +17,10 @@ public class BaselineRepositoryTests(PostgresFixture postgres) : IAsyncLifetime
 
     public Task DisposeAsync() => Task.CompletedTask;
 
-    private static HeroMetrics Hero(int heroId, int role, int deaths) =>
-        new(heroId, Team.Radiant, role, deaths, 1, 0, 0.2, 0.05, 3000, 7000, 40, 0.25, 0, 0, null, 0, 0,
-            PerRegion<double>.Of(_ => 0.125), PerRegion<int>.Of(region => region == MapRegion.River ? 1 : 0), RoleInferred: true);
+    private static HeroMetrics Hero(int heroId, int role, int deaths, Team team = Team.Radiant) =>
+        new(heroId, team, role, deaths, 1, 0, 0.2, 0.05, 3000, 7000, 40, 0.25, 0, 0, null, 0, 0,
+            PerRegion<double>.Of(_ => 0.125), PerRegion<int>.Of(region => region == MapRegion.River ? 1 : 0),
+            RoleInferred: true, FirstBigItemSeconds: 900);
 
     private static BaselineMatch Collected(long matchId, BaselineSource source, DateTimeOffset start, params HeroMetrics[] heroes) =>
         new(ReplayBuilder.MatchIdOf(matchId), source, start, 2100, BaselineMatchStatus.Collected, heroes, Now);
@@ -37,6 +38,26 @@ public class BaselineRepositoryTests(PostgresFixture postgres) : IAsyncLifetime
         var sample = Assert.Single(samples);
         Assert.Equal(Hero(31, 5, 3), sample.Metrics);
         Assert.Equal(2100, sample.MatchSeconds);
+    }
+
+    [Fact]
+    public async Task SaveThenRead_LaneMatchupSamplesByBothHeroesAndRole()
+    {
+        var repository = CreateRepository();
+        await repository.SaveAsync(
+            Collected(1, BaselineSource.Pro, Now.AddDays(-1),
+                Hero(31, 5, 3), Hero(44, 4, 2, Team.Dire)),
+            CancellationToken.None);
+
+        var groups = await repository.GetMatchupGroupsAsync(Now.AddDays(-60), CancellationToken.None);
+        var sample = Assert.Single(await repository.GetMatchupSamplesAsync(
+            31, 5, 44, BaselineSource.Pro, Now.AddDays(-60), CancellationToken.None));
+        var generalSamples = await repository.GetSamplesAsync(31, 5, BaselineSource.Pro, Now.AddDays(-60), CancellationToken.None);
+
+        Assert.Contains((31, 5, 44, BaselineSource.Pro), groups);
+        Assert.Equal((31, 2100), (sample.Metrics.HeroId, sample.MatchSeconds));
+        Assert.Equal(44, sample.OpponentHeroId);
+        Assert.Single(generalSamples);
     }
 
     [Fact]
@@ -108,6 +129,16 @@ public class BaselineRepositoryTests(PostgresFixture postgres) : IAsyncLifetime
         Assert.NotNull(set);
         Assert.Equal(10, set.Matches);
         Assert.Equal(distributions, set.Distributions);
+        await store.ReplaceAllAsync(
+            [
+                new(31, 5, BaselineSource.Pro, 10, distributions),
+                new(31, 5, BaselineSource.Pro, 12, distributions, 44),
+            ],
+            Now, CancellationToken.None);
+        var matchup = await store.FindMatchupAsync(31, 5, 44, BaselineSource.Pro, CancellationToken.None);
+        Assert.NotNull(matchup);
+        Assert.Equal(12, matchup.Matches);
+        Assert.Equal(44, matchup.OpponentHeroId);
         Assert.Null(await store.FindAsync(31, 5, BaselineSource.HighRank, CancellationToken.None));
     }
 

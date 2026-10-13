@@ -51,4 +51,14 @@ public interface IBaselineRepository
     /// <exception cref="StorageUnavailableException">The database could not be read.</exception>
     Task<IReadOnlyList<BaselineSample>> GetSamplesAsync(
         int heroId, int role, BaselineSource source, DateTimeOffset since, CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<(int HeroId, int Role, int OpponentHeroId, BaselineSource Source)>> GetMatchupGroupsAsync(
+        DateTimeOffset since, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<(int, int, int, BaselineSource)>>([]);
+
+    // A hero's metrics when the opposing lane hero and source also match.
+    Task<IReadOnlyList<BaselineSample>> GetMatchupSamplesAsync(
+        int heroId, int role, int opponentHeroId, BaselineSource source, DateTimeOffset since,
+        CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<BaselineSample>>([]);
 }

@@ -1620,6 +1620,51 @@ details[open] > summary {
     padding-bottom: 0.25rem;
 }
 
+/* ----- Skill build (AbilityBuildSection): one row per ability, one column per hero level ----- */
+.ability-grid {
+    font-size: 13px;
+}
+
+.ability-grid th,
+.ability-grid td {
+    padding: 0;
+    border: 1px solid var(--divider);
+    text-align: center;
+}
+
+.ability-grid thead th {
+    padding: 0.35rem 0;
+    min-width: 30px;
+    background: var(--surface-lowest);
+    color: var(--text);
+    font-size: 12px;
+}
+
+.ability-grid tbody th,
+.ability-grid thead th:first-child {
+    padding: 0.35rem 0.75rem;
+    min-width: 11rem;
+    color: var(--text-h);
+    font-weight: 500;
+    text-align: left;
+    white-space: nowrap;
+}
+
+.ability-cell {
+    width: 30px;
+    height: 30px;
+}
+
+.ability-cell.is-taken {
+    background: var(--primary-bg);
+    color: var(--primary);
+    font-weight: 700;
+}
+
+.ability-cell.is-talent {
+    background: rgba(241, 179, 67, 0.14);
+    color: var(--amber);
+}
 .item-timeline {
     position: relative;
     display: flex;
@@ -2296,6 +2341,18 @@ details[open] > summary {
     margin-top: 0.85rem;
     color: var(--text);
     font-size: 12px;
+}
+
+.heatmap-indicators {
+    margin-top: 1.25rem;
+}
+
+.indicator-hint {
+    display: block;
+    color: var(--text-muted);
+    font-size: 11.5px;
+    font-weight: 400;
+    line-height: 1.4;
 }
 
 .heatmap-legend-bar {

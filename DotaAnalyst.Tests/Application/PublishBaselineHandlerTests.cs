@@ -44,8 +44,38 @@ public class PublishBaselineHandlerTests
         Assert.Null(mirror.Sets);
     }
 
-    private sealed class RawBase(Dictionary<(int, int, BaselineSource), List<BaselineSample>> groups) : IBaselineRepository
+    [Fact]
+    public async Task PublishesLaneMatchupDistributionsAlongsideGeneralHeroDistributions()
     {
+        var local = new Store();
+        var matchups = new Dictionary<(int, int, int, BaselineSource), List<BaselineSample>>
+        {
+            [(31, 5, 44, BaselineSource.Pro)] = Enumerable.Range(1, 12)
+                .Select(deaths => Sample(deaths) with { OpponentHeroId = 44 })
+                .ToList(),
+            // Too few matches to compare anything: not published (the mirror stays small).
+            [(31, 5, 77, BaselineSource.Pro)] = Enumerable.Range(1, 3)
+                .Select(deaths => Sample(deaths) with { OpponentHeroId = 77 })
+                .ToList(),
+        };
+        var raw = new RawBase([], matchups);
+
+        await new PublishBaselineHandler(raw, local, new Mirror(configured: false),
+                new FixedTimeProvider(Now), NullLogger<PublishBaselineHandler>.Instance)
+            .PublishAsync(CancellationToken.None);
+
+        var matchup = Assert.Single(local.Sets!);
+        Assert.Equal((31, 5, 44, 12),
+            (matchup.HeroId, matchup.Role, matchup.OpponentHeroId, matchup.Matches));
+        Assert.Contains(matchup.Distributions, distribution => distribution.Metric == ComparedMetric.DeathsPer30);
+    }
+
+    private sealed class RawBase(
+        Dictionary<(int, int, BaselineSource), List<BaselineSample>> groups,
+        Dictionary<(int, int, int, BaselineSource), List<BaselineSample>>? matchups = null) : IBaselineRepository
+    {
+        private readonly Dictionary<(int, int, int, BaselineSource), List<BaselineSample>> _matchups = matchups ?? [];
+
         public DateTimeOffset Since { get; private set; }
 
         public Task<IReadOnlySet<long>> FindKnownAsync(IReadOnlyCollection<MatchId> matchIds, CancellationToken cancellationToken) =>
@@ -68,6 +98,15 @@ public class PublishBaselineHandlerTests
         public Task<IReadOnlyList<BaselineSample>> GetSamplesAsync(
             int heroId, int role, BaselineSource source, DateTimeOffset since, CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlyList<BaselineSample>>(groups[(heroId, role, source)]);
+
+        public Task<IReadOnlyList<(int HeroId, int Role, int OpponentHeroId, BaselineSource Source)>> GetMatchupGroupsAsync(
+            DateTimeOffset since, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<(int, int, int, BaselineSource)>>(_matchups.Keys.ToList());
+
+        public Task<IReadOnlyList<BaselineSample>> GetMatchupSamplesAsync(
+            int heroId, int role, int opponentHeroId, BaselineSource source, DateTimeOffset since,
+            CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<BaselineSample>>(_matchups[(heroId, role, opponentHeroId, source)]);
     }
 
     private sealed class Store : IBaselineDistributionStore

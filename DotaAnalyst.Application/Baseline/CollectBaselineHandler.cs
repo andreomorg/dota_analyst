@@ -33,6 +33,7 @@ public class CollectBaselineHandler(
     IReplayAnalyzer replayAnalyzer,
     IReplayParser replayParser,
     IMatchProvider matchProvider,
+    IItemCatalog itemCatalog,
     BaselineCollectorSettings settings,
     TimeProvider timeProvider,
     ILogger<CollectBaselineHandler> logger)
@@ -111,7 +112,10 @@ public class CollectBaselineHandler(
         try
         {
             var analysis = await replayParser.ParseAsync(candidate.MatchId, replayUrl, cancellationToken);
-            await SaveAsync(candidate, details, BaselineMatchStatus.Collected, analysis.Metrics ?? [], now, cancellationToken);
+            var metrics = analysis.Metrics is { } replayMetrics && analysis.Purchases is { } purchases
+                ? FirstBigItemMetric.AddTo(replayMetrics, purchases, await itemCatalog.GetItemsAsync(cancellationToken))
+                : analysis.Metrics ?? [];
+            await SaveAsync(candidate, details, BaselineMatchStatus.Collected, metrics, now, cancellationToken);
             logger.LogInformation(
                 "Collected {Source} match {MatchId} for the comparison base", candidate.Source, candidate.MatchId.Value);
         }

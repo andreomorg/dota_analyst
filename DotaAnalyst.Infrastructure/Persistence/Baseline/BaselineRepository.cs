@@ -60,6 +60,9 @@ public class BaselineRepository(
                     MatchId = match.MatchId.Value,
                     HeroId = hero.HeroId,
                     Role = hero.Role,
+                    OpponentHeroId = LaneMatchup.OpposingRole(hero.Role) is { } opposingRole
+                        ? match.Metrics.FirstOrDefault(other => other.Team != hero.Team && other.Role == opposingRole)?.HeroId
+                        : null,
                     Source = source,
                     StartTime = start,
                     DurationSeconds = match.DurationSeconds,
@@ -111,6 +114,24 @@ public class BaselineRepository(
                 .ToList();
         });
 
+    public Task<IReadOnlyList<(int HeroId, int Role, int OpponentHeroId, BaselineSource Source)>> GetMatchupGroupsAsync(
+        DateTimeOffset since, CancellationToken cancellationToken) =>
+        storageGuard.RunAsync("listing the comparison base's lane matchups", async () =>
+        {
+            var from = since.ToUniversalTime();
+            await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+            var groups = await db.BaselineMetrics
+                .AsNoTracking()
+                .Where(row => row.StartTime >= from && row.OpponentHeroId != null)
+                .Select(row => new { row.HeroId, row.Role, OpponentHeroId = row.OpponentHeroId!.Value, row.Source })
+                .Distinct()
+                .ToListAsync(cancellationToken);
+            return (IReadOnlyList<(int, int, int, BaselineSource)>)groups
+                .Select(group => (group.HeroId, group.Role, group.OpponentHeroId,
+                    group.Source == SourceName(BaselineSource.Pro) ? BaselineSource.Pro : BaselineSource.HighRank))
+                .ToList();
+        });
+
     public Task<IReadOnlyList<BaselineSample>> GetSamplesAsync(
         int heroId, int role, BaselineSource source, DateTimeOffset since, CancellationToken cancellationToken) =>
         storageGuard.RunAsync($"reading the comparison base of hero {heroId}", async () =>
@@ -137,6 +158,39 @@ public class BaselineRepository(
                 {
                     // One unreadable row only leaves the base a little smaller.
                     logger.LogWarning(ex, "A comparison base row of hero {HeroId} can't be read", heroId);
+                }
+            }
+
+            return (IReadOnlyList<BaselineSample>)samples;
+        });
+
+    public Task<IReadOnlyList<BaselineSample>> GetMatchupSamplesAsync(
+        int heroId, int role, int opponentHeroId, BaselineSource source, DateTimeOffset since,
+        CancellationToken cancellationToken) =>
+        storageGuard.RunAsync($"reading the lane matchup base of hero {heroId}", async () =>
+        {
+            var name = SourceName(source);
+            var from = since.ToUniversalTime();
+            await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
+            var rows = await db.BaselineMetrics
+                .AsNoTracking()
+                .Where(row => row.HeroId == heroId && row.Role == role && row.OpponentHeroId == opponentHeroId
+                    && row.Source == name && row.StartTime >= from)
+                .Select(row => new { row.Metrics, row.DurationSeconds })
+                .ToListAsync(cancellationToken);
+
+            var samples = new List<BaselineSample>();
+            foreach (var row in rows)
+            {
+                try
+                {
+                    var stored = JsonSerializer.Deserialize<StoredHeroMetrics>(row.Metrics, StoredReplayMappings.JsonOptions)
+                        ?? throw new InvalidDataException("Empty metrics.");
+                    samples.Add(new BaselineSample(StoredReplayMappings.ToDomain(stored), row.DurationSeconds, opponentHeroId));
+                }
+                catch (Exception ex) when (ex is JsonException or InvalidDataException or ArgumentException)
+                {
+                    logger.LogWarning(ex, "A lane matchup base row of hero {HeroId} can't be read", heroId);
                 }
             }
 

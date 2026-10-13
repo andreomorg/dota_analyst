@@ -1,4 +1,4 @@
-import { formatNumber, toPercent } from '../matches/format';
+import { formatDuration, formatNumber, toPercent } from '../matches/format';
 import SectionHead from '../ui/SectionHead';
 import { INSIGHT_TITLES, insightText, lifetime, percent, plain, ROLES } from './insights';
 import { metricLabel } from './metrics';
@@ -42,6 +42,7 @@ const GROUPS = [
             { key: 'lastHitsAt10', label: 'Last hits aos 10:00', format: plain },
             { key: 'netWorthAt10', label: 'Patrimônio aos 10:00', format: plain },
             { key: 'netWorthAt20', label: 'Patrimônio aos 20:00', format: plain },
+            { key: 'firstBigItemSeconds', label: 'Primeiro item grande', format: value => formatDuration(Math.round(value)) },
             { key: 'netWorthShare', label: 'Parte do patrimônio do time', format: percent },
             { key: 'laneDamageDealt', label: 'Dano causado em heróis até 10:00', format: plain },
             { key: 'laneDamageTaken', label: 'Dano recebido de heróis até 10:00', format: plain },
@@ -262,6 +263,7 @@ const COMPARED = {
     laneDamageTaken: { label: 'Dano recebido de heróis até 10:00', format: plain },
     teamObserverUptime: { label: 'Tempo com observer do time', format: percent },
     leadLostPerDeath: { label: 'Vantagem do time perdida por morte', format: value => formatNumber(Math.round(value)) },
+    firstBigItemSeconds: { label: 'Primeiro item grande', format: value => formatDuration(Math.round(value)) },
 };
 
 const SOURCES = { pro: 'Profissionais', highRank: 'Alto nível' };
@@ -287,7 +289,7 @@ function BetterThan({ share }) {
 }
 
 // The player against other players of the same hero and role, from the comparison base (pro and high-rank matches).
-function BaselineTable({ baselines, role, heroName }) {
+function BaselineTable({ baselines, role, heroName, opponentHeroName }) {
     if (!baselines) {
         return null;
     }
@@ -299,11 +301,19 @@ function BaselineTable({ baselines, role, heroName }) {
 
     return (
         <div className="card">
-            <h3 className="card-title">Comparado com outros jogadores de {heroName} como {ROLES[role] ?? `posição ${role}`}</h3>
+            <h3 className="card-title">
+                {opponentHeroName
+                    ? `${heroName} contra ${opponentHeroName} na rota`
+                    : `Comparado com outros jogadores de ${heroName} como ${ROLES[role] ?? `posição ${role}`}`}
+            </h3>
             {usable.length > 0 && (
                 <div className="table-scroll">
                     <table className="data-table">
-                        <caption className="visually-hidden">Seus números contra os de outros jogadores do mesmo herói e posição</caption>
+                        <caption className="visually-hidden">
+                            {opponentHeroName
+                                ? `Seus números de ${heroName} contra ${opponentHeroName} na rota`
+                                : 'Seus números contra os de outros jogadores do mesmo herói e posição'}
+                        </caption>
                         <thead>
                             <tr>
                                 <th scope="col">Métrica</th>
@@ -345,12 +355,13 @@ function BaselineTable({ baselines, role, heroName }) {
             {small.map(baseline => (
                 <p key={baseline.source} className="section-note">
                     {SOURCES[baseline.source] ?? baseline.source}: a base ainda tem {baseline.matches}{' '}
-                    {baseline.matches === 1 ? 'partida' : 'partidas'} deste herói nesta posição (são precisas 10 para comparar).
+                    {baseline.matches === 1 ? 'partida' : 'partidas'} deste herói
+                    {opponentHeroName ? ` contra ${opponentHeroName}` : ''} nesta posição (são precisas 10 para comparar).
                     Ela cresce sozinha com o coletor.
                 </p>
             ))}
             <p className="section-note">
-                &quot;Melhor que&quot;: em quantas partidas da base você foi melhor (em mortes, dano recebido e vantagem perdida, menos é melhor). Contagens
+                &quot;Melhor que&quot;: em quantas partidas da base você foi melhor (em mortes, dano recebido, vantagem perdida e tempo até o primeiro item grande, menos é melhor). Contagens
                 por 30 minutos de jogo, porque as partidas têm durações diferentes. Partidas dos últimos 60 dias; nas
                 profissionais a posição é deduzida pela rota e pelo patrimônio aos 10:00.
             </p>
@@ -466,6 +477,14 @@ function SmartStatsSection({ performance, smartStats }) {
 
             <div className="stack">
                 <BaselineTable baselines={smartStats.baselines} role={smartStats.role} heroName={performance?.heroName ?? 'seu herói'} />
+                {smartStats.laneMatchupHeroName && smartStats.laneMatchupBaselines && (
+                    <BaselineTable
+                        baselines={smartStats.laneMatchupBaselines}
+                        role={smartStats.role}
+                        heroName={performance?.heroName ?? 'seu herói'}
+                        opponentHeroName={smartStats.laneMatchupHeroName}
+                    />
+                )}
                 <CounterpartTable smartStats={smartStats} />
                 {hasPhaseMetrics && (
                     <details className="card">

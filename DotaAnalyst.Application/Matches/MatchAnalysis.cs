@@ -26,6 +26,7 @@ namespace DotaAnalyst.Application.Matches;
 /// <param name="SmartStats">Numbers that show where the player could improve (positioning, economy, vision), compared with the enemy of the same role and the match average, and what to improve; null unless replayStatus is ready and the player is in the match, and for matches without role queue (Turbo, unranked).</param>
 /// <param name="ItemBuild">The player's starting items and when each item of the build was ready (approximate: items sold or given away still count); null unless replayStatus is ready and the player is in the match, or when the item catalog is unavailable.</param>
 /// <param name="Heatmaps">Where each of the ten heroes spent its time alive, per game phase, read from the replay; null unless replayStatus is ready (and for replays read before heatmaps existed).</param>
+/// <param name="AbilityBuild">The player's ability level-ups in replay order; null unless replayStatus is ready and the player is in the match.</param>
 public record MatchAnalysis(
     long MatchId,
     int DurationSeconds,
@@ -47,7 +48,18 @@ public record MatchAnalysis(
     PlayerItemBuild? ItemBuild = null,
     IReadOnlyList<MapObjectiveSummary>? Objectives = null,
     SmartStats? SmartStats = null,
-    HeatmapSet? Heatmaps = null);
+    HeatmapSet? Heatmaps = null,
+    PlayerAbilityBuild? AbilityBuild = null);
+
+/// <summary>The ability level-ups of the player whose point of view the analysis uses.</summary>
+/// <param name="Upgrades">Ability names and levels in the order recorded by the replay.</param>
+public record PlayerAbilityBuild(IReadOnlyList<AbilityBuildUpgrade> Upgrades);
+
+/// <summary>One ability level-up in the replay.</summary>
+/// <param name="Seconds">Game-clock time in seconds.</param>
+/// <param name="AbilityName">The parser's internal ability name.</param>
+/// <param name="Level">The resulting level of this ability.</param>
+public record AbilityBuildUpgrade(int Seconds, string AbilityName, int Level);
 
 /// <summary>Where each hero spent its time alive, as a grid over the map (column 0 = west edge, row 0 = north edge), per game phase.</summary>
 /// <param name="GridSize">Columns and rows of the grid.</param>
@@ -375,6 +387,9 @@ public record MapObjectiveSummary(
 /// <param name="Counterpart">The numbers of the enemy of the same role.</param>
 /// <param name="MatchAverage">The average of the ten heroes.</param>
 /// <param name="Baselines">The player against other players of the same hero and role: pro matches and high-rank public matches of the last 60 days (one entry per source, even when empty); null when the comparison base could not be read.</param>
+/// <param name="LaneMatchupHeroId">The opposing lane hero used for the lane matchup baseline, when it could be identified.</param>
+/// <param name="LaneMatchupHeroName">Name of the opposing lane hero.</param>
+/// <param name="LaneMatchupBaselines">The player against this hero's lane matchup in pro and high-rank matches; each metric needs at least 10 samples, null if the comparison base could not be read.</param>
 /// <param name="Insights">What to improve (positioning, then economy, then vision); empty when nothing stands out.</param>
 public record SmartStats(
     int Role,
@@ -384,7 +399,10 @@ public record SmartStats(
     MetricsSummary Counterpart,
     MetricsSummary MatchAverage,
     IReadOnlyList<InsightSummary> Insights,
-    IReadOnlyList<BaselineComparisonSummary>? Baselines = null);
+    IReadOnlyList<BaselineComparisonSummary>? Baselines = null,
+    int? LaneMatchupHeroId = null,
+    string? LaneMatchupHeroName = null,
+    IReadOnlyList<BaselineComparisonSummary>? LaneMatchupBaselines = null);
 
 /// <summary>A hero's numbers (or the match average) for the smart stats.</summary>
 /// <param name="Deaths">Deaths (Aegis deaths included).</param>
@@ -418,6 +436,7 @@ public record SmartStats(
 /// <param name="LeadLostPerDeath">Average fall of the team's net worth lead from the minute of each death to the next (positive = lost; correlation, not cause); null without such deaths or for older metrics.</param>
 /// <param name="NetWorthGainByRegion">Net worth gained in the minutes spent mostly in each region (divide by MinutesByRegion for a rate per minute); null for older metrics.</param>
 /// <param name="MinutesByRegion">Minutes spent mostly in each region (minutes dead all along left out); null for older metrics.</param>
+/// <param name="FirstBigItemSeconds">Game-clock time when the first build item worth at least 2000 gold was ready; null when none was recorded.</param>
 public record MetricsSummary(
     double Deaths,
     double IsolatedDeaths,
@@ -449,7 +468,8 @@ public record MetricsSummary(
     double? TeamObserverUptime = null,
     double? LeadLostPerDeath = null,
     RegionValues? NetWorthGainByRegion = null,
-    RegionValues? MinutesByRegion = null);
+    RegionValues? MinutesByRegion = null,
+    double? FirstBigItemSeconds = null);
 
 /// <summary>Values for each region, split into early game (0-10 minutes), mid game (10-20 minutes), and late game (20+ minutes).</summary>
 public record RegionPhaseValues(RegionValues EarlyGame, RegionValues MidGame, RegionValues LateGame);

@@ -29,6 +29,19 @@ public class PublishBaselineHandler(
             sets.Add(new BaselineDistributionSet(heroId, role, source, samples.Count, BaselineComparer.Distribute(samples)));
         }
 
+        // Lane matchups (hero x role x lane opponent) are many and mostly small: only the ones with something to compare
+        // (a metric with enough matches) are published, so the mirror stays small.
+        foreach (var (heroId, role, opponentHeroId, source) in await repository.GetMatchupGroupsAsync(since, cancellationToken))
+        {
+            var samples = await repository.GetMatchupSamplesAsync(
+                heroId, role, opponentHeroId, source, since, cancellationToken);
+            var distributions = BaselineComparer.Distribute(samples);
+            if (distributions.Count > 0)
+            {
+                sets.Add(new BaselineDistributionSet(heroId, role, source, samples.Count, distributions, opponentHeroId));
+            }
+        }
+
         await localStore.ReplaceAllAsync(sets, now, cancellationToken);
         if (mirror.IsConfigured)
         {

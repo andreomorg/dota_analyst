@@ -30,10 +30,11 @@ public enum ComparedMetric
     LaneDamageTaken,
     TeamObserverUptime,
     LeadLostPerDeath,
+    FirstBigItemSeconds,
 }
 
 // One hero's metrics in one match of the base, with the match's length (for the per-30-minutes numbers).
-public record BaselineSample(HeroMetrics Metrics, int MatchSeconds);
+public record BaselineSample(HeroMetrics Metrics, int MatchSeconds, int? OpponentHeroId = null);
 
 // A metric's distribution in the base: the values at percentiles 0, 5, 10 ... 100 (QuantileCount points) and how
 // many matches it came from. What is published to production: small however big the base is.
@@ -82,6 +83,7 @@ public static class BaselineComparer
         (ComparedMetric.LaneDamageTaken, (hero, _) => hero.LaneDamageTaken, false),
         (ComparedMetric.TeamObserverUptime, (hero, _) => hero.TeamObserverUptime, true),
         (ComparedMetric.LeadLostPerDeath, (hero, _) => hero.LeadLostPerDeath, false),
+        (ComparedMetric.FirstBigItemSeconds, (hero, _) => hero.FirstBigItemSeconds, false),
     ];
 
     // The distribution of each metric the base has at least MinSampleSize values of.

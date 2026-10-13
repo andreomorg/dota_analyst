@@ -32,6 +32,12 @@ namespace DotaAnalyst.Infrastructure.Persistence.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("role");
 
+                    b.Property<int>("OpponentHeroId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("opponent_hero_id");
+
                     b.Property<string>("Source")
                         .HasMaxLength(16)
                         .HasColumnType("character varying(16)")
@@ -50,7 +56,7 @@ namespace DotaAnalyst.Infrastructure.Persistence.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("published_at");
 
-                    b.HasKey("HeroId", "Role", "Source")
+                    b.HasKey("HeroId", "Role", "OpponentHeroId", "Source")
                         .HasName("pk_baseline_distributions");
 
                     b.ToTable("baseline_distributions", (string)null);
@@ -114,6 +120,10 @@ namespace DotaAnalyst.Infrastructure.Persistence.Migrations
                         .HasColumnType("jsonb")
                         .HasColumnName("metrics");
 
+                    b.Property<int?>("OpponentHeroId")
+                        .HasColumnType("integer")
+                        .HasColumnName("opponent_hero_id");
+
                     b.Property<int>("Role")
                         .HasColumnType("integer")
                         .HasColumnName("role");
@@ -133,6 +143,9 @@ namespace DotaAnalyst.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("HeroId", "Role", "Source", "StartTime")
                         .HasDatabaseName("ix_baseline_metrics_hero_id_role_source_start_time");
+
+                    b.HasIndex("HeroId", "Role", "OpponentHeroId", "Source", "StartTime")
+                        .HasDatabaseName("ix_baseline_metrics_hero_id_role_opponent_hero_id_source_start");
 
                     b.ToTable("baseline_metrics", (string)null);
                 });

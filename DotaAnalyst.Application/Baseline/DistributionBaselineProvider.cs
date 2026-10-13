@@ -15,13 +15,23 @@ public class DistributionBaselineProvider(
 
     public async Task<IReadOnlyList<BaselineComparisonSummary>?> CompareAsync(
         HeroMetrics player, int matchSeconds, CancellationToken cancellationToken)
+        => await CompareAsync(player, matchSeconds, null, cancellationToken);
+
+    public async Task<IReadOnlyList<BaselineComparisonSummary>?> CompareLaneMatchupAsync(
+        HeroMetrics player, int opponentHeroId, int matchSeconds, CancellationToken cancellationToken)
+        => await CompareAsync(player, matchSeconds, opponentHeroId, cancellationToken);
+
+    private async Task<IReadOnlyList<BaselineComparisonSummary>?> CompareAsync(
+        HeroMetrics player, int matchSeconds, int? opponentHeroId, CancellationToken cancellationToken)
     {
         var baselines = new List<BaselineComparisonSummary>();
         try
         {
             foreach (var source in Sources)
             {
-                var set = await store.FindAsync(player.HeroId, player.Role, source, cancellationToken);
+                var set = opponentHeroId is { } opponent
+                    ? await store.FindMatchupAsync(player.HeroId, player.Role, opponent, source, cancellationToken)
+                    : await store.FindAsync(player.HeroId, player.Role, source, cancellationToken);
                 baselines.Add(new BaselineComparisonSummary(
                     source,
                     set?.Matches ?? 0,

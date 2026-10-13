@@ -23,7 +23,12 @@ internal sealed record ReplayParserMatchResponse(
     ReplayParserVision? Vision,
     ReplayParserCombat? Combat,
     ReplayParserItems? Items,
-    ReplayParserObjectives? Objectives);
+    ReplayParserObjectives? Objectives,
+    ReplayParserAbilities? Abilities);
+
+internal sealed record ReplayParserAbilities(IReadOnlyList<ReplayParserPlayerAbilityLevels?>? Upgrades);
+
+internal sealed record ReplayParserPlayerAbilityLevels(int? Player, IReadOnlyList<JsonElement>? Levels);
 
 internal sealed record ReplayParserObjectives(
     IReadOnlyList<ReplayParserBuildingKill?>? Buildings,
@@ -204,6 +209,16 @@ internal static class ReplayParserMappings
                 .Select(kill => ToCreatureObjective(ObjectiveKind.Tormentor, kill ?? throw Empty("tormentor"), HeroOfPlayer)))
             .ToList();
 
+        var abilityUpgrades = Required(response.Abilities?.Upgrades, "abilities.upgrades")
+            .Select(entry => entry ?? throw Empty("ability upgrades entry"))
+            .SelectMany(entry =>
+            {
+                var heroId = HeroOfPlayer(entry.Player ?? throw Missing("ability upgrades.player"))!.Value;
+                return Required(entry.Levels, "ability upgrades.levels")
+                    .Select(tuple => ToAbilityUpgrade(heroId, tuple));
+            })
+            .ToList();
+
         var timeline = new MatchTimeline(Seconds(count, duration), heroes);
         var positions = Required(response.Timelines?.Positions, "timelines.positions")
             .Select(entry => entry ?? throw Empty("positions entry"))
@@ -230,7 +245,7 @@ internal static class ReplayParserMappings
 
         return new ReplayAnalysis(
             matchId, endsAt, laningStats, timeline, deaths, wards, damage, purchases, mapObjectives, metrics,
-            positions.Select(hero => HeroHeatmap.FromPositions(hero, AlliesOf(hero))).ToList());
+            positions.Select(hero => HeroHeatmap.FromPositions(hero, AlliesOf(hero))).ToList(), abilityUpgrades);
 
         // The positions of the hero's teammates (the laning stats say each hero's team).
         IReadOnlyList<HeroPositions> AlliesOf(HeroPositions hero)
@@ -242,6 +257,27 @@ internal static class ReplayParserMappings
                     && laningStats.FirstOrDefault(player => player.HeroId == other.HeroId)?.Team == team)
                 .ToList();
         }
+    }
+
+    // [t, "ability_name", level] -> one ability upgrade.
+    private static AbilityUpgrade ToAbilityUpgrade(int heroId, JsonElement tuple)
+    {
+        if (tuple.ValueKind != JsonValueKind.Array || tuple.GetArrayLength() != 3
+            || tuple[0].ValueKind != JsonValueKind.Number
+            || tuple[1].ValueKind != JsonValueKind.String
+            || tuple[2].ValueKind != JsonValueKind.Number)
+        {
+            throw new InvalidDataException("An ability upgrade is not [t, ability, level].");
+        }
+
+        var abilityName = tuple[1].GetString();
+        if (string.IsNullOrWhiteSpace(abilityName) || !tuple[2].TryGetInt32(out var level))
+        {
+            throw new InvalidDataException("An ability upgrade has an invalid ability or level.");
+        }
+
+        return new AbilityUpgrade(
+            heroId, (int)Math.Round(tuple[0].GetDouble()), abilityName, level);
     }
 
     // [t, x, y] -> a position sample.

@@ -1,17 +1,19 @@
 import { useMemo, useState } from 'react';
 import { HeroIcon } from '../heroes/HeroImage';
 import GameMap from './GameMap';
+import HeatmapIndicators from './HeatmapIndicators';
 import { renderHeatmap, sumCells } from './heatmap';
 import { MINIMAP_ORIGIN, MINIMAP_SIZE, svgY, VIEW_BOX } from './mapGeometry';
 
 // Where the player spent the match, as a heatmap on the game's minimap, next to another hero (by default the enemy
 // of the same role). Like the heatmaps of a football player: red where they spent the most time.
 
+// indicators: the key of the phase in the API's indicators (HeatmapIndicators.jsx).
 const PHASES = [
-    { key: 'all', label: 'Partida inteira', fields: ['earlyGame', 'midGame', 'lateGame'], from: 0, to: Infinity },
-    { key: 'early', label: '0–10 min', fields: ['earlyGame'], from: 0, to: 600 },
-    { key: 'mid', label: '10–20 min', fields: ['midGame'], from: 600, to: 1200 },
-    { key: 'late', label: '20+ min', fields: ['lateGame'], from: 1200, to: Infinity },
+    { key: 'all', label: 'Partida inteira', fields: ['earlyGame', 'midGame', 'lateGame'], indicators: 'all', from: 0, to: Infinity },
+    { key: 'early', label: '0–10 min', fields: ['earlyGame'], indicators: 'earlyGame', from: 0, to: 600 },
+    { key: 'mid', label: '10–20 min', fields: ['midGame'], indicators: 'midGame', from: 600, to: 1200 },
+    { key: 'late', label: '20+ min', fields: ['lateGame'], indicators: 'lateGame', from: 1200, to: Infinity },
 ];
 
 function HeatmapImage({ hero, phase, gridSize }) {
@@ -162,6 +164,14 @@ function HeatmapSection({ heatmaps, deaths, smartStats, laning }) {
             <p className="section-note">
                 Cada mapa usa a própria escala: compare o formato, não a intensidade absoluta. Tempo morto não aparece.
             </p>
+
+            <HeatmapIndicators
+                player={player}
+                other={other}
+                phaseKey={phase.indicators}
+                phaseLabel={phase.label.toLowerCase()}
+                matchAverage={heatmaps.matchAverage}
+            />
         </div>
     );
 }

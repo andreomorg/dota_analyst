@@ -45,7 +45,11 @@ public class ReplayParserClientTests
           "vision": { "wards": [] },
           "combat": { "damage": [], "healing": [], "perMinute": [ { "player": 0, "damageToHeroes": [0,0,0,0,0,0,0,0,0,0,0,0], "damageFromHeroes": [0,0,0,0,0,0,0,0,0,0,0,0], "damageTaken": [], "healing": [] }, { "player": 5, "damageToHeroes": [0,0,0,0,0,0,0,0,0,0,0,0], "damageFromHeroes": [0,0,0,0,0,0,0,0,0,0,0,0], "damageTaken": [], "healing": [] } ] },
           "items": { "purchases": [], "uses": [], "final": [] },
-          "objectives": { "buildings": [], "roshan": [], "tormentors": [], "couriers": [], "runes": [], "outposts": [] }
+          "objectives": { "buildings": [], "roshan": [], "tormentors": [], "couriers": [], "runes": [], "outposts": [] },
+          "abilities": { "upgrades": [
+            { "player": 0, "levels": [[-70.2, "lich_frost_nova", 1], [60.4, "lich_frost_shield", 2]] },
+            { "player": 5, "levels": [] }
+          ] }
         }
         """;
 
@@ -70,6 +74,10 @@ public class ReplayParserClientTests
         Assert.Equal(600, analysis.EndsAtSeconds);
         Assert.Equal(new LaningStats(31, Team.Radiant, Lane.Bottom, 12, 3, 2900, 3100, 1), analysis.FindHero(31));
         Assert.Equal(new LaningStats(28, Team.Dire, Lane.Jungle, 40, 0, 3500, 2800, 0), analysis.FindHero(28));
+        Assert.Equal(
+            [new AbilityUpgrade(31, -70, "lich_frost_nova", 1), new AbilityUpgrade(31, 60, "lich_frost_shield", 2)],
+            analysis.AbilityUpgrades);
+        Assert.False(analysis.IsOutdated);
 
         // The timeline: a point per minute, the last one at the end of the match.
         var timeline = analysis.Timeline;

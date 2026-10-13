@@ -10,4 +10,8 @@ public interface IBaselineProvider
 {
     Task<IReadOnlyList<BaselineComparisonSummary>?> CompareAsync(
         HeroMetrics player, int matchSeconds, CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<BaselineComparisonSummary>?> CompareLaneMatchupAsync(
+        HeroMetrics player, int opponentHeroId, int matchSeconds, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<BaselineComparisonSummary>?>([]);
 }

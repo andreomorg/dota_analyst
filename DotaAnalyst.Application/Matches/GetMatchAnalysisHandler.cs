@@ -1,4 +1,5 @@
 using DotaAnalyst.Application.Abstractions;
+using DotaAnalyst.Application.Baseline;
 using DotaAnalyst.Domain.Analysis;
 using DotaAnalyst.Domain.Heroes;
 using DotaAnalyst.Domain.Items;
@@ -56,6 +57,9 @@ public class GetMatchAnalysisHandler(
             .ToList();
 
         var (replayStatus, replay) = await GetReplayAsync(match, cancellationToken);
+        var replayMetrics = replay?.Metrics is { } metrics && replay.Purchases is { } purchases
+            ? FirstBigItemMetric.AddTo(metrics, purchases, itemsTask.Result)
+            : replay?.Metrics;
 
         return new MatchAnalysis(
             MatchId: match.MatchId.Value,
@@ -76,14 +80,20 @@ public class GetMatchAnalysisHandler(
             Damage: replay?.Damage is { } damage && currentPlayer is not null ? ToDamage(damage, match, currentPlayer, names) : null,
             // Deaths read before the damage have no assists: no fights until the replay is read again.
             Fights: replay?.Deaths is { } fightDeaths && replay.Damage is not null ? ToFights(fightDeaths, match, currentPlayer) : null,
-            ItemBuild: replay?.Purchases is { } purchases && currentPlayer is not null
-                ? ToItemBuild(purchases, currentPlayer, itemsTask.Result)
+            ItemBuild: replay?.Purchases is { } itemPurchases && currentPlayer is not null
+                ? ToItemBuild(itemPurchases, currentPlayer, itemsTask.Result)
                 : null,
             Objectives: replay?.Objectives is { } objectives ? ToObjectives(objectives, currentPlayer, names) : null,
-            SmartStats: replay?.Metrics is { } metrics && currentPlayer is not null
-                ? await WithBaselinesAsync(ToSmartStats(metrics, currentPlayer, names), metrics, currentPlayer, match, cancellationToken)
+            SmartStats: replayMetrics is { } metricsForAnalysis && currentPlayer is not null
+                ? await WithBaselinesAsync(ToSmartStats(metricsForAnalysis, currentPlayer, names), metricsForAnalysis, currentPlayer, match, names, cancellationToken)
                 : null,
-            Heatmaps: replay?.Heatmaps is { } heatmaps ? ToHeatmaps(heatmaps, match, currentPlayer, names) : null);
+            Heatmaps: replay?.Heatmaps is { } heatmaps ? ToHeatmaps(heatmaps, match, currentPlayer, names) : null,
+            AbilityBuild: replay?.AbilityUpgrades is { } upgrades && currentPlayer is not null
+                ? new PlayerAbilityBuild(upgrades
+                    .Where(upgrade => upgrade.HeroId == currentPlayer.HeroId)
+                    .Select(upgrade => new AbilityBuildUpgrade(upgrade.Seconds, upgrade.AbilityName, upgrade.Level))
+                    .ToList())
+                : null);
     }
 
     private static HeatmapSet ToHeatmaps(
@@ -155,7 +165,7 @@ public class GetMatchAnalysisHandler(
     // comparison base (IBaselineProvider): an extra, the analysis comes without it when it can't be reached.
     private async Task<SmartStats?> WithBaselinesAsync(
         SmartStats? stats, IReadOnlyList<HeroMetrics> metrics, MatchPlayer player, MatchDetails match,
-        CancellationToken cancellationToken)
+        NameLookup names, CancellationToken cancellationToken)
     {
         if (stats is null || metrics.FirstOrDefault(hero => hero.HeroId == player.HeroId) is not { } mine)
         {
@@ -163,7 +173,21 @@ public class GetMatchAnalysisHandler(
         }
 
         var baselines = await baselineProvider.CompareAsync(mine, (int)match.Duration.TotalSeconds, cancellationToken);
-        return baselines is null ? stats : stats with { Baselines = baselines };
+        var opponentRole = LaneMatchup.OpposingRole(mine.Role);
+        var laneOpponent = opponentRole is { } role
+            ? metrics.FirstOrDefault(hero => hero.Team != mine.Team && hero.Role == role)
+            : null;
+        var matchupBaselines = laneOpponent is null
+            ? []
+            : await baselineProvider.CompareLaneMatchupAsync(
+                mine, laneOpponent.HeroId, (int)match.Duration.TotalSeconds, cancellationToken);
+        return stats with
+        {
+            Baselines = baselines,
+            LaneMatchupHeroId = laneOpponent?.HeroId,
+            LaneMatchupHeroName = laneOpponent is null ? null : names.Hero(laneOpponent.HeroId),
+            LaneMatchupBaselines = matchupBaselines,
+        };
     }
 
     // Null without metrics for the player or an enemy of the same role, and for a match without role queue (its
@@ -222,7 +246,9 @@ public class GetMatchAnalysisHandler(
             TeamObserverUptime: AverageKnown(metrics.Select(hero => hero.TeamObserverUptime)),
             LeadLostPerDeath: AverageKnown(metrics.Select(hero => hero.LeadLostPerDeath)),
             NetWorthGainByRegion: AverageKnownByRegion(metrics.Select(hero => hero.NetWorthGainByRegion)),
-            MinutesByRegion: AverageKnownByRegion(metrics.Select(hero => hero.MinutesByRegion?.Select(count => (double)count))));
+            MinutesByRegion: AverageKnownByRegion(metrics.Select(hero => hero.MinutesByRegion?.Select(count => (double)count))),
+            FirstBigItemSeconds: Average(metrics.Select(hero =>
+                hero.FirstBigItemSeconds is { } seconds ? (int?)seconds : null)));
 
         return new SmartStats(
             Role: mine.Role,
@@ -252,7 +278,8 @@ public class GetMatchAnalysisHandler(
             hero.TeamFights, hero.FightsNearby, hero.KillParticipation, hero.QuickRedeaths, hero.LaneDamageDealt,
             hero.LaneDamageTaken, hero.TeamObserverUptime, hero.LeadLostPerDeath,
             hero.NetWorthGainByRegion is { } gain ? ToRegionValues(gain) : null,
-            hero.MinutesByRegion is { } minutes ? ToRegionValues(minutes.Select(count => (double)count)) : null);
+            hero.MinutesByRegion is { } minutes ? ToRegionValues(minutes.Select(count => (double)count)) : null,
+            hero.FirstBigItemSeconds);
 
     private static RegionValues ToRegionValues(PerRegion<double> values) =>
         new(values.OwnBase, values.EnemyBase, values.TopLane, values.MiddleLane, values.BottomLane, values.River,

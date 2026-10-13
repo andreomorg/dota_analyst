@@ -14,13 +14,23 @@ public class BaselineDistributionStore(IDbContextFactory<AppDbContext> dbContext
     private sealed record StoredDistribution(ComparedMetric Metric, IReadOnlyList<double> Quantiles, int SampleSize);
 
     public Task<BaselineDistributionSet?> FindAsync(int heroId, int role, BaselineSource source, CancellationToken cancellationToken) =>
+        FindSetAsync(heroId, role, null, source, cancellationToken);
+
+    public Task<BaselineDistributionSet?> FindMatchupAsync(
+        int heroId, int role, int opponentHeroId, BaselineSource source, CancellationToken cancellationToken) =>
+        FindSetAsync(heroId, role, opponentHeroId, source, cancellationToken);
+
+    private Task<BaselineDistributionSet?> FindSetAsync(
+        int heroId, int role, int? opponentHeroId, BaselineSource source, CancellationToken cancellationToken) =>
         storageGuard.RunAsync($"reading the comparison base of hero {heroId}", async () =>
         {
             var name = BaselineRepository.SourceName(source);
+            var storedOpponentHeroId = opponentHeroId ?? 0;
             await using var db = await dbContextFactory.CreateDbContextAsync(cancellationToken);
             var row = await db.BaselineDistributions
                 .AsNoTracking()
-                .SingleOrDefaultAsync(set => set.HeroId == heroId && set.Role == role && set.Source == name, cancellationToken);
+                .SingleOrDefaultAsync(set => set.HeroId == heroId && set.Role == role
+                    && set.OpponentHeroId == storedOpponentHeroId && set.Source == name, cancellationToken);
             if (row is null)
             {
                 return null;
@@ -31,7 +41,8 @@ public class BaselineDistributionStore(IDbContextFactory<AppDbContext> dbContext
                 var distributions = JsonSerializer.Deserialize<List<StoredDistribution>>(row.Distributions, StoredReplayMappings.JsonOptions) ?? [];
                 return new BaselineDistributionSet(
                     heroId, role, source, row.Matches,
-                    distributions.Select(stored => new MetricDistribution(stored.Metric, stored.Quantiles, stored.SampleSize)).ToList());
+                    distributions.Select(stored => new MetricDistribution(stored.Metric, stored.Quantiles, stored.SampleSize)).ToList(),
+                    opponentHeroId);
             }
             catch (JsonException)
             {
@@ -56,6 +67,7 @@ public class BaselineDistributionStore(IDbContextFactory<AppDbContext> dbContext
                 {
                     HeroId = set.HeroId,
                     Role = set.Role,
+                    OpponentHeroId = set.OpponentHeroId ?? 0,
                     Source = BaselineRepository.SourceName(set.Source),
                     Matches = set.Matches,
                     Distributions = JsonSerializer.Serialize(

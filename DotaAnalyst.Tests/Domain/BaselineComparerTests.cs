@@ -43,6 +43,22 @@ public class BaselineComparerTests
     }
 
     [Fact]
+    public void LowerIsBetter_ForFirstBigItemTiming()
+    {
+        var samples = Enumerable.Range(1, 10)
+            .Select(i => new BaselineSample(Hero(i, 0) with { FirstBigItemSeconds = i * 60 }, 1800))
+            .ToList();
+        var baseline = BaselineComparer.Distribute(samples);
+
+        var comparison = Assert.Single(BaselineComparer.Compare(
+            Hero(0, 0) with { FirstBigItemSeconds = 120 }, 1800, baseline),
+            metric => metric.Metric == ComparedMetric.FirstBigItemSeconds);
+
+        Assert.Equal(330, comparison.Median);
+        Assert.True(comparison.BetterThan > 0.7);
+    }
+
+    [Fact]
     public void ARunOfEqualPercentiles_CountsAsATie()
     {
         // Most of the base never died: dying 0 times is better than about half of it, not all of it.

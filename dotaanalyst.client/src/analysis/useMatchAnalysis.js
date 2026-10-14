@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { fetchMatchAnalysis } from '../api/matches';
+import { pollingState } from './analysisPolling';
 
 // While the API says the replay is being analyzed, the analysis is fetched again every 10 s,
 // for at most ~5 min (the replay parser usually answers well before that).
 const REPLAY_POLL_INTERVAL_MS = 10_000;
-const REPLAY_POLL_LIMIT_MS = 5 * 60_000;
 
 // Loads the analysis of a match and, while replayStatus is "processing", keeps it up to date.
 // Returns { status: 'loading' } | { status: 'error', message } |
@@ -34,14 +34,10 @@ export function useMatchAnalysis(accountId, matchId, enabled) {
         const controller = new AbortController();
         const startedAt = Date.now();
         let refreshTimer = null;
+        let lastAnalysis = null;
 
-        // false = the next refresh would go past the time limit.
-        function canRefreshAgain() {
-            return Date.now() - startedAt + REPLAY_POLL_INTERVAL_MS <= REPLAY_POLL_LIMIT_MS;
-        }
-
-        function scheduleRefresh() {
-            refreshTimer = setTimeout(() => load(true), REPLAY_POLL_INTERVAL_MS);
+        function scheduleRefresh(interval = REPLAY_POLL_INTERVAL_MS) {
+            refreshTimer = setTimeout(() => load(true), interval);
         }
 
         function load(isRefresh) {
@@ -50,16 +46,17 @@ export function useMatchAnalysis(accountId, matchId, enabled) {
                     if (controller.signal.aborted) {
                         return;
                     }
-                    const processing = analysis.replayStatus === 'processing';
-                    const keepPolling = processing && canRefreshAgain();
+                    const polling = pollingState(analysis, Date.now() - startedAt);
+                    lastAnalysis = analysis;
                     setResult({
                         key: requestKey,
                         status: 'success',
                         analysis,
-                        replayPollingStopped: processing && !keepPolling,
+                        replayPollingStopped: polling.replayPollingStopped,
+                        openDotaPollingStopped: polling.openDotaPollingStopped,
                     });
-                    if (keepPolling) {
-                        scheduleRefresh();
+                    if (polling.keepPolling) {
+                        scheduleRefresh(polling.intervalMs);
                     }
                 })
                 .catch(error => {
@@ -71,12 +68,13 @@ export function useMatchAnalysis(accountId, matchId, enabled) {
                         return;
                     }
                     // A failed refresh keeps the analysis already on screen and tries again next round.
-                    if (canRefreshAgain()) {
-                        scheduleRefresh();
-                    } else {
-                        setResult(previous => (previous?.key === requestKey
-                            ? { ...previous, replayPollingStopped: true }
-                            : previous));
+                    const polling = pollingState(lastAnalysis, Date.now() - startedAt);
+                    setResult(previous => (previous?.key === requestKey
+                        ? { ...previous, replayPollingStopped: polling.replayPollingStopped,
+                            openDotaPollingStopped: polling.openDotaPollingStopped }
+                        : previous));
+                    if (polling.keepPolling) {
+                        scheduleRefresh(polling.intervalMs);
                     }
                 });
         }

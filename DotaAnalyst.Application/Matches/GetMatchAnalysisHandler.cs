@@ -21,7 +21,8 @@ public class GetMatchAnalysisHandler(
     IItemCatalog itemCatalog,
     IBaselineProvider baselineProvider,
     TimeProvider timeProvider,
-    ILogger<GetMatchAnalysisHandler> logger)
+    ILogger<GetMatchAnalysisHandler> logger,
+    IOpenDotaParseCoordinator? openDotaParsing = null)
 {
     public const string UnknownHeroName = GetRecentMatchesHandler.UnknownHeroName;
     public const string UnknownItemName = "Unknown item";
@@ -51,6 +52,8 @@ public class GetMatchAnalysisHandler(
 
         var names = new NameLookup(heroesTask.Result, itemsTask.Result);
         var currentPlayer = match.FindPlayer(accountId);
+        var openDotaProcessing = openDotaParsing is null ? null
+            : await openDotaParsing.EnsureAsync(match, cancellationToken);
 
         IReadOnlyList<MatchPlayerSummary> TeamOf(Team team) => match.Players
             .Where(player => player.Team == team)
@@ -97,7 +100,24 @@ public class GetMatchAnalysisHandler(
                 : null,
             Stats: replay is not null && MatchStatTimeline.From(replay) is { } stats
                 ? ToStats(stats, match, currentPlayer, names)
-                : null);
+                : null,
+            OpenDotaProcessing: openDotaProcessing,
+            OpenDotaExtras: currentPlayer?.SupplementalStats is { } supplemental
+                ? ToSupplemental(supplemental, itemsTask.Result) : null);
+    }
+
+    private static OpenDotaPlayerExtras ToSupplemental(SupplementalPlayerStats stats, IReadOnlyDictionary<int, Item> items)
+    {
+        IReadOnlyList<ExternalStatTotal>? Rows(IReadOnlyDictionary<string, int>? values) => values?
+            .OrderByDescending(pair => pair.Value).ThenBy(pair => pair.Key, StringComparer.Ordinal)
+            .Select(pair =>
+            {
+                var key = pair.Key.StartsWith("item_", StringComparison.Ordinal) ? pair.Key[5..] : pair.Key;
+                var item = items.Values.FirstOrDefault(candidate => candidate.Details?.Key == key);
+                return new ExternalStatTotal(pair.Key, item?.Name ?? pair.Key, pair.Value, item?.Id);
+            }).ToList();
+        return new("opendota", Rows(stats.DamageReceived), Rows(stats.AbilityUses), Rows(stats.ItemUses),
+            stats.ActionsPerMinute, Rows(stats.Actions), Rows(stats.GoldSources), Rows(stats.ExperienceSources));
     }
 
     private static MatchStats ToStats(MatchStatTimeline stats, MatchDetails match, MatchPlayer? player, NameLookup names) =>

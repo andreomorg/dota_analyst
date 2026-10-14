@@ -21,4 +21,5 @@ public record MatchPlayer(
     // Inventory items, without empty slots.
     IReadOnlyList<int> ItemIds,
     int? NeutralItemId,
-    IReadOnlyList<Benchmark> Benchmarks);
+    IReadOnlyList<Benchmark> Benchmarks,
+    SupplementalPlayerStats? SupplementalStats = null);

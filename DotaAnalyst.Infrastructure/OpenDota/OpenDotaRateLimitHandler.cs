@@ -17,7 +17,8 @@ public sealed class OpenDotaRateLimitHandler(
     protected override async Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request, CancellationToken cancellationToken)
     {
-        if (limiter.TryReserve() is not { } wait)
+        var cost = request.Method == HttpMethod.Post && request.RequestUri?.AbsolutePath.Contains("/request/", StringComparison.Ordinal) == true ? 10 : 1;
+        if (limiter.TryReserve(cost) is not { } wait)
         {
             return Refused(request);
         }

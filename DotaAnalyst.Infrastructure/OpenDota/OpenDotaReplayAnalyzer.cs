@@ -14,10 +14,16 @@ public class OpenDotaReplayAnalyzer(OpenDotaClient openDotaClient, IMemoryCache 
     // "Not found" is remembered briefly, so repeated requests for a wrong ID don't all reach OpenDota.
     private static readonly TimeSpan NotFoundCacheDuration = TimeSpan.FromMinutes(1);
 
-    public async Task<MatchDetails?> GetMatchDetailsAsync(MatchId matchId, CancellationToken cancellationToken)
+    public Task<MatchDetails?> GetMatchDetailsAsync(MatchId matchId, CancellationToken cancellationToken) =>
+        LoadAsync(matchId, refresh: false, cancellationToken);
+
+    public Task<MatchDetails?> RefreshMatchDetailsAsync(MatchId matchId, CancellationToken cancellationToken) =>
+        LoadAsync(matchId, refresh: true, cancellationToken);
+
+    private async Task<MatchDetails?> LoadAsync(MatchId matchId, bool refresh, CancellationToken cancellationToken)
     {
         var cacheKey = $"opendota:match:{matchId.Value}";
-        if (cache.TryGetValue(cacheKey, out CachedMatch? cached) && cached is not null)
+        if (!refresh && cache.TryGetValue(cacheKey, out CachedMatch? cached) && cached is not null)
         {
             return cached.Details;
         }

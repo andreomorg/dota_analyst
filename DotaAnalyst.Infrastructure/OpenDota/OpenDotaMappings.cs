@@ -51,7 +51,8 @@ public static class OpenDotaMappings
             // OpenDota only fills "version" after parsing the replay.
             IsParsed: match.Version is not null,
             Players: (match.Players ?? []).Select(ToMatchPlayer).ToList(),
-            ReplayUrl: ReplayUrls.Parse(match.ReplayUrl));
+            ReplayUrl: ReplayUrls.Parse(match.ReplayUrl),
+            SupplementalStatsVersion: match.Version is null ? 0 : DotaAnalyst.Application.Matches.SupplementalStatsSchema.CurrentVersion);
     }
 
     // Valve's placeholder account ID for players with an anonymous profile.
@@ -80,7 +81,16 @@ public static class OpenDotaMappings
                 .Select(itemId => itemId!.Value)
                 .ToList(),
             NeutralItemId: player.ItemNeutral is > 0 ? player.ItemNeutral : null,
-            Benchmarks: ToBenchmarks(player.Benchmarks));
+            Benchmarks: ToBenchmarks(player.Benchmarks),
+            SupplementalStats: player.DamageInflictorReceived is null && player.AbilityUses is null && player.ItemUses is null
+                && player.ActionsPerMin is null && player.Actions is null && player.GoldReasons is null && player.XpReasons is null
+                ? null : new SupplementalPlayerStats(Clean(player.DamageInflictorReceived), Clean(player.AbilityUses), Clean(player.ItemUses),
+                    player.ActionsPerMin is >= 0 ? player.ActionsPerMin : null, Clean(player.Actions),
+                    player.GoldReasons?.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal),
+                    player.XpReasons?.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal)));
+
+    private static IReadOnlyDictionary<string, int>? Clean(IReadOnlyDictionary<string, int>? rows) =>
+        rows?.Where(pair => pair.Value >= 0).ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
 
     // Joins the two item constants (ID -> key and key -> data) into ID -> item, with the item's details.
     // Entries without a key match or without a display name are skipped.

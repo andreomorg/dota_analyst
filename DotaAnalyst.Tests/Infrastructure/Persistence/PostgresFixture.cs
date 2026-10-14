@@ -32,7 +32,7 @@ public sealed class PostgresFixture : IAsyncLifetime
     {
         await using var db = await DbContextFactory.CreateDbContextAsync();
         await db.Database.ExecuteSqlRawAsync(
-            "TRUNCATE matches, player_searches, catalog_entries, replay_analyses, replay_documents, data_protection_keys, baseline_matches, baseline_metrics, baseline_distributions");
+            "TRUNCATE matches, player_searches, catalog_entries, replay_analyses, replay_documents, data_protection_keys, baseline_matches, baseline_metrics, baseline_distributions, opendota_parse_requests");
     }
 
     private sealed class TestDbContextFactory(string connectionString) : IDbContextFactory<AppDbContext>

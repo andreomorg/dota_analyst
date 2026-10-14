@@ -33,10 +33,12 @@ public sealed class OpenDotaRateLimiter(
     private long lastLowQuotaWarningTicks;
 
     // How long the caller must wait before its call goes out (usually zero), or null when it is refused.
-    public TimeSpan? TryReserve()
+    public TimeSpan? TryReserve(int cost = 1)
     {
         var now = timeProvider.GetUtcNow().UtcTicks;
         var permits = options.Value.PermitsPerMinute;
+        if (cost <= 0) throw new ArgumentOutOfRangeException(nameof(cost));
+        if (cost > permits) return null;
 
         lock (gate)
         {
@@ -50,14 +52,17 @@ public sealed class OpenDotaRateLimiter(
             calls.RemoveRange(0, expired < 0 ? calls.Count : expired);
 
             // The new call must be at least one window after the call "permits" places before it.
-            var slot = calls.Count < permits ? now : Math.Max(now, calls[^permits] + Window.Ticks);
+            // All units must fit at the same time; reserve atomically without a partial charge.
+            var requiredExpiry = calls.Count + cost - permits;
+            var slot = requiredExpiry <= 0 ? now : Math.Max(now, calls[requiredExpiry - 1] + Window.Ticks);
+            if (calls.Count > 0) slot = Math.Max(slot, calls[^1]);
             var wait = TimeSpan.FromTicks(slot - now);
             if (wait > options.Value.MaxQueueWait)
             {
                 return null;
             }
 
-            calls.Add(slot);
+            for (var i = 0; i < cost; i++) calls.Add(slot);
             return wait;
         }
     }

@@ -18,6 +18,49 @@ public class GetMatchAnalysisHandlerTests
     private static readonly DateTimeOffset Now = new(2026, 10, 11, 12, 0, 0, TimeSpan.Zero);
 
     [Fact]
+    public async Task CachedUnparsedMatch_StillInvokesOpenDotaCoordination()
+    {
+        var match = UnparsedMatchWithMe();
+        var analyzer = new FakeReplayAnalyzer(null) { Fail = true };
+        var coordinator = new FakeOpenDotaCoordinator();
+        var handler = CreateHandler(analyzer, repository: new FakeMatchRepository(new SavedMatch(match, Now)),
+            parsing: coordinator);
+        var result = await handler.HandleAsync(match.MatchId, Me, default);
+        Assert.Equal(0, analyzer.Calls);
+        Assert.Equal(1, coordinator.Calls);
+        Assert.Equal("queued", result!.OpenDotaProcessing!.Status);
+    }
+
+    private sealed class FakeOpenDotaCoordinator : IOpenDotaParseCoordinator
+    {
+        public int Calls;
+        public Task<OpenDotaProcessing> EnsureAsync(MatchDetails match, CancellationToken ct)
+        { Calls++; return Task.FromResult(new OpenDotaProcessing("queued")); }
+    }
+
+    [Fact]
+    public async Task SupplementalTotals_ExposeOriginAndCatalogNamesWithoutChangingReplay()
+    {
+        var match = UnparsedMatchWithMe();
+        var players = match.Players.Select(player => player.AccountId == Me ? player with
+        {
+            SupplementalStats = new SupplementalPlayerStats(new Dictionary<string, int> { ["spell"] = 10 },
+                new Dictionary<string, int> { ["spell"] = 0 }, new Dictionary<string, int> { ["blink"] = 3 },
+                153, GoldSources: new Dictionary<string, int> { ["1"] = -50 })
+        } : player).ToList();
+        var catalog = new FakeItemCatalog(new Item(1, "Blink Dagger") { Details = new ItemDetails("blink", 2250, [], false) });
+        var handler = CreateHandler(new FakeReplayAnalyzer(match with { Players = players }), items: catalog);
+        var result = await handler.HandleAsync(match.MatchId, Me, default);
+        Assert.Equal("opendota", result!.OpenDotaExtras!.Source);
+        Assert.Equal("Blink Dagger", Assert.Single(result.OpenDotaExtras.ItemUses!).Name);
+        Assert.Equal(0, Assert.Single(result.OpenDotaExtras.AbilityUses!).Amount);
+        Assert.Equal(-50, Assert.Single(result.OpenDotaExtras.GoldSources!).Amount);
+        Assert.Equal(153, result.OpenDotaExtras.ActionsPerMinute);
+        Assert.Null(result.OpenDotaExtras.ExperienceSources);
+        Assert.False(result.IsParsed);
+    }
+
+    [Fact]
     public async Task HandleAsync_BuildsTeamsAndPerformanceForCurrentPlayer()
     {
         // Arrange
@@ -962,7 +1005,8 @@ public class GetMatchAnalysisHandlerTests
         FakeReplayParseQueue? queue = null,
         TimeProvider? clock = null,
         FakeItemCatalog? items = null,
-        FakeDistributions? baseline = null) =>
+        FakeDistributions? baseline = null,
+        IOpenDotaParseCoordinator? parsing = null) =>
         new(
             analyzer,
             repository ?? new FakeMatchRepository(),
@@ -973,7 +1017,7 @@ public class GetMatchAnalysisHandlerTests
             items ?? new FakeItemCatalog(new Item(1, "Blink Dagger"), new Item(2, "Trusty Shovel")),
             new DistributionBaselineProvider(baseline ?? new FakeDistributions(), NullLogger<DistributionBaselineProvider>.Instance),
             clock ?? new FixedTimeProvider(Now),
-            NullLogger<GetMatchAnalysisHandler>.Instance);
+            NullLogger<GetMatchAnalysisHandler>.Instance, parsing);
 
     private static MatchDetails CreateMatch(Team? winningTeam, params MatchPlayer[] players) =>
         CreateMatch(winningTeam, isParsed: false, players);

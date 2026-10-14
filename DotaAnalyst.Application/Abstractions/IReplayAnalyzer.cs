@@ -9,4 +9,7 @@ public interface IReplayAnalyzer
     /// <returns>The match, or null when it does not exist.</returns>
     /// <exception cref="DataSourceUnavailableException">The data source could not be reached.</exception>
     Task<MatchDetails?> GetMatchDetailsAsync(MatchId matchId, CancellationToken cancellationToken);
+    // Explicit completion/enrichment refresh; ordinary reads retain their cache policy.
+    Task<MatchDetails?> RefreshMatchDetailsAsync(MatchId matchId, CancellationToken cancellationToken) =>
+        GetMatchDetailsAsync(matchId, cancellationToken);
 }

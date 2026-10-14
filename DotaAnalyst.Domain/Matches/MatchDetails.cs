@@ -16,7 +16,8 @@ public record MatchDetails(
     IReadOnlyList<MatchPlayer> Players,
     // Where Valve keeps the replay file (it expires after a few weeks). Null when the source doesn't know it,
     // and for matches saved before this field existed.
-    Uri? ReplayUrl = null)
+    Uri? ReplayUrl = null,
+    int SupplementalStatsVersion = 0)
 {
     // When the match ended (start + duration). Pauses count in Duration, so this is wall-clock time.
     public DateTimeOffset EndedAt => StartTime + Duration;

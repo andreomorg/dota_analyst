@@ -17,7 +17,7 @@ namespace DotaAnalyst.Infrastructure.Persistence.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.12")
+                .HasAnnotation("ProductVersion", "10.0.13")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -218,6 +218,69 @@ namespace DotaAnalyst.Infrastructure.Persistence.Migrations
                         .HasName("pk_matches");
 
                     b.ToTable("matches", (string)null);
+                });
+
+            modelBuilder.Entity("DotaAnalyst.Infrastructure.Persistence.OpenDota.OpenDotaParseRequestRecord", b =>
+                {
+                    b.Property<long>("MatchId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("match_id");
+
+                    b.Property<bool>("EnrichmentOnly")
+                        .HasColumnType("boolean")
+                        .HasColumnName("enrichment_only");
+
+                    b.Property<string>("JobId")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("job_id");
+
+                    b.Property<string>("LastErrorCode")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("last_error_code");
+
+                    b.Property<Guid?>("LeaseToken")
+                        .HasColumnType("uuid")
+                        .HasColumnName("lease_token");
+
+                    b.Property<DateTimeOffset?>("LeaseUntil")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("lease_until");
+
+                    b.Property<DateTimeOffset>("NextAttemptAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("next_attempt_at");
+
+                    b.Property<int>("PollAttempts")
+                        .HasColumnType("integer")
+                        .HasColumnName("poll_attempts");
+
+                    b.Property<DateTimeOffset>("RequestedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("requested_at");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("character varying(24)")
+                        .HasColumnName("state");
+
+                    b.Property<int>("SubmitAttempts")
+                        .HasColumnType("integer")
+                        .HasColumnName("submit_attempts");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("MatchId")
+                        .HasName("pk_opendota_parse_requests");
+
+                    b.HasIndex("State", "NextAttemptAt")
+                        .HasDatabaseName("ix_opendota_parse_requests_state_next_attempt_at");
+
+                    b.ToTable("opendota_parse_requests", (string)null);
                 });
 
             modelBuilder.Entity("DotaAnalyst.Infrastructure.Persistence.Players.PlayerSearchRecord", b =>

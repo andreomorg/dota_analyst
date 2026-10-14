@@ -29,6 +29,8 @@ namespace DotaAnalyst.Application.Matches;
 /// <param name="Heatmaps">Where each of the ten heroes spent its time alive, per game phase, read from the replay; null unless replayStatus is ready (and for replays read before heatmaps existed).</param>
 /// <param name="AbilityBuild">The player's ability level-ups in replay order; null unless replayStatus is ready and the player is in the match.</param>
 /// <param name="Stats">Every statistic of every hero minute by minute, read from the replay, so any moment or period can be shown; null unless replayStatus is ready (and for replays read before the timeline existed).</param>
+/// <param name="OpenDotaProcessing">External processing status, independent of replayStatus; absent for older API responses.</param>
+/// <param name="OpenDotaExtras">Optional external aggregates for the selected player, with explicit source and scope.</param>
 public record MatchAnalysis(
     long MatchId,
     int DurationSeconds,
@@ -52,7 +54,9 @@ public record MatchAnalysis(
     SmartStats? SmartStats = null,
     HeatmapSet? Heatmaps = null,
     PlayerAbilityBuild? AbilityBuild = null,
-    MatchStats? Stats = null);
+    MatchStats? Stats = null,
+    OpenDotaProcessing? OpenDotaProcessing = null,
+    OpenDotaPlayerExtras? OpenDotaExtras = null);
 
 /// <summary>Every statistic of every hero, one value per point of the match (each minute, then the end): the value at any moment is the last point at or before it, and what happened in a period is the difference between two points.</summary>
 /// <param name="Definitions">What each statistic is (the same catalog for every match).</param>

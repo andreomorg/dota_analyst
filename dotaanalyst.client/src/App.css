@@ -466,6 +466,15 @@
     color: var(--secondary);
 }
 
+.opendota-extras { display: none; }
+@media (min-width: 1025px) {
+    .opendota-extras { display: block; }
+    .external-data h3 { font-size: 15px; margin-bottom: 8px; }
+    .external-data table { width: 100%; font-size: 13px; }
+    .external-data th, .external-data td { text-align: left; padding: 12px; border-bottom: 1px solid var(--border); }
+    .external-data td:last-child { text-align: right; }
+}
+
 .notice {
     padding: 0.75rem 1rem;
     border: 1px solid var(--border);

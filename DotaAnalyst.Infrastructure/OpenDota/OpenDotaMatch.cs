@@ -44,7 +44,14 @@ public record OpenDotaMatchPlayer(
     [property: JsonPropertyName("item_5")] int? Item5,
     int? ItemNeutral,
     // Keys are metric names (gold_per_min, xp_per_min...), so a dictionary instead of a fixed class.
-    IReadOnlyDictionary<string, OpenDotaBenchmark>? Benchmarks);
+    IReadOnlyDictionary<string, OpenDotaBenchmark>? Benchmarks,
+    IReadOnlyDictionary<string, int>? DamageInflictorReceived = null,
+    IReadOnlyDictionary<string, int>? AbilityUses = null,
+    IReadOnlyDictionary<string, int>? ItemUses = null,
+    int? ActionsPerMin = null,
+    IReadOnlyDictionary<string, int>? Actions = null,
+    IReadOnlyDictionary<string, int>? GoldReasons = null,
+    IReadOnlyDictionary<string, int>? XpReasons = null);
 
 // Raw = the player's value; Pct = percentile (0 to 1) against other players of the same hero.
 public record OpenDotaBenchmark(double? Raw, double? Pct);

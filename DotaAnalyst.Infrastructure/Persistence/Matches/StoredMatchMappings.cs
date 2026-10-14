@@ -19,7 +19,8 @@ internal sealed record StoredMatchDetails(
     bool IsParsed,
     IReadOnlyList<StoredMatchPlayer> Players,
     // Added later: rows saved before it have no "replayUrl" and are read with null, so Version stays 1.
-    string? ReplayUrl = null);
+    string? ReplayUrl = null,
+    int SupplementalStatsVersion = 0);
 
 internal sealed record StoredMatchPlayer(
     long? AccountId,
@@ -39,7 +40,17 @@ internal sealed record StoredMatchPlayer(
     int Level,
     IReadOnlyList<int> ItemIds,
     int? NeutralItemId,
-    IReadOnlyList<StoredBenchmark> Benchmarks);
+    IReadOnlyList<StoredBenchmark> Benchmarks,
+    StoredSupplementalPlayerStats? SupplementalStats = null);
+
+internal sealed record StoredSupplementalPlayerStats(
+    IReadOnlyDictionary<string, int>? DamageReceived,
+    IReadOnlyDictionary<string, int>? AbilityUses,
+    IReadOnlyDictionary<string, int>? ItemUses,
+    int? ActionsPerMinute = null,
+    IReadOnlyDictionary<string, int>? Actions = null,
+    IReadOnlyDictionary<string, int>? GoldSources = null,
+    IReadOnlyDictionary<string, int>? ExperienceSources = null);
 
 internal sealed record StoredBenchmark(BenchmarkMetric Metric, double Value, double Percentile);
 
@@ -76,7 +87,8 @@ internal static class StoredMatchMappings
             DireScore: match.DireScore,
             IsParsed: match.IsParsed,
             Players: match.Players.Select(ToStored).ToList(),
-            ReplayUrl: match.ReplayUrl?.AbsoluteUri);
+            ReplayUrl: match.ReplayUrl?.AbsoluteUri,
+            SupplementalStatsVersion: match.SupplementalStatsVersion);
 
     private static StoredMatchPlayer ToStored(MatchPlayer player) =>
         new(
@@ -97,7 +109,10 @@ internal static class StoredMatchMappings
             Level: player.Level,
             ItemIds: player.ItemIds,
             NeutralItemId: player.NeutralItemId,
-            Benchmarks: player.Benchmarks.Select(b => new StoredBenchmark(b.Metric, b.Value, b.Percentile)).ToList());
+            Benchmarks: player.Benchmarks.Select(b => new StoredBenchmark(b.Metric, b.Value, b.Percentile)).ToList(),
+            SupplementalStats: player.SupplementalStats is { } extras
+                ? new StoredSupplementalPlayerStats(extras.DamageReceived, extras.AbilityUses, extras.ItemUses,
+                    extras.ActionsPerMinute, extras.Actions, extras.GoldSources, extras.ExperienceSources) : null);
 
     private static MatchDetails ToDomain(StoredMatchDetails stored)
     {
@@ -121,7 +136,8 @@ internal static class StoredMatchMappings
             IsParsed: stored.IsParsed,
             Players: (stored.Players ?? []).Select(ToDomain).ToList(),
             // Same rule as for OpenDota's address: anything that isn't absolute http(s) becomes null.
-            ReplayUrl: ReplayUrls.Parse(stored.ReplayUrl));
+            ReplayUrl: ReplayUrls.Parse(stored.ReplayUrl),
+            SupplementalStatsVersion: stored.SupplementalStatsVersion);
     }
 
     private static MatchPlayer ToDomain(StoredMatchPlayer stored) =>
@@ -141,7 +157,10 @@ internal static class StoredMatchMappings
             Level: stored.Level,
             ItemIds: stored.ItemIds ?? [],
             NeutralItemId: stored.NeutralItemId,
-            Benchmarks: (stored.Benchmarks ?? []).Select(ToDomain).ToList());
+            Benchmarks: (stored.Benchmarks ?? []).Select(ToDomain).ToList(),
+            SupplementalStats: stored.SupplementalStats is { } extras
+                ? new SupplementalPlayerStats(extras.DamageReceived, extras.AbilityUses, extras.ItemUses,
+                    extras.ActionsPerMinute, extras.Actions, extras.GoldSources, extras.ExperienceSources) : null);
 
     private static Benchmark ToDomain(StoredBenchmark stored)
     {

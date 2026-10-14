@@ -9,6 +9,7 @@ using DotaAnalyst.Infrastructure.Persistence;
 using DotaAnalyst.Infrastructure.Persistence.Baseline;
 using DotaAnalyst.Infrastructure.Persistence.Catalogs;
 using DotaAnalyst.Infrastructure.Persistence.Matches;
+using DotaAnalyst.Infrastructure.Persistence.OpenDota;
 using DotaAnalyst.Infrastructure.Persistence.Players;
 using DotaAnalyst.Infrastructure.Persistence.Replays;
 using DotaAnalyst.Infrastructure.ReplayParser;
@@ -32,10 +33,28 @@ public static class DependencyInjection
         AddOpenDota(services, configuration);
         AddSteamProfiles(services, configuration);
         var hasDatabase = AddDatabase(services, configuration);
+        AddOpenDotaParsing(services, configuration, hasDatabase);
         var parsesReplays = AddReplayParsing(services, configuration, hasDatabase);
         AddBaselineCollector(services, configuration, hasDatabase && parsesReplays);
 
         return services;
+    }
+
+    private static void AddOpenDotaParsing(IServiceCollection services, IConfiguration configuration, bool hasDatabase)
+    {
+        services.AddOptions<OpenDotaParsingOptions>().Bind(configuration.GetSection(OpenDotaParsingOptions.SectionName))
+            .Validate(o => o.PollSeconds > 0 && o.MaxPollSeconds >= o.PollSeconds && o.ActiveMinutes > 0
+                && o.ResumeMinutes > 0 && o.MaxSubmitAttempts > 0 && o.RetryHours > 0,
+                "OpenDota:Parsing intervals and limits must be positive.").ValidateOnStart();
+        if (!hasDatabase)
+        {
+            services.AddSingleton<IOpenDotaParseCoordinator, DisabledOpenDotaParseCoordinator>();
+            return;
+        }
+        services.AddScoped<IOpenDotaParseRequestRepository, OpenDotaParseRequestRepository>();
+        services.AddScoped<IOpenDotaParseCoordinator, OpenDotaParseCoordinator>();
+        services.AddScoped<OpenDotaParseStep>();
+        services.AddHostedService<OpenDotaParseWorker>();
     }
 
     // Our own reading of replays (the Go service, replay-parser/), for matches OpenDota didn't parse. Only on
@@ -205,6 +224,14 @@ public static class DependencyInjection
             .AddHttpMessageHandler<OpenDotaRateLimitHandler>();
 
         services.AddScoped<IMatchProvider, OpenDotaMatchProvider>();
+        services.AddHttpClient<IOpenDotaParseClient, OpenDotaParseClient>((provider, client) =>
+            {
+                var options = provider.GetRequiredService<IOptions<OpenDotaOptions>>().Value;
+                client.BaseAddress = options.BaseUrl;
+                client.Timeout = options.Timeout;
+                client.MaxResponseContentBufferSize = 64 * 1024;
+            })
+            .AddHttpMessageHandler<OpenDotaRateLimitHandler>();
         services.AddScoped<IReplayAnalyzer, OpenDotaReplayAnalyzer>();
         services.AddScoped<IHeroCatalog, OpenDotaHeroCatalog>();
         services.AddScoped<IItemCatalog, OpenDotaItemCatalog>();

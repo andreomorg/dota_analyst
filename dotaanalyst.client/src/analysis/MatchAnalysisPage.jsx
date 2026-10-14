@@ -13,6 +13,10 @@ import HeatmapSection from './HeatmapSection';
 import ItemBuildSection from './ItemBuildSection';
 import LaningSection, { ReplayStatusBanner } from './LaningSection';
 import MatchHeader from './MatchHeader';
+import OpenDotaStatus from './OpenDotaStatus';
+import OpenDotaExtras from './OpenDotaExtras';
+import { hasOpenDotaExtras } from './externalExtrasVisibility';
+import { useDesktopViewport } from './useDesktopViewport';
 import ObjectivesSection, { ObjectiveCards } from './ObjectivesSection';
 import PerformanceSummary from './PerformanceSummary';
 import SmartStatsSection, { HighlightCards, PhaseDeathsCard } from './SmartStatsSection';
@@ -147,6 +151,7 @@ function MatchAnalysisPage() {
                     analysis={state.analysis}
                     accountId={accountId}
                     replayPollingStopped={state.replayPollingStopped}
+                    openDotaPollingStopped={state.openDotaPollingStopped}
                 />
             )}
         </main>
@@ -160,15 +165,15 @@ function MatchAnalysisPage() {
 // - laning: how did the first 10 min go?    - positioning: where was I?
 // - fights: how did the fights go?          - build: what did I buy and level?
 // - players: and the other nine?
-function tabsOf(analysis) {
+function tabsOf(analysis, desktop) {
     const ready = analysis.replayStatus === 'ready';
     return [
         { key: 'overview', label: 'Resumo', visible: true },
         { key: 'tips', label: 'Como melhorar', visible: Boolean(analysis.performance) || (ready && Boolean(analysis.smartStats)) },
         { key: 'laning', label: 'Fase de rotas', visible: ready && Boolean(analysis.laning) },
         { key: 'positioning', label: 'Posicionamento', visible: ready && ((analysis.heatmaps?.heroes?.length ?? 0) > 0 || Boolean(analysis.deaths) || (analysis.wards?.length ?? 0) > 0) },
-        { key: 'fights', label: 'Lutas e objetivos', visible: ready && (Boolean(analysis.fights) || Boolean(analysis.damage) || Boolean(analysis.objectives)) },
-        { key: 'build', label: 'Build', visible: ready && (Boolean(analysis.itemBuild) || (analysis.abilityBuild?.upgrades?.length ?? 0) > 0) },
+        { key: 'fights', label: 'Lutas e objetivos', visible: (ready && (Boolean(analysis.fights) || Boolean(analysis.damage) || Boolean(analysis.objectives))) || (desktop && hasOpenDotaExtras(analysis.openDotaExtras, 'combat')) },
+        { key: 'build', label: 'Build', visible: (ready && (Boolean(analysis.itemBuild) || (analysis.abilityBuild?.upgrades?.length ?? 0) > 0)) || (desktop && hasOpenDotaExtras(analysis.openDotaExtras, 'build')) },
         { key: 'players', label: 'Jogadores', visible: true },
     ].filter(tab => tab.visible);
 }
@@ -285,10 +290,11 @@ function Shortcuts({ analysis, tabs }) {
 // How the lane chart names each hero of the lane (timeline.lane[].side).
 const LANE_SIDES = { player: 'você', ally: 'aliado', opponent: 'adversário' };
 
-function AnalysisContent({ analysis, accountId, replayPollingStopped }) {
+function AnalysisContent({ analysis, accountId, replayPollingStopped, openDotaPollingStopped }) {
     const [searchParams] = useSearchParams();
     const { performance } = analysis;
-    const tabs = tabsOf(analysis);
+    const desktop = useDesktopViewport();
+    const tabs = tabsOf(analysis, desktop);
     const asked = searchParams.get('tab') ?? 'overview';
     const requested = OLD_TABS[asked] ?? asked;
     // A tab this match doesn't have (or not yet: replay still being read) shows the overview.
@@ -323,14 +329,10 @@ function AnalysisContent({ analysis, accountId, replayPollingStopped }) {
 
             <div className="container analysis-sections" data-analysis-tab={active}>
                 <ReplayStatusBanner replayStatus={analysis.replayStatus} pollingStopped={replayPollingStopped} />
+                <OpenDotaStatus analysis={analysis} pollingStopped={openDotaPollingStopped} />
 
                 {active === 'overview' && (
                     <>
-                        {!analysis.isParsed && (
-                            <p className="notice">
-                                O OpenDota ainda não processou o replay desta partida: os percentis de desempenho podem faltar.
-                            </p>
-                        )}
                         {!performance && (
                             <p className="notice">
                                 O jogador {accountId} não aparece nesta partida, por isso não há análise de desempenho.
@@ -425,6 +427,7 @@ function AnalysisContent({ analysis, accountId, replayPollingStopped }) {
                                 <DamageSourcesCard damage={analysis.damage} heroName={performance?.heroName} />
                             </div>
                         )}
+                        <OpenDotaExtras extras={analysis.openDotaExtras} section="combat" />
                         <div className={smartStats && analysis.objectives ? 'split split-top split-7-5' : 'stack'}>
                             <ObjectivesSection objectives={analysis.objectives} durationSeconds={analysis.durationSeconds} />
                             <ThemeStatsCard themes={['fights']} smartStats={smartStats} heroName={heroName} title="Seus números nas lutas" compact />
@@ -441,6 +444,7 @@ function AnalysisContent({ analysis, accountId, replayPollingStopped }) {
                         />
                         <ThemeStatsCard themes={['economy']} smartStats={smartStats} stats={stats} heroName={heroName} title="Economia: seus números contra outros jogadores" />
                         <AbilityBuildSection abilityBuild={analysis.abilityBuild} heroName={performance?.heroName} durationSeconds={analysis.durationSeconds} />
+                        <OpenDotaExtras extras={analysis.openDotaExtras} section="build" />
                     </>
                 )}
 

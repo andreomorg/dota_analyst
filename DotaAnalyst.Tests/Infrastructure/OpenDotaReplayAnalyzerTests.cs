@@ -69,6 +69,32 @@ public class OpenDotaReplayAnalyzerTests
     }
 
     // Same SizeLimit setup as production (see AddInfrastructure), so every cache entry must declare its size.
+    [Fact]
+    public async Task Refresh_BypassesUnparsedCache_AndReplacesCachedResult()
+    {
+        var handler = new ChangingHandler();
+        using var cache = new MemoryCache(new MemoryCacheOptions { SizeLimit = 20 });
+        var analyzer = new OpenDotaReplayAnalyzer(new OpenDotaClient(new HttpClient(handler)
+            { BaseAddress = new("https://example.com/api/") }), cache);
+        var id = CreateMatchId(12);
+        Assert.False((await analyzer.GetMatchDetailsAsync(id, default))!.IsParsed);
+        Assert.False((await analyzer.GetMatchDetailsAsync(id, default))!.IsParsed);
+        Assert.True((await analyzer.RefreshMatchDetailsAsync(id, default))!.IsParsed);
+        Assert.True((await analyzer.GetMatchDetailsAsync(id, default))!.IsParsed);
+        Assert.Equal(2, handler.Calls);
+    }
+
+    private sealed class ChangingHandler : HttpMessageHandler
+    {
+        public int Calls;
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token)
+        {
+            Calls++;
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(
+                Calls == 1 ? "{\"match_id\":12}" : "{\"match_id\":12,\"version\":21}") });
+        }
+    }
+
     private static OpenDotaReplayAnalyzer CreateAnalyzer(StubHandler handler, long sizeLimit = 1000)
     {
         var httpClient = new HttpClient(handler) { BaseAddress = new Uri("https://api.opendota.com/api/") };

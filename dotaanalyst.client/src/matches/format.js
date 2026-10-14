@@ -22,6 +22,16 @@ export function formatDateTime(isoDate) {
     return `${dayFormatter.format(date)} · ${timeFormatter.format(date)}`;
 }
 
+const compactDateFormatter = new Intl.DateTimeFormat('pt-BR', { day: 'numeric', month: 'short' });
+
+export function formatCompactDate(isoDate) {
+    const date = new Date(isoDate);
+    const parts = compactDateFormatter.formatToParts(date);
+    const day = parts.find(part => part.type === 'day').value;
+    const month = parts.find(part => part.type === 'month').value;
+    return `${day} ${month}, ${timeFormatter.format(date)}`;
+}
+
 // Up to 2 decimals so per-minute rates like 0.07 kills/min stay readable; integers stay integers.
 const numberFormatter = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 2 });
 

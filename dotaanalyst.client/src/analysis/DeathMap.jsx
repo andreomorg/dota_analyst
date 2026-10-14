@@ -3,6 +3,7 @@ import { formatDuration } from '../matches/format';
 
 import { svgY, VIEW_BOX } from './mapGeometry';
 import GameMap from './GameMap';
+import TabIcon from './TabIcon';
 
 // Where the player died, on the game's minimap (GameMap.jsx).
 
@@ -29,19 +30,36 @@ function DeathMap({ deaths }) {
     }
 
     const laning = deaths.filter(death => death.inLaningPhase).length;
+    const mid = deaths.filter(death => death.seconds >= 600 && death.seconds < 1200).length;
+    const late = deaths.filter(death => death.seconds >= 1200).length;
+    const byKiller = Object.entries(deaths.reduce((counts, death) => {
+        const name = death.killer === 'hero' ? 'heróis' : (KILLERS[death.killer] ?? death.killer).toLowerCase();
+        return { ...counts, [name]: (counts[name] ?? 0) + 1 };
+    }, {})).sort((a, b) => b[1] - a[1]);
     return (
-        <div className="card map-card">
-            <div className="card-head">
-                <h3 id="death-map-title">Onde você morreu</h3>
-                <span className="card-aside mono">{deaths.length} {deaths.length === 1 ? 'morte' : 'mortes'}</span>
+        <section className="card map-card" aria-labelledby="death-map-title">
+            <div className="card-split-head">
+                <h2 id="death-map-title" className="card-heading">
+                    <TabIcon tab="skull" className="section-icon icon-loss" />
+                    Mapa de mortes
+                </h2>
+                <span className="tag-outline tag-loss mono">{deaths.length} {deaths.length === 1 ? 'morte' : 'mortes'}</span>
             </div>
             {deaths.length === 0
-                ? <p className="section-note">Você não morreu nesta partida.</p>
+                ? (
+                    <>
+                        <div className="map-frame">
+                            <svg viewBox={VIEW_BOX} role="img" aria-label="Mapa de mortes: nenhuma morte nesta partida.">
+                                <GameMap />
+                            </svg>
+                        </div>
+                        <p className="quiet-note">Você não morreu nesta partida. Nenhuma morte para marcar no mapa.</p>
+                    </>
+                )
                 : (
                     <>
-                        <p className="section-intro">{laning} na fase de rotas (até 10:00).</p>
-                        <ul className="chart-legend">
-                            <li><span className="legend-ring death-laning" aria-hidden="true" /> Fase de rotas (até 10:00)</li>
+                        <ul className="chart-legend map-legend">
+                            <li><span className="legend-ring death-laning" aria-hidden="true" /> Até 10:00</li>
                             <li><span className="legend-ring death-later" aria-hidden="true" /> Depois dos 10:00</li>
                             <li><span className="legend-ring death-aegis" aria-hidden="true" /> Voltou com Aegis</li>
                         </ul>
@@ -72,9 +90,16 @@ function DeathMap({ deaths }) {
                                 </div>
                             )}
                         </div>
+                        <div className="summary-box">
+                            <p className="summary-box-head">
+                                <span>Mortes por fase:</span>
+                                <span className="mono">0–10 min: <strong>{laning}</strong> · 10–20: <strong>{mid}</strong> · 20+: <strong>{late}</strong></span>
+                            </p>
+                            <p>Quem matou: {byKiller.map(([name, count]) => `${name} (${count})`).join(', ')}.</p>
+                        </div>
                         <details className="inline-details">
                             <summary>Ver as mortes em tabela</summary>
-                            <div className="table-scroll">
+                            <div className="table-scroll" tabIndex={0} role="region" aria-label="Mortes na partida, tabela com rolagem">
                                 <table className="data-table">
                                     <caption className="visually-hidden">Suas mortes, em ordem</caption>
                                     <thead>
@@ -100,7 +125,7 @@ function DeathMap({ deaths }) {
                         </details>
                     </>
                 )}
-        </div>
+        </section>
     );
 }
 

@@ -85,7 +85,7 @@ function HeatmapIndicators({ player, other, phaseKey, phaseLabel, matchAverage }
     return (
         <div className="heatmap-indicators">
             <h4 className="bar-group-title">Indicadores de posicionamento · {phaseLabel}</h4>
-            <div className="table-scroll">
+            <div className="table-scroll" tabIndex={0} role="region" aria-label="Indicadores de posicionamento, tabela com rolagem">
                 <table className="data-table">
                     <caption className="visually-hidden">
                         Indicadores de posicionamento de {columns.map(column => column.label).join(', ')} em {phaseLabel}

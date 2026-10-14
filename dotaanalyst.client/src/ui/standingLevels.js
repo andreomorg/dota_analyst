@@ -15,6 +15,17 @@ export function standingOf(share) {
     return LEVELS.find(level => share >= level.min);
 }
 
+// The short form of the references: "à frente de 76 em cada 100" / "86 em cada 100 foram melhores".
+export function standingPer100(share) {
+    const ahead = toPercent(share);
+    return ahead >= 50 ? `à frente de ${ahead} em cada 100` : `${100 - ahead} em cada 100 foram melhores`;
+}
+
+// The verdict without "da média" for tight spots ("Muito acima", "Na média").
+export function shortLabel(level) {
+    return level.label.replace(' da média', '');
+}
+
 // "Você foi melhor que 76% dos jogadores de Lich" / "86% dos jogadores de Lich foram melhores que você";
 // who: "jogadores de Lich" (default "jogadores").
 export function standingDetail(share, who = 'jogadores') {

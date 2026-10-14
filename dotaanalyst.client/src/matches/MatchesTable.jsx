@@ -1,5 +1,5 @@
 import { Link } from 'react-router';
-import { formatDateTime, formatDuration } from './format';
+import { formatCompactDate, formatDateTime, formatDuration } from './format';
 import { HeroPortrait } from '../heroes/HeroImage';
 import { ResultChip } from '../ui/Chips';
 import Kda from '../ui/Kda';
@@ -10,6 +10,10 @@ import Kda from '../ui/Kda';
 function MatchesTable({ matches, accountId }) {
     return (
         <section className="match-list-section" aria-label="Partidas recentes">
+            <div className="match-list-mobile-head">
+                <h2>Partidas recentes</h2>
+                <span>{matches.length} exibidas</span>
+            </div>
             <div className="match-list-head" aria-hidden="true">
                 <span>Herói</span>
                 <span>Resultado</span>
@@ -27,7 +31,7 @@ function MatchesTable({ matches, accountId }) {
                                 <HeroPortrait heroId={match.heroId} />
                                 <span className="match-row-names">
                                     <strong>{match.heroName}</strong>
-                                    <span>{match.isRadiant ? 'Radiant' : 'Dire'} · <span className="mono">#{match.matchId}</span></span>
+                                    <span>{match.isRadiant ? 'Radiant' : 'Dire'} • <span className="mono">#{match.matchId}</span></span>
                                 </span>
                             </span>
                             <span className="match-row-result">
@@ -35,17 +39,20 @@ function MatchesTable({ matches, accountId }) {
                                 <ResultChip won={match.won} />
                             </span>
                             <span className="match-row-kda">
+                                <span className="match-cell-label" aria-hidden="true">K / D / A</span>
                                 <span className="visually-hidden">Abates, mortes e assistências: </span>
                                 <Kda kills={match.kills} deaths={match.deaths} assists={match.assists} />
                             </span>
-                            <span className="match-row-duration mono">
-                                <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" /><path d="M12 8v4l3 2" /></svg>
+                            <span className="match-row-duration">
+                                <span className="match-cell-label" aria-hidden="true">Duração</span>
                                 <span className="visually-hidden">Duração: </span>
-                                {formatDuration(match.durationSeconds)}
+                                <span className="match-duration-value mono"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" /><path d="M12 8v4l3 2" /></svg>{formatDuration(match.durationSeconds)}</span>
                             </span>
                             <span className="match-row-date">
+                                <span className="match-cell-label" aria-hidden="true">Data</span>
                                 <span className="visually-hidden">Data: </span>
-                                {formatDateTime(match.startTime)}
+                                <time className="match-date-full" dateTime={match.startTime}>{formatDateTime(match.startTime)}</time>
+                                <time className="match-date-mobile" dateTime={match.startTime} title={formatDateTime(match.startTime)}>{formatCompactDate(match.startTime)}</time>
                             </span>
                         </Link>
                     </li>

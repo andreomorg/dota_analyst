@@ -1,7 +1,7 @@
 import { Link } from 'react-router';
-import { formatNumber } from '../matches/format';
+import { formatNumber, formatSignedNumber } from '../matches/format';
 import SectionHead from '../ui/SectionHead';
-import { standingDetail, standingOf } from '../ui/standingLevels';
+import { standingDetail, standingOf, standingPer100 } from '../ui/standingLevels';
 import ComparisonCard from './ComparisonCard';
 import { INSIGHT_TITLES, insightText, plain, ROLES } from './insights';
 import { metricLabel } from './metrics';
@@ -35,39 +35,65 @@ const PHASES = [
     { key: 'lateGame', label: 'Fim (20+ min)' },
 ];
 
+// The subject of each tip (InsightKind), on its tag.
+const INSIGHT_SUBJECTS = {
+    behindAtTen: 'Fase de rotas',
+    lostLaneTrades: 'Trocas na rota',
+    isolatedDeaths: 'Posicionamento',
+    aloneOnEnemySide: 'Posicionamento',
+    deathsInEnemyJungle: 'Posicionamento',
+    quickRedeaths: 'Mortes',
+    fewObservers: 'Visão',
+    shortObserverLife: 'Visão',
+    lowObserverUptime: 'Visão',
+    lowFightPresence: 'Lutas',
+    gapGrewAfterLane: 'Economia',
+};
+
 const LANES = { top: 'rota de cima', middle: 'rota do meio', bottom: 'rota de baixo', jungle: 'selva', roaming: 'roaming' };
 
 // ----- The three highlight cards -----
 
-function Icon({ kind }) {
-    const paths = {
-        strong: 'M7 11v8H4v-8h3zm2 8h7.4a2 2 0 0 0 2-1.6l1-5A2 2 0 0 0 17.4 10H14l.6-3.2A1.7 1.7 0 0 0 13 5l-4 6v8z',
-        warning: 'M12 4l9 16H3L12 4zm0 6v4m0 3h.01',
-        lane: 'M4 19h16M7 16V9m5 7V5m5 11v-4',
-    };
+const BADGE_ICONS = {
+    strong: 'M20 6L9 17l-5-5',
+    warning: 'M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0zM12 9v4M12 17h.01',
+    lane: 'M13 2L3 14h9l-1 8 10-12h-9l1-8z',
+};
+
+// A tag in the card's tone (green = good, red = attention), with its small icon.
+export function Badge({ tone, icon, children }) {
     return (
-        <svg className="card-icon" viewBox="0 0 24 24" aria-hidden="true">
-            <path d={paths[kind]} />
-        </svg>
+        <span className={`badge badge-${tone}`}>
+            {icon && <svg viewBox="0 0 24 24" aria-hidden="true"><path d={BADGE_ICONS[icon]} /></svg>}
+            {children}
+        </span>
     );
 }
 
-function HighlightCard({ tone, icon, title, text, detail, footerLabel, footerValue }) {
+function HighlightCard({ tone, icon, badge, value, title, text, footerLabel, footerValue, footerTone }) {
     return (
-        <article className={`card highlight-card tone-${tone}`}>
+        <article className="card highlight-card">
             <div>
-                <h3 className="highlight-title"><Icon kind={icon} /> {title}</h3>
+                <div className="highlight-top">
+                    <Badge tone={tone} icon={icon}>{badge}</Badge>
+                    {value && <span className={`highlight-value mono text-${tone}`}>{value}</span>}
+                </div>
+                <h3 className="highlight-title">{title}</h3>
                 <p className="highlight-text">{text}</p>
-                {detail && <p className="highlight-detail">{detail}</p>}
             </div>
             {footerLabel && (
                 <p className="highlight-footer">
                     <span>{footerLabel}</span>
-                    <strong className="mono">{footerValue}</strong>
+                    <strong className={`mono text-${footerTone ?? tone}`}>{footerValue}</strong>
                 </p>
             )}
         </article>
     );
+}
+
+// "Muito acima da média (à frente de 97 em cada 100)".
+function verdict(share) {
+    return `${standingOf(share).label} (${standingPer100(share)})`;
 }
 
 function StrongPoint({ performance }) {
@@ -82,13 +108,14 @@ function StrongPoint({ performance }) {
         <HighlightCard
             tone="win"
             icon="strong"
-            title={isStrength ? 'Ponto forte' : 'Seu melhor número'}
-            text={`${metricLabel(best.metric)}: ${standingOf(best.percentile).label.toLowerCase()}.`}
-            detail={`${capitalize(standingDetail(best.percentile, `jogadores de ${performance.heroName}`))}.${performance.strengths.length > 1
+            badge={isStrength ? 'Ponto forte' : 'Seu melhor número'}
+            value={`${formatNumber(Math.round(best.value * 100) / 100)}${best.metric === 'towerDamage' ? '' : ' /min'}`}
+            title={`${metricLabel(best.metric)}: ${standingOf(best.percentile).label.toLowerCase()}`}
+            text={`${capitalize(standingDetail(best.percentile, `jogadores de ${performance.heroName}`))}.${performance.strengths.length > 1
                 ? ` Também acima da maioria: ${performance.strengths.slice(1, 3).map(metricLabel).join(' e ')}.`
                 : ''}`}
             footerLabel={`Contra jogadores de ${performance.heroName}`}
-            footerValue={standingOf(best.percentile).label}
+            footerValue={verdict(best.percentile)}
         />
     );
 }
@@ -100,11 +127,12 @@ function AttentionPoint({ performance, smartStats }) {
             <HighlightCard
                 tone="loss"
                 icon="warning"
-                title="Ponto de atenção"
-                text={INSIGHT_TITLES[insight.kind] ?? 'Ponto de atenção'}
-                detail={insightText(insight, smartStats)}
-                footerLabel={`Comparado com ${smartStats.counterpartHeroName}`}
-                footerValue="mesma posição"
+                badge="Atenção / oportunidade"
+                title={INSIGHT_TITLES[insight.kind] ?? 'Ponto de atenção'}
+                text={insightText(insight, smartStats)}
+                footerLabel="Comparado com"
+                footerValue={`${smartStats.counterpartHeroName} (mesma posição)`}
+                footerTone="even"
             />
         );
     }
@@ -117,11 +145,12 @@ function AttentionPoint({ performance, smartStats }) {
         <HighlightCard
             tone="loss"
             icon="warning"
-            title="Ponto de atenção"
-            text={`${metricLabel(worst.metric)}: ${standingOf(worst.percentile).label.toLowerCase()}.`}
-            detail={`${capitalize(standingDetail(worst.percentile, `jogadores de ${performance.heroName}`))}: o seu número mais fraco nesta partida.`}
+            badge="Atenção / oportunidade"
+            value={`${formatNumber(Math.round(worst.value * 100) / 100)}${worst.metric === 'towerDamage' ? '' : ' /min'}`}
+            title={`${metricLabel(worst.metric)}: ${standingOf(worst.percentile).label.toLowerCase()}`}
+            text={`${capitalize(standingDetail(worst.percentile, `jogadores de ${performance.heroName}`))}: o seu número mais fraco nesta partida.`}
             footerLabel={`Contra jogadores de ${performance.heroName}`}
-            footerValue={standingOf(worst.percentile).label}
+            footerValue={verdict(worst.percentile)}
         />
     );
 }
@@ -131,22 +160,26 @@ function LanePoint({ laning, smartStats }) {
         return null;
     }
     const opponentBest = laning.opponents.reduce((best, hero) => (hero.lastHits > (best?.lastHits ?? -1) ? hero : best), null);
-    const outcome = { won: 'Ganhou', even: 'Empatada', lost: 'Perdeu' }[laning.outcome];
+    const outcome = { won: 'Ganhou a rota', even: 'Rota empatada', lost: 'Perdeu a rota' }[laning.outcome];
+    const tone = { won: 'win', lost: 'loss' }[laning.outcome] ?? 'even';
+    const difference = laning.opponents.length > 0 ? laning.netWorthDifference : null;
     const trades = smartStats?.player.laneDamageDealt !== null && smartStats?.player.laneDamageDealt !== undefined
         ? `Trocas até 10:00: causou ${formatNumber(smartStats.player.laneDamageDealt)} e recebeu ${formatNumber(smartStats.player.laneDamageTaken)} de dano de heróis.`
         : null;
     return (
         <HighlightCard
-            tone="neutral"
+            tone={tone === 'even' ? 'win' : tone}
             icon="lane"
-            title="Fase de rotas"
-            text={`${formatNumber(laning.player.lastHits)} ${laning.player.lastHits === 1 ? 'last hit' : 'last hits'} e ${formatNumber(laning.player.denies)} ${laning.player.denies === 1 ? 'deny' : 'denies'} aos 10:00 na ${LANES[laning.lane] ?? laning.lane}.`}
-            detail={[
+            badge="Fase de rotas"
+            value={difference !== null && difference !== undefined ? `${formatSignedNumber(difference)} patrimônio` : null}
+            title={`${formatNumber(laning.player.lastHits)} ${laning.player.lastHits === 1 ? 'last hit' : 'last hits'} e ${formatNumber(laning.player.denies)} ${laning.player.denies === 1 ? 'deny' : 'denies'} aos 10:00 na ${LANES[laning.lane] ?? laning.lane}`}
+            text={[
                 opponentBest && `O adversário com mais last hits, ${opponentBest.heroName}, tinha ${formatNumber(opponentBest.lastHits)}.`,
                 trades,
             ].filter(Boolean).join(' ') || 'Sem adversário na sua rota.'}
             footerLabel="Resultado da rota"
             footerValue={outcome ?? '—'}
+            footerTone={tone}
         />
     );
 }
@@ -169,7 +202,7 @@ export function PhaseDeathsCard({ smartStats }) {
                 Onde e quando as mortes aconteceram
                 <span className="summary-hint">por região do mapa, 0–10, 10–20 e 20+ min</span>
             </summary>
-            <div className="table-scroll">
+            <div className="table-scroll" tabIndex={0} role="region" aria-label="Mortes por fase, tabela com rolagem">
                 <table className="data-table">
                     <caption className="visually-hidden">
                         Mortes em cada região por fase: você, {smartStats.counterpartHeroName} e a média da partida
@@ -209,8 +242,8 @@ export function HighlightCards({ performance, laning, smartStats }) {
     }
     return (
         <section className="section" aria-labelledby="highlights-title">
-            <SectionHead id="highlights-title" title="Destaques da partida">
-                {smartStats && <span>Comparado com {smartStats.counterpartHeroName}, a mesma posição no time inimigo</span>}
+            <SectionHead id="highlights-title" title="Destaques da partida" icon="pulse">
+                <span className="mono">{smartStats ? 'Do replay e do OpenDota' : 'Do OpenDota'}</span>
             </SectionHead>
             <div className="highlight-grid">
                 <StrongPoint performance={performance} />
@@ -236,42 +269,57 @@ function SmartStatsSection({ performance, smartStats, tabs }) {
     const hasTab = key => (tabs ?? []).some(tab => tab.key === key);
 
     return (
-        <section className="section" aria-labelledby="smart-stats-title">
-            <SectionHead id="smart-stats-title" title="Como melhorar">
-                {smartStats && <span>Comparado com {smartStats.counterpartHeroName}, a mesma posição no time inimigo</span>}
-            </SectionHead>
-
+        <>
             {smartStats && (
-                <>
-                    <p className="section-intro">
-                        Você jogou de {ROLES[smartStats.role] ?? `posição ${smartStats.role}`}. As dicas mais importantes vêm
-                        primeiro; os números de cada uma estão na aba do assunto.
+                <section className="section" aria-labelledby="smart-stats-title">
+                    <SectionHead id="smart-stats-title" title="Diagnósticos Prioritários de Desempenho" icon="pulse">
+                        <span className="mono">
+                            {texts.length === 0 ? 'Nenhuma dica' : `${texts.length} ${texts.length === 1 ? 'dica' : 'dicas'}`}
+                        </span>
+                    </SectionHead>
+                    <p className="section-intro tips-context">
+                        Você jogou de {ROLES[smartStats.role] ?? `posição ${smartStats.role}`}, comparado com {smartStats.counterpartHeroName}, a
+                        mesma posição no time inimigo. As dicas mais importantes vêm primeiro; os números de cada uma estão na aba do assunto.
                     </p>
                     {texts.length === 0
-                        ? <p className="empty-state">Nada se destacou como ponto a melhorar nesta partida.</p>
+                        ? (
+                            <div className="card quiet-state">
+                                <p className="quiet-state-kicker mono">Sem pontos críticos</p>
+                                <p>Nada se destacou como ponto a melhorar nesta partida.</p>
+                            </div>
+                        )
                         : (
                             <ol className="insight-list">
-                                {texts.map(({ insight, text }) => {
+                                {texts.map(({ insight, text }, index) => {
                                     const tab = INSIGHT_TABS[insight.kind];
                                     return (
-                                        <li key={insight.kind} className="insight-item">
-                                            <strong>{INSIGHT_TITLES[insight.kind] ?? 'Dica'}</strong>
-                                            <span>{text}</span>
-                                            {tab && hasTab(tab) && (
-                                                <Link className="insight-link" to={tabLink(tab)}>
-                                                    Ver os números em {TAB_NAMES[tab]} →
-                                                </Link>
-                                            )}
+                                        <li key={insight.kind} className="card insight-item">
+                                            <div>
+                                                <div className="highlight-top">
+                                                    <Badge tone="loss">{INSIGHT_SUBJECTS[insight.kind] ?? 'Atenção'}</Badge>
+                                                    <span className="insight-rank mono">Dica {index + 1} de {texts.length}</span>
+                                                </div>
+                                                <h3 className="highlight-title">{INSIGHT_TITLES[insight.kind] ?? 'Dica'}</h3>
+                                                <p className="insight-text">{text}</p>
+                                            </div>
+                                            <p className="insight-footer">
+                                                <span className="mono">vs {smartStats.counterpartHeroName}</span>
+                                                {tab && hasTab(tab) && (
+                                                    <Link className="insight-link" to={tabLink(tab)}>
+                                                        Ver os números em {TAB_NAMES[tab]} →
+                                                    </Link>
+                                                )}
+                                            </p>
                                         </li>
                                     );
                                 })}
                             </ol>
                         )}
-                </>
+                </section>
             )}
 
             <ComparisonCard performance={performance} />
-        </section>
+        </>
     );
 }
 

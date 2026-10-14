@@ -72,7 +72,7 @@
     --page-width: 1126px;
     --gutter: 16px;
 
-    font: 400 15px/1.5 var(--sans);
+    font: 400 16px/1.5 var(--sans);
     color: var(--text);
     background: var(--bg);
     font-synthesis: none;

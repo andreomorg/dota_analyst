@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { statLabel } from '../stats/statLabels';
 import { averageIn, definitionOf, endOf, formatStat, momentLabel, valueIn } from '../stats/statQuery';
 import Standing from '../ui/Standing';
+import { standingOf } from '../ui/standingLevels';
+import TabIcon from './TabIcon';
 import { COMPARED_FORMAT, PER_30, THEMES } from './statThemes';
 
 // The numbers of one subject (statThemes.js), shown once, in the tab of that subject: for each statistic, the player,
@@ -54,9 +56,10 @@ function momentsOf(section, stats) {
         .filter(moment => (moment.at !== undefined ? moment.atEnd || moment.at < end : moment.to <= end));
 }
 
+// compact: for half a row (no descriptions, the verdict stacked).
 // themes: keys of THEMES shown in this card (one group header each when more than one); smartStats and stats from
 // the API (smartStats is null without role queue: then nothing shows).
-function ThemeStatsCard({ themes, smartStats, stats, heroName, title }) {
+function ThemeStatsCard({ themes, smartStats, stats, heroName, title, compact = false }) {
     const [selectedKey, setSelectedKey] = useState(null);
     const [momentKey, setMomentKey] = useState(null);
     if (!smartStats) {
@@ -92,67 +95,74 @@ function ThemeStatsCard({ themes, smartStats, stats, heroName, title }) {
     };
     const cell = (row, heroId, summary) => (row.stat && moment ? statCell(row, heroId, summary) : summaryCell(summary, row));
 
+    const headingId = `theme-${themes.join('-')}-title`;
     return (
-        <div className="card theme-stats">
-            <div className="card-head">
-                <h3>{title ?? sections[0].title}</h3>
-                {groups.length > 1 && (
-                    <div className="segmented" role="group" aria-label="Comparar com">
-                        {groups.map(candidate => (
-                            <button
-                                key={candidate.key}
-                                type="button"
-                                aria-pressed={candidate.key === group.key}
-                                onClick={() => setSelectedKey(candidate.key)}
-                            >
-                                {candidate.label}
-                                <span className="segmented-hint">{candidate.matches}</span>
-                            </button>
-                        ))}
-                    </div>
-                )}
-            </div>
-            {moments.length > 1 && (
-                <div className="moment-picker">
-                    <span className="moment-picker-label">Momento da partida</span>
-                    <div className="segmented" role="group" aria-label="Momento da partida">
-                        {moments.map(candidate => (
-                            <button
-                                key={candidate.key}
-                                type="button"
-                                aria-pressed={candidate.key === moment.key}
-                                onClick={() => setMomentKey(candidate.key)}
-                            >
-                                {candidate.label}
-                            </button>
-                        ))}
-                    </div>
+        <section className={`card theme-stats${compact ? ' is-compact' : ''}`} aria-labelledby={headingId}>
+            <div className="card-split-head">
+                <div>
+                    <h2 id={headingId} className="card-heading">
+                        <TabIcon tab="chart" className="section-icon" />
+                        {title ?? sections[0].title}
+                    </h2>
+                    <p className="card-subtitle">
+                        Você, {counterpartHeroName} (mesma posição no time inimigo) e a média da partida
+                        {group ? `; comparação com outros jogadores de ${heroName} (${group.label})` : ''}.
+                    </p>
                 </div>
-            )}
-            <div className="table-scroll">
-                <table className="data-table baseline-table">
+                <div className="theme-controls">
+                    {groups.length > 1 && (
+                        <div className="segmented" role="group" aria-label="Comparar com">
+                            {groups.map(candidate => (
+                                <button
+                                    key={candidate.key}
+                                    type="button"
+                                    aria-pressed={candidate.key === group.key}
+                                    onClick={() => setSelectedKey(candidate.key)}
+                                >
+                                    {candidate.label}
+                                    <span className="segmented-hint">{candidate.matches} partidas</span>
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                    {moments.length > 1 && (
+                        <div className="segmented" role="group" aria-label="Momento da partida">
+                            {moments.map(candidate => (
+                                <button
+                                    key={candidate.key}
+                                    type="button"
+                                    aria-pressed={candidate.key === moment.key}
+                                    onClick={() => setMomentKey(candidate.key)}
+                                >
+                                    {candidate.label}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            </div>
+            <div className="table-scroll" tabIndex={0} role="region" aria-label="Comparação de estatísticas, tabela com rolagem">
+                <table className="data-table baseline-table theme-table">
                     <caption className="visually-hidden">
                         Seus números{moment ? ` ${momentLabel(moment, stats)}` : ''}, os de {counterpartHeroName}, a média da partida e a comparação com {who}
                     </caption>
                     <thead>
                         <tr>
                             <th scope="col">Estatística</th>
-                            <th scope="col" className="num-col">Você</th>
+                            <th scope="col" className="num-col">Você{heroName && <span className="th-sub theme-player-name">{heroName}</span>}</th>
                             <th scope="col" className="num-col">{counterpartHeroName}<span className="th-sub">mesma posição</span></th>
                             <th scope="col" className="num-col">Média da partida</th>
-                            {group && (
-                                <th scope="col">
-                                    {group.label}
-                                    <span className="th-sub">{group.matches} partidas de {heroName}</span>
-                                </th>
-                            )}
+                            <th scope="col">
+                                {group?.label ?? 'Base de comparação'}
+                                {group && <span className="th-sub">{group.matches} partidas de {heroName}</span>}
+                            </th>
                         </tr>
                     </thead>
                     {sections.map(section => (
                         <tbody key={section.title}>
                             {sections.length > 1 && (
                                 <tr className="group-row">
-                                    <th scope="rowgroup" colSpan={group ? 5 : 4}>{section.title}</th>
+                                    <th scope="rowgroup" colSpan={5}>{section.title}</th>
                                 </tr>
                             )}
                             {section.rows.map(row => {
@@ -173,16 +183,20 @@ function ThemeStatsCard({ themes, smartStats, stats, heroName, title }) {
                                 return (
                                     <tr key={row.stat ?? row.key}>
                                         <th scope="row">
-                                            {row.stat ? statLabel(row.stat) : row.label}
+                                            <span className="comparison-name">
+                                                {row.stat ? statLabel(row.stat) : row.label}
+                                                {lower && <span className="tag-lower mono">menos é melhor</span>}
+                                            </span>
+                                            {row.desc && <span className="comparison-desc">{row.desc}</span>}
                                             {timed && definition?.kind === 'state' && moment.from !== undefined && (
                                                 <span className="indicator-hint">ganho no período</span>
                                             )}
-                                            {lower && <span className="indicator-hint">menos é melhor</span>}
                                         </th>
-                                        <td className="num-col mono">{cell(row, playerHeroId, player)}</td>
+                                        <td className={`num-col mono theme-you${compared ? ` tone-${standingOf(compared.betterThan).tone}` : ''}`}>
+                                            {cell(row, playerHeroId, player)}
+                                        </td>
                                         <td className="num-col mono">{cell(row, counterpartHeroId, counterpart)}</td>
                                         <td className="num-col mono">{cell(row, null, matchAverage)}</td>
-                                        {group && (
                                             <td>
                                                 {compared
                                                     ? (
@@ -198,13 +212,12 @@ function ThemeStatsCard({ themes, smartStats, stats, heroName, title }) {
                                                     )
                                                     : (
                                                         <span className="indicator-hint">
-                                                            {timed && (moment.atEnd || moment.at === undefined)
+                                                            {!group ? 'Sem amostras suficientes' : timed && (moment.atEnd || moment.at === undefined)
                                                                 ? 'sem comparação no fim nem em períodos'
                                                                 : 'sem comparação'}
                                                         </span>
                                                     )}
                                             </td>
-                                        )}
                                     </tr>
                                 );
                             })}
@@ -212,18 +225,14 @@ function ThemeStatsCard({ themes, smartStats, stats, heroName, title }) {
                     ))}
                 </table>
             </div>
-            {!group && (
-                <p className="section-note">
-                    A comparação com outros jogadores de {heroName} aparece quando a base tiver 10 partidas dele nesta posição.
-                </p>
-            )}
-            {moments.length > 1 && (
-                <p className="section-note">
-                    Escolha o momento acima. A comparação com outros jogadores usa as partidas da base que chegaram até esse
-                    momento (aos 5, 10, 15, 20, 25, 30 e 40 min).
-                </p>
-            )}
-        </div>
+            <p className="theme-footer">
+                {group
+                    ? (moments.length > 1
+                        ? 'A comparação com outros jogadores usa as partidas da base que chegaram até o momento escolhido (5, 10, 15, 20, 25, 30 e 40 min).'
+                        : 'Comparação com as partidas da base do mesmo herói e posição; contagens por 30 min de jogo.')
+                    : `Sem base de comparação: ela aparece quando houver 10 partidas de ${heroName} nesta posição.`}
+            </p>
+        </section>
     );
 }
 

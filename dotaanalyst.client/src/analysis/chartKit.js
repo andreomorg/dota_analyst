@@ -41,8 +41,9 @@ export function minuteTicks(lastSecond) {
     return ticks;
 }
 
-export function scales(seconds, width, yMin, yMax) {
-    const innerWidth = width - MARGIN.left - MARGIN.right;
+// right: the room kept on the right (the end labels by default; less when the chart has none).
+export function scales(seconds, width, yMin, yMax, right = MARGIN.right) {
+    const innerWidth = width - MARGIN.left - right;
     const innerHeight = HEIGHT - MARGIN.top - MARGIN.bottom;
     const last = seconds[seconds.length - 1] || 1;
     const x = second => MARGIN.left + (second / last) * innerWidth;

@@ -1,7 +1,7 @@
 import { formatNumber } from '../matches/format';
 import { HeroIcon } from '../heroes/HeroImage';
 import ItemIcon from '../items/ItemIcon';
-import { ResultChip, YouChip } from '../ui/Chips';
+
 import Kda from '../ui/Kda';
 
 // One team of the match (the Stitch "Tabela completa de jogadores"): a header with the result and the team's totals,
@@ -20,6 +20,10 @@ function Items({ items, itemIds, neutralItem, neutralItemId }) {
                     <span className="visually-hidden">{item}{index < items.length - 1 || neutralItem ? ', ' : ''}</span>
                 </span>
             ))}
+            {/* The empty slots of the six-slot inventory, as in the game. */}
+            {Array.from({ length: Math.max(0, INVENTORY_SLOTS - items.length) }, (_, index) => (
+                <span key={`empty-${index}`} className="item-slot is-empty" aria-hidden="true" />
+            ))}
             {neutralItem && (
                 <span className="item-slot item-neutral" title={`Neutro: ${neutralItem}`}>
                     {neutralItemId ? <ItemIcon itemId={neutralItemId} /> : <span className="item-image-placeholder" aria-hidden="true" />}
@@ -30,23 +34,35 @@ function Items({ items, itemIds, neutralItem, neutralItemId }) {
     );
 }
 
+const INVENTORY_SLOTS = 6;
+
+// 11830 -> "11,8k".
+function thousands(value) {
+    return `${formatNumber(Math.round(value / 100) / 10)}k`;
+}
+
 // won: true/false for this team, or null when the winner is unknown. side: 'radiant' or 'dire'.
 function TeamTable({ name, side, players, won, score }) {
     const netWorth = players.reduce((total, player) => total + player.netWorth, 0);
+    const teamGpm = players.reduce((total, player) => total + player.goldPerMinute, 0);
+    const known = won !== null && won !== undefined;
 
     return (
-        <section className={`card team-card team-${side}`} aria-label={`Time ${name}`}>
+        <section className={`card team-card team-${side}`} aria-labelledby={`team-${side}-title`}>
             <div className="team-card-head">
-                <h3>
+                <h2 id={`team-${side}-title`} className="team-card-title">
                     <span className={`team-dot team-dot-${side}`} aria-hidden="true" />
-                    {name}
-                    <ResultChip won={won} winLabel="Vencedores" lossLabel="Derrotados" />
-                </h3>
-                <p className="team-card-totals mono">
-                    {formatNumber(score)} abates · {formatNumber(Math.round(netWorth / 100) / 10)} mil de patrimônio
+                    <span className={known ? (won ? 'text-win' : 'text-loss') : undefined}>{name}</span>
+                    <span className="team-card-meta">
+                        • {formatNumber(score)} abates • {known ? (won ? 'Vencedores' : 'Derrotados') : 'resultado desconhecido'}
+                    </span>
+                </h2>
+                <p className="team-card-totals">
+                    Patrimônio médio: <strong className="mono">{players.length > 0 ? thousands(netWorth / players.length) : '—'}</strong>
+                    <span className="team-card-gap">GPM do time: <strong className="mono">{formatNumber(teamGpm)}</strong></span>
                 </p>
             </div>
-            <div className="table-scroll">
+            <div className="table-scroll" tabIndex={0} role="region" aria-label={`Jogadores do ${name}, tabela com rolagem`}>
                 <table className="data-table team-table">
                     <caption className="visually-hidden">Jogadores do time {name}</caption>
                     <thead>
@@ -67,17 +83,22 @@ function TeamTable({ name, side, players, won, score }) {
                             <tr key={`${index}-${player.heroId}`} className={player.isCurrentPlayer ? 'is-you' : undefined}>
                                 <th scope="row">
                                     <span className="hero-cell">
-                                        <HeroIcon heroId={player.heroId} />
+                                        <picture>
+                                            {Number.isInteger(player.heroId) && player.heroId > 0 && (
+                                                <source media="(min-width: 1025px)" srcSet={`/hero-images/full/${player.heroId}.webp`} />
+                                            )}
+                                            <HeroIcon heroId={player.heroId} />
+                                        </picture>
                                         {player.heroName}
-                                        {player.isCurrentPlayer && <YouChip />}
+                                        {player.isCurrentPlayer && <span className="tag-you">Você</span>}
                                     </span>
                                 </th>
                                 <td className="num-col mono">{player.level}</td>
                                 <td className="center-col"><Kda kills={player.kills} deaths={player.deaths} assists={player.assists} /></td>
-                                <td className="num-col mono">{formatNumber(player.netWorth)}</td>
+                                <td className={`num-col mono${player.isCurrentPlayer ? ' text-win' : ''}`}>{formatNumber(player.netWorth)}</td>
                                 <td className="num-col mono">{formatNumber(player.lastHits)} / {formatNumber(player.denies)}</td>
                                 <td className="num-col mono">{formatNumber(player.goldPerMinute)} / {formatNumber(player.experiencePerMinute)}</td>
-                                <td className="num-col mono">{formatNumber(player.heroDamage)}</td>
+                                <td className="num-col mono team-strong">{formatNumber(player.heroDamage)}</td>
                                 <td>
                                     <Items
                                         items={player.items}

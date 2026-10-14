@@ -1,7 +1,8 @@
 import { useId, useState } from 'react';
-import { formatDuration } from '../matches/format';
+import { formatDuration, toPercent } from '../matches/format';
 import { svgY, VIEW_BOX } from './mapGeometry';
 import GameMap from './GameMap';
+import TabIcon from './TabIcon';
 
 // Both teams' wards on the game's minimap (GameMap.jsx). Shape = kind (circle observer, diamond sentry), colour = team (blue the
 // player's team, red the other; the validated diverging pair — so colour is never the only cue), a cross =
@@ -58,8 +59,9 @@ function describe(ward) {
         : life === null ? 'até o fim da partida' : `expirou após ${formatDuration(life)}`;
 }
 
+// uptime: the share of the match with an observer of the player's team (smartStats; null without it).
 // wards comes from the API (null until the replay is read; absent on older responses: then nothing shows).
-function WardMap({ wards }) {
+function WardMap({ wards, uptime }) {
     const hasPlayer = wards?.some(ward => ward.isPlayersTeam !== null) ?? false;
     const [team, setTeam] = useState('all');
     const [period, setPeriod] = useState('all');
@@ -79,27 +81,22 @@ function WardMap({ wards }) {
     const current = shown.find(({ index }) => index === selected)?.ward;
     const teamLabels = hasPlayer ? TEAMS : { mine: 'Radiant', theirs: 'Dire', all: 'Ambos' };
 
+    const count = (kind, mine) => wards.filter(ward => ward.kind === kind && isMine(ward) === mine).length;
     return (
-        <div className="card map-card">
-            <div className="card-head">
-                <h3 id="ward-map-title">Wards</h3>
-                <span className="card-aside mono">{shown.length} de {wards.length}</span>
+        <section className="card map-card" aria-labelledby="ward-map-title">
+            <div className="card-split-head">
+                <h2 id="ward-map-title" className="card-heading">
+                    <TabIcon tab="eye" className="section-icon icon-amber" />
+                    Mapa de visão e wards
+                </h2>
+                <span className="tag-outline mono">
+                    {uptime !== null && uptime !== undefined ? `${toPercent(uptime)}% com observer` : `${wards.length} wards`}
+                </span>
             </div>
-            <p className="section-intro">
-                {wards.filter(isMine).length} do {hasPlayer ? 'seu time' : 'Radiant'} e {wards.filter(ward => !isMine(ward)).length} do
-                {hasPlayer ? ' adversário' : ' Dire'}.
-            </p>
             <div className="map-filters">
                 <Filter label="Time" options={teamLabels} value={team} onChange={setTeam} />
                 <Filter label="Período" options={PERIODS} value={period} onChange={setPeriod} />
             </div>
-            <ul className="chart-legend">
-                <li><span className="legend-ring team-mine" aria-hidden="true" /> {teamLabels.mine}</li>
-                <li><span className="legend-ring team-theirs" aria-hidden="true" /> {teamLabels.theirs}</li>
-                <li><img className="legend-icon" src={ICONS.observer} alt="" aria-hidden="true" /> Observer</li>
-                <li><img className="legend-icon" src={ICONS.sentry} alt="" aria-hidden="true" /> Sentry</li>
-                <li><span className="legend-shape destroyed" aria-hidden="true">×</span> Destruído</li>
-            </ul>
             <div className="map-frame">
                 <svg viewBox={VIEW_BOX} role="img" aria-label={`Mapa com ${shown.length} wards; os detalhes estão na tabela abaixo.`}>
                     <defs>
@@ -130,9 +127,20 @@ function WardMap({ wards }) {
                     </div>
                 )}
             </div>
+            <ul className="chart-legend map-legend ward-legend">
+                <li><span className="legend-ring team-mine" aria-hidden="true" /> {teamLabels.mine}</li>
+                <li><span className="legend-ring team-theirs" aria-hidden="true" /> {teamLabels.theirs}</li>
+                <li><img className="legend-icon" src={ICONS.observer} alt="" aria-hidden="true" /> Observers ({count('observer', true)} × {count('observer', false)})</li>
+                <li><img className="legend-icon" src={ICONS.sentry} alt="" aria-hidden="true" /> Sentries ({count('sentry', true)} × {count('sentry', false)})</li>
+                <li><span className="legend-shape destroyed" aria-hidden="true">×</span> Destruído</li>
+            </ul>
+            <p className="section-note">
+                Mostrando {shown.length} de {wards.length}: {wards.filter(isMine).length} do {hasPlayer ? 'seu time' : 'Radiant'} e {wards.filter(ward => !isMine(ward)).length} do
+                {hasPlayer ? ' adversário' : ' Dire'} (entre parênteses: {teamLabels.mine.toLowerCase()} × {teamLabels.theirs.toLowerCase()}).
+            </p>
             <details className="inline-details">
                 <summary>Ver os {shown.length} wards em tabela</summary>
-                <div className="table-scroll">
+                <div className="table-scroll" tabIndex={0} role="region" aria-label="Wards na partida, tabela com rolagem">
                     <table className="data-table">
                         <thead>
                             <tr>
@@ -155,7 +163,7 @@ function WardMap({ wards }) {
                     </table>
                 </div>
             </details>
-        </div>
+        </section>
     );
 }
 

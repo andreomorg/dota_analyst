@@ -1,12 +1,10 @@
 import { formatDuration, formatNumber, formatSignedNumber } from '../matches/format';
 import { HeroIcon } from '../heroes/HeroImage';
-import { YouChip } from '../ui/Chips';
-import SectionHead from '../ui/SectionHead';
 
 const LANE_LABELS = {
-    top: 'Top (rota de cima)',
-    middle: 'Mid (rota do meio)',
-    bottom: 'Bot (rota de baixo)',
+    top: 'Rota de cima',
+    middle: 'Rota do meio',
+    bottom: 'Rota de baixo',
     jungle: 'Selva',
     roaming: 'Roaming',
 };
@@ -44,70 +42,78 @@ function laneLabel(lane) {
     return LANE_LABELS[lane] ?? lane;
 }
 
-function PlayerRow({ player, isCurrentPlayer }) {
+// side: 'ally' (green numbers for the lane's leader on your side) or 'enemy' (red).
+function PlayerRow({ player, isCurrentPlayer, side, lead }) {
     return (
         <tr className={isCurrentPlayer ? 'is-you' : undefined}>
             <th scope="row">
                 <span className="hero-cell">
                     <HeroIcon heroId={player.heroId} />
                     {player.heroName}
-                    {isCurrentPlayer && <YouChip />}
+                    {isCurrentPlayer && <span className="tag-you">Você</span>}
                 </span>
             </th>
-            <td className="num-col mono">{formatNumber(player.lastHits)} / {formatNumber(player.denies)}</td>
-            <td className="num-col mono">{formatNumber(player.netWorth)}</td>
-            <td className="num-col mono">{formatNumber(player.experience)}</td>
-            <td className="num-col mono">{formatNumber(player.deaths)}</td>
+            <td className={`num-col mono${lead ? ` lane-lead lane-${side}` : ''}`}>{formatNumber(player.lastHits)} / {formatNumber(player.denies)}</td>
+            <td className={`num-col mono lane-${side}`}>{formatNumber(player.netWorth)}</td>
+            <td className="num-col mono">{formatNumber(player.experience)} XP</td>
+            <td className={`num-col mono${player.deaths > 0 ? ' text-loss' : ''}`}>{formatNumber(player.deaths)}</td>
         </tr>
     );
 }
 
 const COLUMN_COUNT = 5;
 
-function GroupHeader({ title }) {
+function GroupHeader({ title, side }) {
     return (
-        <tr className="group-row">
+        <tr className={`group-row group-${side}`}>
             <th scope="rowgroup" colSpan={COLUMN_COUNT}>{title}</th>
         </tr>
     );
 }
 
-function LaningTable({ laning, time, isLane }) {
+// The hero of a side with the most last hits (its numbers stand out, as in the reference).
+function leaderOf(players) {
+    return players.reduce((best, hero) => (hero.lastHits > (best?.lastHits ?? -1) ? hero : best), null)?.heroId;
+}
+
+function LaningTable({ laning, time, isLane, ourTeam, theirTeam }) {
     const allies = laning.allies ?? [];
     const opponents = laning.opponents ?? [];
     // In the jungle or roaming there is usually only the player: no sides to label.
     const showOpponents = opponents.length > 0 || isLane;
+    const ourLeader = leaderOf([laning.player, ...allies]);
+    const theirLeader = leaderOf(opponents);
 
     return (
-        <div className="table-scroll">
-            <table className="data-table">
+        <div className="table-scroll" tabIndex={0} role="region" aria-label="Jogadores da rota, tabela com rolagem">
+            <table className="data-table lane-table">
                 <caption className="visually-hidden">
                     Last hits, denies, patrimônio, experiência e mortes aos {time}
                 </caption>
                 <thead>
                     <tr>
                         <th scope="col">Herói</th>
-                        <th scope="col" className="num-col">LH / DN</th>
+                        <th scope="col" className="num-col">LH / denies</th>
                         <th scope="col" className="num-col">Patrimônio</th>
                         <th scope="col" className="num-col">Experiência</th>
-                        <th scope="col" className="num-col">Mortes</th>
+                        <th scope="col" className="num-col">Mortes na rota</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {showOpponents && <GroupHeader title="Seu lado na rota" />}
-                    <PlayerRow player={laning.player} isCurrentPlayer />
-                    {allies.map(ally => <PlayerRow key={ally.heroId} player={ally} />)}
+                    {showOpponents && <GroupHeader title={`Seu lado (${ourTeam})`} side="ally" />}
+                    <PlayerRow player={laning.player} isCurrentPlayer side="ally" lead={ourLeader === laning.player.heroId} />
+                    {allies.map(ally => <PlayerRow key={ally.heroId} player={ally} side="ally" lead={ourLeader === ally.heroId} />)}
                 </tbody>
                 {showOpponents && (
                     <tbody>
-                        <GroupHeader title="Adversários na rota" />
+                        <GroupHeader title={`Adversários (${theirTeam})`} side="enemy" />
                         {opponents.length === 0
                             ? (
                                 <tr>
                                     <td colSpan={COLUMN_COUNT}>Nenhum adversário nesta rota.</td>
                                 </tr>
                             )
-                            : opponents.map(opponent => <PlayerRow key={opponent.heroId} player={opponent} />)}
+                            : opponents.map(opponent => <PlayerRow key={opponent.heroId} player={opponent} side="enemy" lead={theirLeader === opponent.heroId} />)}
                     </tbody>
                 )}
             </table>
@@ -115,57 +121,69 @@ function LaningTable({ laning, time, isLane }) {
     );
 }
 
-function LaningSummary({ laning }) {
+function LaningSummary({ laning, isRadiant }) {
     const time = formatDuration(laning.endsAtSeconds);
     const outcome = OUTCOMES[laning.outcome];
     const isLane = LANES.includes(laning.lane);
     const noLaneText = NO_LANE_TEXT[laning.lane] ?? (isLane ? UNCONTESTED_LANE_TEXT : undefined);
     const hasDifference = outcome && laning.netWorthDifference !== null && laning.netWorthDifference !== undefined;
+    const ourTeam = isRadiant === false ? 'Dire' : 'Radiant';
+    const theirTeam = isRadiant === false ? 'Radiant' : 'Dire';
 
     return (
-        <section className="section" aria-labelledby="laning-title">
-            <SectionHead id="laning-title" title="Fase de rotas">
-                <span>Aos {time} de jogo, segundo o replay</span>
-            </SectionHead>
-            <div className="card">
-                <dl className="fact-row">
-                    <div className="tile">
-                        <dt className="stat-label">Rota</dt>
-                        <dd>{laneLabel(laning.lane)}</dd>
-                    </div>
-                    {outcome && (
-                        <div className="tile">
-                            <dt className="stat-label">Resultado</dt>
+        <section className="card lane-card" aria-labelledby="laning-title">
+            <div className="lane-card-head">
+                <div>
+                    <p className="kicker">{isLane ? `Confronto da ${laneLabel(laning.lane).toLowerCase()}` : `Fase de rotas · ${laneLabel(laning.lane)}`}</p>
+                    <h2 id="laning-title" className="lane-card-title">
+                        {laning.opponents.length > 0 ? `${ourTeam} × ${theirTeam}` : 'Sua rota'} (0:00 – {time})
+                    </h2>
+                </div>
+                {outcome && (
+                    <dl className="lane-result">
+                        <div>
+                            <dt className="mono">Resultado da rota</dt>
                             <dd className={outcome.className}>{outcome.label}</dd>
                         </div>
-                    )}
-                    {hasDifference && (
-                        <div className="tile">
-                            <dt className="stat-label">Diferença de patrimônio</dt>
-                            <dd className={`mono ${laning.netWorthDifference >= 0 ? 'text-win' : 'text-loss'}`}>
-                                {formatSignedNumber(laning.netWorthDifference)}
-                            </dd>
-                        </div>
-                    )}
-                </dl>
-
-                {hasDifference && (
-                    <p className="section-note">
-                        Patrimônio somado do seu lado na rota menos o dos adversários, aos {time}.
-                    </p>
+                        {hasDifference && (
+                            <div>
+                                <dt className="mono">Diferença de patrimônio ({time})</dt>
+                                <dd className={`mono ${laning.netWorthDifference >= 0 ? 'text-win' : 'text-loss'}`}>
+                                    {formatSignedNumber(laning.netWorthDifference)}
+                                </dd>
+                            </div>
+                        )}
+                    </dl>
                 )}
-                {!outcome && noLaneText && <p className="section-note">{noLaneText}</p>}
-
-                <LaningTable laning={laning} time={time} isLane={isLane} />
             </div>
+
+            {!outcome && noLaneText && <p className="section-note">{noLaneText}</p>}
+
+            <LaningTable laning={laning} time={time} isLane={isLane} ourTeam={ourTeam} theirTeam={theirTeam} />
+            {hasDifference && (
+                <p className="section-note">
+                    Diferença = patrimônio somado do seu lado na rota menos o dos adversários, aos {time}, segundo o replay.
+                </p>
+            )}
         </section>
     );
 }
 
 // The laning phase section; laning comes from the API (null without a point-of-view player or before the replay is
-// read: then nothing shows).
-function LaningSection({ laning }) {
-    return laning ? <LaningSummary laning={laning} /> : null;
+// read: then nothing shows). isRadiant: the point-of-view player's team (names the sides).
+function LaningSection({ laning, isRadiant }) {
+    return laning ? <LaningSummary laning={laning} isRadiant={isRadiant} /> : null;
+}
+
+const REPLAY_ICONS = {
+    clock: <><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" /></>,
+    expired: <><circle cx="12" cy="12" r="10" /><path d="M4.9 4.9l14.2 14.2" /></>,
+    unavailable: <path d="M1 1l22 22M16.7 11.1A10.9 10.9 0 0 1 19 12.5M5 12.6a10.9 10.9 0 0 1 5.2-2.5M10.7 5.1A16 16 0 0 1 22.6 9M1.4 9a15.9 15.9 0 0 1 4.7-2.9M8.5 16.1a5 5 0 0 1 7 0M12 20h.01" />,
+    failed: <><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M9 9l6 6M15 9l-6 6" /></>,
+};
+
+function ReplayIcon({ kind }) {
+    return <svg className="replay-status-icon" viewBox="0 0 24 24" aria-hidden="true">{REPLAY_ICONS[kind]}</svg>;
 }
 
 // Where the reading of the replay stands, as a banner at the top of the analysis (nothing once it is ready).
@@ -181,23 +199,28 @@ export function ReplayStatusBanner({ replayStatus, pollingStopped }) {
         announcement = 'A análise do replay está pronta.';
     } else if (replayStatus === 'processing') {
         content = (
-            <div className={`replay-status replay-status-processing${pollingStopped ? ' replay-status-delayed' : ''}`}>
-                <span className="replay-status-indicator" aria-hidden="true" />
-                <div>
-                    <h2>Analisando o replay</h2>
-                    <p>{processingText}</p>
-                </div>
+            <div className={`replay-status replay-status-${pollingStopped ? 'delayed' : 'processing'}`}>
+                {pollingStopped
+                    ? <ReplayIcon kind="clock" />
+                    : <span className="replay-status-indicator" aria-hidden="true" />}
+                <p><strong>{pollingStopped ? 'O replay está demorando.' : 'Analisando o replay.'}</strong> {processingText}</p>
             </div>
         );
         announcement = processingText;
     } else if (STATUS_TEXT[replayStatus]) {
         content = (
-            <div className={`replay-status replay-status-${replayStatus}`}>
-                <div>
-                    <h2>{STATUS_TITLE[replayStatus]}</h2>
-                    <p>{STATUS_TEXT[replayStatus]}</p>
+            <>
+                <div className={`replay-status replay-status-${replayStatus}`}>
+                    <ReplayIcon kind={replayStatus} />
+                    <p><strong>{STATUS_TITLE[replayStatus]}.</strong> {STATUS_TEXT[replayStatus]} O placar e os números do OpenDota continuam disponíveis.</p>
                 </div>
-            </div>
+                {replayStatus === 'expired' && (
+                    <p className="replay-status-strip mono">
+                        <span>Dados disponíveis sem o replay</span>
+                        <span className="text-win">Placar · itens finais · GPM/XPM · percentis do OpenDota</span>
+                    </p>
+                )}
+            </>
         );
         announcement = STATUS_TEXT[replayStatus];
     }

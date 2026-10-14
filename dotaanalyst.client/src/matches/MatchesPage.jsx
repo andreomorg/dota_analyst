@@ -3,6 +3,8 @@ import { toAccountId } from '../accountId';
 import { readSavedAccountId, saveAccountId } from '../accountStorage';
 import { fetchRecentMatches } from '../api/matches';
 import { useCurrentUser } from '../auth/useCurrentUser';
+import { loginUrl } from '../api/auth';
+import StatePanel, { StateIcon } from '../ui/StatePanel';
 import MatchesTable from './MatchesTable';
 
 // Only checks the format (account ID or SteamID64); the API decides if the number is valid.
@@ -29,6 +31,7 @@ function SearchIcon() {
 
 function MatchesPage() {
     const { status: sessionStatus, user } = useCurrentUser();
+    const searchInput = useRef(null);
     const [savedAccountId] = useState(readSavedAccountId);
     // null = the user hasn't typed anything yet, so the field shows the default account ID.
     const [accountIdInput, setAccountIdInput] = useState(null);
@@ -51,6 +54,18 @@ function MatchesPage() {
     const inputValue = accountIdInput ?? (sessionReady ? defaultAccountId : '');
     const searchKey = search?.key;
     const searchAccountId = search?.accountId;
+
+    useEffect(() => {
+        function focusSearch(event) {
+            if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+                event.preventDefault();
+                searchInput.current?.focus();
+                searchInput.current?.select();
+            }
+        }
+        window.addEventListener('keydown', focusSearch);
+        return () => window.removeEventListener('keydown', focusSearch);
+    }, []);
 
     useEffect(() => {
         if (!searchKey) {
@@ -120,7 +135,7 @@ function MatchesPage() {
     return (
         <main className="page container matches-page">
             <section className="matches-hero" aria-labelledby="matches-title">
-                <p className="kicker">Dota 2 <span aria-hidden="true">//</span> histórico de partidas</p>
+                <p className="kicker">Dota 2 <span aria-hidden="true">//</span> histórico</p>
                 <h1 id="matches-title">{viewingSomeoneElse ? 'Partidas' : 'Minhas partidas'}</h1>
                 <p className="matches-description">
                     Os resultados recentes. Abra uma partida para ver a análise do replay: fase de rotas, mapa de
@@ -134,6 +149,7 @@ function MatchesPage() {
                     <div className="search-field">
                         <SearchIcon />
                         <input
+                            ref={searchInput}
                             id="account-id"
                             inputMode="numeric"
                             autoComplete="off"
@@ -142,12 +158,16 @@ function MatchesPage() {
                                 setAccountIdInput(event.target.value);
                                 setInputError(null);
                             }}
-                            placeholder="Account ID do Dota ou SteamID64 (ex.: 87278757)"
+                            placeholder="Ex: 99517715 ou 76561198059783443"
                             aria-describedby={inputError ? 'account-id-error' : 'account-id-hint'}
                             aria-invalid={Boolean(inputError)}
                         />
+                        <kbd className="search-shortcut" aria-hidden="true">Ctrl + K</kbd>
                     </div>
-                    <button className="button-primary" type="submit" disabled={state.status === 'loading'}>Buscar</button>
+                    <button className="button-primary" type="submit" disabled={state.status === 'loading'}>
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6" /><path d="M15 15l5 5" /></svg>
+                        {state.status === 'loading' && search ? 'Buscando…' : 'Buscar'}
+                    </button>
                     <p id="account-id-hint" className="search-hint">
                         {ownAccountId
                             ? 'Mostrando as suas partidas. Para ver as de outro jogador, informe o account ID ou o SteamID64 dele.'
@@ -162,7 +182,18 @@ function MatchesPage() {
                 </form>
             </section>
 
-            {inputError && <p id="account-id-error" className="alert" role="alert">{inputError}</p>}
+            {inputError && (
+                <div className="input-error">
+                    <p id="account-id-error" className="input-error-text mono" role="alert">
+                        <StateIcon icon="info" /> {inputError}
+                    </p>
+                    <p className="input-examples mono">
+                        <span>Exemplos válidos:</span>
+                        <span className="text-win">account ID: 99517715</span>
+                        <span className="text-win">SteamID64: 76561198059783443 (17 dígitos)</span>
+                    </p>
+                </div>
+            )}
             {state.status === 'loading' && (
                 <div role="status" aria-live="polite" aria-busy="true">
                     <p className="loading-line"><span className="spinner" aria-hidden="true" /> Carregando partidas...</p>
@@ -170,19 +201,54 @@ function MatchesPage() {
                 </div>
             )}
             {state.status === 'error' && !inputError && (
-                <div className="alert" role="alert">
-                    <p>{state.message}</p>
-                    <button className="button-secondary" type="button" onClick={retrySearch}>Tentar novamente</button>
+                <div className="error-panel" role="alert">
+                    <span className="error-panel-icon"><StateIcon icon="alert" /></span>
+                    <div>
+                        <h2>Não foi possível carregar as partidas</h2>
+                        <p>{state.message}</p>
+                        <button className="button-secondary button-retry" type="button" onClick={retrySearch}>
+                            <span aria-hidden="true">↻</span> Tentar novamente
+                        </button>
+                    </div>
                 </div>
             )}
             {state.status === 'idle' && (
-                <p className="empty-state">Informe um ID acima para buscar as partidas recentes.</p>
+                sessionStatus === 'anonymous'
+                    ? (
+                        <div className="steam-panel">
+                            <span className="steam-panel-icon"><StateIcon icon="user" /></span>
+                            <div>
+                                <h2>Entrar com a Steam</h2>
+                                <p>Carregue as suas partidas sem digitar o identificador. O site nunca vê a sua senha.</p>
+                            </div>
+                            <a className="button-secondary steam-panel-button" href={loginUrl('/')}>Entrar com a Steam</a>
+                        </div>
+                    )
+                    : <p className="quiet-note">Informe um ID acima para buscar as partidas recentes.</p>
             )}
             {state.status === 'success' && state.matches.length === 0 && (
-                <div className="empty-state">
-                    <h2>Nenhuma partida encontrada</h2>
+                <StatePanel
+                    icon="search"
+                    title="Nenhuma partida encontrada"
+                    actions={(
+                        <button
+                            className="button-secondary"
+                            type="button"
+                            onClick={() => {
+                                searchInput.current?.focus();
+                                searchInput.current?.select();
+                            }}
+                        >
+                            Tentar outro ID
+                        </button>
+                    )}
+                >
                     <p>O perfil pode estar privado ou ainda não ter partidas disponíveis.</p>
-                </div>
+                    <p className="state-hint">
+                        <StateIcon icon="info" />
+                        <span>Confira se a opção <strong>“Expor dados públicos de partidas”</strong> está ativada nas configurações do Dota 2 (Social).</span>
+                    </p>
+                </StatePanel>
             )}
             {state.status === 'success' && state.matches.length > 0 && (
                 <MatchesTable matches={state.matches} accountId={search.accountId} />

@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
+import { loginUrl } from '../api/auth';
+import { StateIcon } from '../ui/StatePanel';
 
 // The API sends the browser to "/?login=failed" when the Steam login fails or is cancelled.
 function LoginFailedNotice() {
@@ -25,9 +27,15 @@ function LoginFailedNotice() {
     }
 
     return (
-        <div className="login-failed" role="alert">
-            <p>Não foi possível entrar com a Steam. Tente de novo.</p>
-            <button type="button" onClick={() => setVisible(false)} aria-label="Fechar aviso">×</button>
+        <div className="container">
+            <div className="login-failed" role="alert">
+                <StateIcon icon="alert" />
+                <p>Não foi possível entrar com a Steam. Tente de novo.</p>
+                <a className="login-failed-retry" href={loginUrl(location.pathname)}>Entrar novamente com a Steam</a>
+                <button type="button" className="login-failed-close mono" onClick={() => setVisible(false)}>
+                    <span aria-hidden="true">×</span> Fechar aviso
+                </button>
+            </div>
         </div>
     );
 }

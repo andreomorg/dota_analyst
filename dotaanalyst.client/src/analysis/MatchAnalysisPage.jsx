@@ -1,20 +1,23 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router';
 import { readSavedAccountId } from '../accountStorage';
+import { loginUrl } from '../api/auth';
+import StatePanel, { StateIcon } from '../ui/StatePanel';
 import { useCurrentUser } from '../auth/useCurrentUser';
 import SectionHead from '../ui/SectionHead';
 import AbilityBuildSection from './AbilityBuildSection';
-import DamageSection from './DamageSection';
+import { DamageHeroesCard, DamageSourcesCard } from './DamageSection';
 import DeathMap from './DeathMap';
 import FightsSection from './FightsSection';
 import HeatmapSection from './HeatmapSection';
 import ItemBuildSection from './ItemBuildSection';
 import LaningSection, { ReplayStatusBanner } from './LaningSection';
 import MatchHeader from './MatchHeader';
-import ObjectivesSection from './ObjectivesSection';
+import ObjectivesSection, { ObjectiveCards } from './ObjectivesSection';
 import PerformanceSummary from './PerformanceSummary';
 import SmartStatsSection, { HighlightCards, PhaseDeathsCard } from './SmartStatsSection';
 import StatChart from './StatChart';
+import TabIcon from './TabIcon';
 import { useTabLink } from './tabLink';
 import TeamTable from './TeamTable';
 import ThemeStatsCard from './ThemeStatsCard';
@@ -40,16 +43,14 @@ function MatchAnalysisSkeleton({ matchId }) {
     return (
         <section className="analysis-loading" role="status" aria-live="polite" aria-busy="true">
             <h1 className="visually-hidden">Partida {matchId}</h1>
-            <p className="loading-line"><span className="spinner" aria-hidden="true" /> Carregando os dados da partida {matchId}...</p>
+            <p className="loading-line"><span className="loading-dot" aria-hidden="true" /> Carregando os dados da partida {matchId}...</p>
             <div aria-hidden="true" className="skeleton-stack">
                 <span className="skeleton skeleton-banner" />
                 <div className="skeleton-tiles">
                     <span className="skeleton" />
                     <span className="skeleton" />
                     <span className="skeleton" />
-                    <span className="skeleton" />
                 </div>
-                <span className="skeleton skeleton-block" />
             </div>
         </section>
     );
@@ -81,13 +82,20 @@ function MatchAnalysisPage() {
         return (
             <main className="page container">
                 <BackLink />
-                <div className="empty-state">
-                    <h1>Partida {matchId}</h1>
-                    <p>
-                        Para ver a análise, entre com a Steam ou informe o seu account ID do Dota na{' '}
-                        <Link to="/">lista de partidas</Link>.
-                    </p>
-                </div>
+                <StatePanel
+                    icon="user"
+                    tone="you"
+                    title={`Partida ${matchId}`}
+                    titleAs="h1"
+                    actions={(
+                        <>
+                            <Link className="button-secondary" to="/">Voltar para as partidas</Link>
+                            <a className="button-secondary button-steam" href={loginUrl(`/matches/${matchId}`)}>Entrar com a Steam</a>
+                        </>
+                    )}
+                >
+                    <p>Para ver a análise, entre com a Steam ou informe o seu account ID do Dota na lista de partidas.</p>
+                </StatePanel>
             </main>
         );
     }
@@ -96,10 +104,15 @@ function MatchAnalysisPage() {
         return (
             <main className="page container">
                 <BackLink />
-                <div className="empty-state">
-                    <h1>Partida inválida</h1>
-                    <p className="alert" role="alert">O número da partida deve conter só dígitos.</p>
-                </div>
+                <StatePanel
+                    icon="invalid"
+                    tone="loss"
+                    title="Partida inválida"
+                    titleAs="h1"
+                    actions={<Link className="button-secondary" to="/">← Voltar para a busca</Link>}
+                >
+                    <p role="alert">O número da partida deve conter só dígitos.</p>
+                </StatePanel>
             </main>
         );
     }
@@ -116,11 +129,14 @@ function MatchAnalysisPage() {
             {state.status === 'error' && (
                 <div className="page container">
                     <BackLink />
-                    <div className="alert alert-block" role="alert">
-                        <h1>Partida {matchId}</h1>
-                        <p>{state.message}</p>
-                        <button className="button-secondary" type="button" onClick={state.retry}>
-                            Tentar novamente
+                    <div className="error-panel error-panel-wide" role="alert">
+                        <span className="error-panel-icon"><StateIcon icon="alert" /></span>
+                        <div>
+                            <h1>Partida {matchId}</h1>
+                            <p>{state.message}</p>
+                        </div>
+                        <button className="button-secondary button-retry" type="button" onClick={state.retry}>
+                            <span aria-hidden="true">↻</span> Tentar novamente
                         </button>
                     </div>
                 </div>
@@ -178,6 +194,7 @@ function TabNav({ tabs, active }) {
             <div className="container analysis-nav-inner" ref={barRef}>
                 {tabs.map(tab => (
                     <Link key={tab.key} to={tabLink(tab.key)} aria-current={active === tab.key ? 'page' : undefined}>
+                        <TabIcon tab={tab.key} />
                         {tab.label}
                     </Link>
                 ))}
@@ -195,37 +212,46 @@ function Shortcuts({ analysis, tabs }) {
     const won = fights?.filter(fight => fight.playersTeamWon === true).length;
     const joined = fights?.filter(fight => fight.died || fight.kills > 0 || fight.assists > 0).length;
     const lastItem = itemBuild?.items.at(-1);
+    const tips = smartStats?.insights.length;
+    const plural = (count, one, many) => `${count} ${count === 1 ? one : many}`;
     const items = [
         has('tips') && {
             key: 'tips',
             label: 'Como melhorar',
-            value: smartStats ? `${smartStats.insights.length} ${smartStats.insights.length === 1 ? 'dica' : 'dicas'}` : `${performance?.weaknesses.length ?? 0} pontos fracos`,
-            sub: smartStats ? `contra ${smartStats.counterpartHeroName} e outros jogadores do herói` : 'percentis do OpenDota',
+            sub: smartStats
+                ? (tips > 0 ? `${plural(tips, 'dica', 'dicas')} contra ${smartStats.counterpartHeroName} e outros jogadores do herói` : 'Nada se destacou como ponto a melhorar')
+                : `${plural(performance?.weaknesses.length ?? 0, 'ponto fraco', 'pontos fracos')} nos percentis do OpenDota`,
+            cta: 'Abrir dicas',
         },
         has('laning') && {
             key: 'laning',
             label: 'Fase de rotas',
-            value: outcome ?? 'Sem disputa',
-            tone: { won: 'win', lost: 'loss' }[laning.outcome],
-            sub: `${laning.player.lastHits} ${laning.player.lastHits === 1 ? 'last hit' : 'last hits'} aos 10:00`,
+            sub: `${outcome ?? 'Sem disputa'}: ${plural(laning.player.lastHits, 'last hit', 'last hits')} aos 10:00`,
+            cta: 'Ver a rota',
         },
         has('positioning') && {
             key: 'positioning',
             label: 'Posicionamento',
-            value: deaths ? `${deaths.length} ${deaths.length === 1 ? 'morte' : 'mortes'}` : 'Mapa de calor',
-            sub: 'mapa de calor, mortes e wards',
+            sub: `Mapa de calor, wards e ${deaths ? plural(deaths.length, 'morte', 'mortes') : 'mortes'}`,
+            cta: 'Ver o mapa',
         },
-        has('fights') && fights && {
+        has('fights') && {
             key: 'fights',
             label: 'Lutas e objetivos',
-            value: `${won} de ${fights.length} vencidas`,
-            sub: `você participou de ${joined}`,
+            sub: fights ? `${won} de ${plural(fights.length, 'luta vencida', 'lutas vencidas')}; você participou de ${joined}` : 'Dano e objetivos da partida',
+            cta: 'Ver as lutas',
         },
-        has('build') && lastItem && {
+        has('build') && {
             key: 'build',
             label: 'Build',
-            value: `${itemBuild.items.length} itens`,
-            sub: `último: ${lastItem.name}`,
+            sub: lastItem ? `${plural(itemBuild.items.length, 'item', 'itens')}; último: ${lastItem.name}` : 'Itens e habilidades na ordem',
+            cta: 'Ver a build',
+        },
+        has('players') && !has('build') && {
+            key: 'players',
+            label: 'Jogadores',
+            sub: 'Os 10 jogadores e qualquer estatística minuto a minuto',
+            cta: 'Ver os jogadores',
         },
     ].filter(Boolean);
     if (items.length === 0) {
@@ -234,15 +260,20 @@ function Shortcuts({ analysis, tabs }) {
 
     return (
         <section className="section" aria-labelledby="shortcuts-title">
-            <SectionHead id="shortcuts-title" title="Mais detalhes" />
+            <SectionHead id="shortcuts-title" title="Aprofundar a análise desta partida" icon="forward">
+                <span className="mono">Uma aba para cada pergunta</span>
+            </SectionHead>
             <ul className="shortcut-grid">
                 {items.map(item => (
                     <li key={item.key}>
-                        <Link className="card shortcut" to={tabLink(item.key)}>
-                            <span className="stat-label">{item.label}</span>
-                            <strong className={item.tone ? `text-${item.tone}` : undefined}>{item.value}</strong>
-                            <span className="stat-sub">{item.sub}</span>
-                            <span className="shortcut-arrow" aria-hidden="true">→</span>
+                        <Link className="shortcut" to={tabLink(item.key)}>
+                            <span className="shortcut-icons" aria-hidden="true">
+                                <TabIcon tab={item.key} className="shortcut-icon" />
+                                <svg className="shortcut-chevron" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6" /></svg>
+                            </span>
+                            <strong>{item.label}</strong>
+                            <span className="shortcut-sub">{item.sub}</span>
+                            <span className="shortcut-cta mono" aria-hidden="true">{item.cta} →</span>
                         </Link>
                     </li>
                 ))}
@@ -269,6 +300,8 @@ function AnalysisContent({ analysis, accountId, replayPollingStopped }) {
     const laneHeroes = (analysis.timeline?.lane ?? []).map(hero => ({ heroId: hero.heroId, side: LANE_SIDES[hero.side] }));
     // The comparison chart of the players tab starts with you and the enemy of your role (or the first enemy).
     const me = stats?.heroes.find(hero => hero.isCurrentPlayer);
+    // The point-of-view player's row of the scoreboard (items at the end).
+    const pointOfView = [...analysis.radiant, ...analysis.dire].find(player => player.isCurrentPlayer);
     const rivalHeroId = analysis.smartStats?.counterpartHeroId ?? stats?.heroes.find(hero => me && hero.team !== me.team)?.heroId;
     const compareHeroes = [me?.heroId, rivalHeroId].filter(heroId => heroId !== undefined).map(heroId => ({ heroId }));
     // null stays null for both teams: an unknown winner highlights nobody.
@@ -288,7 +321,7 @@ function AnalysisContent({ analysis, accountId, replayPollingStopped }) {
             <MatchHeader analysis={analysis} />
             <TabNav tabs={tabs} active={active} />
 
-            <div className="container analysis-sections">
+            <div className="container analysis-sections" data-analysis-tab={active}>
                 <ReplayStatusBanner replayStatus={analysis.replayStatus} pollingStopped={replayPollingStopped} />
 
                 {active === 'overview' && (
@@ -304,13 +337,20 @@ function AnalysisContent({ analysis, accountId, replayPollingStopped }) {
                                 Abra a partida pela lista de partidas desse jogador.
                             </p>
                         )}
+                        {performance && <PerformanceSummary analysis={analysis} />}
                         <HighlightCards
                             performance={performance}
                             laning={ready ? analysis.laning : null}
                             smartStats={ready ? analysis.smartStats : null}
                         />
-                        {performance && <PerformanceSummary analysis={analysis} />}
-                        {ready && <TimelineSection timeline={analysis.timeline} objectives={analysis.objectives} />}
+                        {ready && (
+                            <TimelineSection
+                                timeline={analysis.timeline}
+                                objectives={analysis.objectives}
+                                durationSeconds={analysis.durationSeconds}
+                                radiantWon={analysis.radiantWon}
+                            />
+                        )}
                         <Shortcuts analysis={analysis} tabs={tabs} />
                     </>
                 )}
@@ -321,17 +361,19 @@ function AnalysisContent({ analysis, accountId, replayPollingStopped }) {
 
                 {active === 'laning' && (
                     <>
-                        <LaningSection laning={analysis.laning} />
-                        {laneHeroes.length > 0 && (
-                            <StatChart
-                                stats={stats}
-                                heroes={laneHeroes}
-                                upTo={15 * 60}
-                                title="Sua rota minuto a minuto (até 15 min)"
-                                titleId="lane-chart-title"
-                            />
-                        )}
-                        <section className="section" aria-labelledby="laning-heatmap-title">
+                        <LaningSection laning={analysis.laning} isRadiant={performance?.isRadiant} />
+                        <div className="split split-top">
+                            {laneHeroes.length > 0 && (
+                                <StatChart
+                                    stats={stats}
+                                    heroes={laneHeroes}
+                                    upTo={15 * 60}
+                                    defaultStat="lastHits"
+                                    title="Evolução dos heróis da rota (0–15 min)"
+                                    titleId="lane-chart-title"
+                                    note={`Minuto a minuto, entre os ${laneHeroes.length} heróis da rota`}
+                                />
+                            )}
                             <HeatmapSection
                                 heatmaps={analysis.heatmaps}
                                 deaths={analysis.deaths}
@@ -339,7 +381,7 @@ function AnalysisContent({ analysis, accountId, replayPollingStopped }) {
                                 laning={analysis.laning}
                                 variant="laning"
                             />
-                        </section>
+                        </div>
                         <ThemeStatsCard
                             themes={['laning']}
                             smartStats={smartStats}
@@ -351,59 +393,62 @@ function AnalysisContent({ analysis, accountId, replayPollingStopped }) {
                 )}
 
                 {active === 'positioning' && (
-                    <section className="section" aria-labelledby="maps-title">
-                        <SectionHead id="maps-title" title="Posicionamento">
-                            <span>No minimapa do jogo, com as posições do replay</span>
-                        </SectionHead>
-                        <div className="stack">
-                            <HeatmapSection
-                                heatmaps={analysis.heatmaps}
-                                deaths={analysis.deaths}
-                                smartStats={analysis.smartStats}
-                                laning={analysis.laning}
-                                variant="afterLaning"
-                            />
-                            <div className="split">
-                                <DeathMap deaths={analysis.deaths} />
-                                <WardMap wards={analysis.wards} />
-                            </div>
-                            <ThemeStatsCard themes={['deaths', 'vision']} smartStats={smartStats} heroName={heroName} title="Mortes e visão" />
-                            <PhaseDeathsCard smartStats={smartStats} />
+                    <>
+                        <HeatmapSection
+                            heatmaps={analysis.heatmaps}
+                            deaths={analysis.deaths}
+                            smartStats={analysis.smartStats}
+                            laning={analysis.laning}
+                            variant="afterLaning"
+                        />
+                        <div className="split split-top map-pair">
+                            <DeathMap deaths={analysis.deaths} />
+                            <WardMap wards={analysis.wards} uptime={smartStats?.player.teamObserverUptime} />
                         </div>
-                    </section>
+                        <ThemeStatsCard themes={['vision', 'deaths']} smartStats={smartStats} heroName={heroName} title="Visão e sobrevivência" />
+                        <PhaseDeathsCard smartStats={smartStats} />
+                    </>
                 )}
 
                 {active === 'fights' && (
                     <>
-                        {(analysis.fights || analysis.damage) && (
-                            <section className="section" aria-labelledby="fights-damage-title">
-                                <SectionHead id="fights-damage-title" title="Lutas e dano" />
-                                <div className="split split-5-7">
-                                    <FightsSection fights={analysis.fights} isRadiant={performance ? performance.isRadiant : null} />
-                                    <DamageSection damage={analysis.damage} heroName={performance?.heroName} />
-                                </div>
-                            </section>
+                        <ObjectiveCards objectives={analysis.objectives} fights={analysis.fights} />
+                        <FightsSection
+                            fights={analysis.fights}
+                            objectives={analysis.objectives}
+                            durationSeconds={analysis.durationSeconds}
+                            isRadiant={performance ? performance.isRadiant : null}
+                        />
+                        {analysis.damage && (
+                            <div className="split split-top">
+                                <DamageHeroesCard damage={analysis.damage} players={[...analysis.radiant.map(player => ({ ...player, team: 'radiant' })), ...analysis.dire.map(player => ({ ...player, team: 'dire' }))]} />
+                                <DamageSourcesCard damage={analysis.damage} heroName={performance?.heroName} />
+                            </div>
                         )}
-                        <ThemeStatsCard themes={['fights']} smartStats={smartStats} heroName={heroName} />
-                        <ObjectivesSection objectives={analysis.objectives} />
+                        <div className={smartStats && analysis.objectives ? 'split split-top split-7-5' : 'stack'}>
+                            <ObjectivesSection objectives={analysis.objectives} durationSeconds={analysis.durationSeconds} />
+                            <ThemeStatsCard themes={['fights']} smartStats={smartStats} heroName={heroName} title="Seus números nas lutas" compact />
+                        </div>
                     </>
                 )}
 
                 {active === 'build' && (
                     <>
-                        <ItemBuildSection itemBuild={analysis.itemBuild} />
-                        <ThemeStatsCard themes={['economy']} smartStats={smartStats} stats={stats} heroName={heroName} />
-                        <AbilityBuildSection abilityBuild={analysis.abilityBuild} heroName={performance?.heroName} />
+                        <ItemBuildSection
+                            itemBuild={analysis.itemBuild}
+                            firstBigItemSeconds={smartStats?.player.firstBigItemSeconds}
+                            neutral={pointOfView?.neutralItem ? { id: pointOfView.neutralItemId, name: pointOfView.neutralItem } : null}
+                        />
+                        <ThemeStatsCard themes={['economy']} smartStats={smartStats} stats={stats} heroName={heroName} title="Economia: seus números contra outros jogadores" />
+                        <AbilityBuildSection abilityBuild={analysis.abilityBuild} heroName={performance?.heroName} durationSeconds={analysis.durationSeconds} />
                     </>
                 )}
 
                 {active === 'players' && (
-                    <section className="section" aria-labelledby="teams-title">
-                        <SectionHead id="teams-title" title="Os 10 jogadores" />
-                        <div className="stack">
-                            <TeamTable name="Radiant" side="radiant" players={analysis.radiant} won={radiantWon} score={analysis.radiantScore} />
-                            <TeamTable name="Dire" side="dire" players={analysis.dire} won={direWon} score={analysis.direScore} />
-                        </div>
+                    <>
+                        <h2 className="visually-hidden">Os 10 jogadores</h2>
+                        <TeamTable name="Radiant" side="radiant" players={analysis.radiant} won={radiantWon} score={analysis.radiantScore} />
+                        <TeamTable name="Dire" side="dire" players={analysis.dire} won={direWon} score={analysis.direScore} />
                         <StatChart
                             stats={stats}
                             heroes={compareHeroes}
@@ -412,7 +457,7 @@ function AnalysisContent({ analysis, accountId, replayPollingStopped }) {
                             titleId="compare-title"
                             note="Escolha a estatística e até 5 heróis. Cada ponto é um minuto do relógio do jogo; o último é o fim da partida."
                         />
-                    </section>
+                    </>
                 )}
             </div>
         </>

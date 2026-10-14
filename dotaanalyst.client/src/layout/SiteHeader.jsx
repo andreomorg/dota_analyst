@@ -2,14 +2,12 @@ import { useState } from 'react';
 import { Link, NavLink, useLocation } from 'react-router';
 import { loginUrl } from '../api/auth';
 import { useCurrentUser } from '../auth/useCurrentUser';
+import stitchLogo from '../assets/stitch-logo.png';
 
 // A small chart line in a rounded square: the site's mark.
 function Logo() {
     return (
-        <svg className="site-logo" viewBox="0 0 32 32" aria-hidden="true">
-            <rect x="1" y="1" width="30" height="30" rx="7" />
-            <path d="M8 21l5-6 4 3 7-8" />
-        </svg>
+        <img className="site-logo" src={stitchLogo} alt="" width="32" height="32" />
     );
 }
 

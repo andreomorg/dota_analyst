@@ -148,6 +148,8 @@ public static class DependencyInjection
         }
 
         services.AddScoped<BaselineHistoryBackfill>();
+        services.AddSingleton(new CollectorStorageLimits(Math.Max(0, options.MaxDatabaseBytes)));
+        services.AddScoped<CollectorStorageBudget>();
         services.AddHostedService<BaselineCollectorService>();
         services.AddHostedService<BaselinePublisherService>();
     }

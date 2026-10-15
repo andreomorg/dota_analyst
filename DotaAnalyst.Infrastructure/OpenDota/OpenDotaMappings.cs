@@ -52,7 +52,8 @@ public static class OpenDotaMappings
             IsParsed: match.Version is not null,
             Players: (match.Players ?? []).Select(ToMatchPlayer).ToList(),
             ReplayUrl: ReplayUrls.Parse(match.ReplayUrl),
-            SupplementalStatsVersion: match.Version is null ? 0 : DotaAnalyst.Application.Matches.SupplementalStatsSchema.CurrentVersion);
+            SupplementalStatsVersion: match.Version is null ? 0 : DotaAnalyst.Application.Matches.SupplementalStatsSchema.CurrentVersion,
+            PatchId: match.Patch is >= 0 ? match.Patch : null);
     }
 
     // Valve's placeholder account ID for players with an anonymous profile.

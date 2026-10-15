@@ -20,7 +20,8 @@ internal sealed record StoredMatchDetails(
     IReadOnlyList<StoredMatchPlayer> Players,
     // Added later: rows saved before it have no "replayUrl" and are read with null, so Version stays 1.
     string? ReplayUrl = null,
-    int SupplementalStatsVersion = 0);
+    int SupplementalStatsVersion = 0,
+    int? PatchId = null);
 
 internal sealed record StoredMatchPlayer(
     long? AccountId,
@@ -88,7 +89,8 @@ internal static class StoredMatchMappings
             IsParsed: match.IsParsed,
             Players: match.Players.Select(ToStored).ToList(),
             ReplayUrl: match.ReplayUrl?.AbsoluteUri,
-            SupplementalStatsVersion: match.SupplementalStatsVersion);
+            SupplementalStatsVersion: match.SupplementalStatsVersion,
+            PatchId: match.PatchId);
 
     private static StoredMatchPlayer ToStored(MatchPlayer player) =>
         new(
@@ -137,7 +139,8 @@ internal static class StoredMatchMappings
             Players: (stored.Players ?? []).Select(ToDomain).ToList(),
             // Same rule as for OpenDota's address: anything that isn't absolute http(s) becomes null.
             ReplayUrl: ReplayUrls.Parse(stored.ReplayUrl),
-            SupplementalStatsVersion: stored.SupplementalStatsVersion);
+            SupplementalStatsVersion: stored.SupplementalStatsVersion,
+            PatchId: stored.PatchId is >= 0 ? stored.PatchId : null);
     }
 
     private static MatchPlayer ToDomain(StoredMatchPlayer stored) =>

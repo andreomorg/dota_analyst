@@ -11,6 +11,9 @@ public class BaselineCollectorOptions
     // At most this many matches collected per 24 h (each is one OpenDota call and one ~30 MB replay download).
     public int DailyLimit { get; set; } = 300;
 
+    // Stop adding matches at this local database size, preserving everything already collected. Zero disables it.
+    public long MaxDatabaseBytes { get; set; } = 40L * 1024 * 1024 * 1024;
+
     // Accounts whose recently played heroes the high-rank matches must have (the project owner's).
     public long[] FocusAccountIds { get; set; } = [];
 

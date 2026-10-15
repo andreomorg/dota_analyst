@@ -16,7 +16,8 @@ public record OpenDotaMatch(
     int? Version,
     IReadOnlyList<OpenDotaMatchPlayer>? Players,
     // Where Valve keeps the replay file (e.g. http://replay202.valve.net/570/<match>_<salt>.dem.bz2).
-    string? ReplayUrl = null);
+    string? ReplayUrl = null,
+    int? Patch = null);
 
 // item_0..item_5 are named explicitly: the naming policy would not put an underscore before the digit.
 public record OpenDotaMatchPlayer(

@@ -30,6 +30,12 @@ public class BaselineCollectorService(
             {
                 // A scope per step: the handler and its repositories are Scoped.
                 await using var scope = scopeFactory.CreateAsyncScope();
+                if (!await scope.ServiceProvider.GetRequiredService<CollectorStorageBudget>().CanCollectAsync(stoppingToken))
+                {
+                    logger.LogWarning("Local collector storage budget reached; collection is paused and existing data is preserved");
+                    await Task.Delay(WhenLimitReached, timeProvider, stoppingToken);
+                    continue;
+                }
                 var result = await scope.ServiceProvider.GetRequiredService<CollectBaselineHandler>().CollectNextAsync(stoppingToken);
                 wait = result switch
                 {

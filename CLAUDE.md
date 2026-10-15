@@ -153,4 +153,12 @@ Back-end em **.NET 10** organizado em **DDD**, um projeto por camada:
 
 ## Plano de desenvolvimento
 
+### Coach com LLM (piloto local, 15/10/2026)
+
+- `Domain/Coaching` define contexto/evidências e validação estrutural; `Application/Coaching/BuildCoachingContext` reutiliza métricas existentes e `StatCatalog`; `ICoachingProvider` é a interface externa; `Infrastructure/Coaching/OllamaCoachingProvider` é opt-in e **não está registrado na API**. Não há alteração no frontend.
+- Iteração 2: contexto v2 com `CoachingFindingSelector` (oportunidades neutras, não diagnóstico), validação de pares achado/exercício e `RenderCoachingAdvice` para texto factual. O modelo retorna somente seleção de IDs; texto livre extra é recusado. Contextos v1 permanecem históricos e precisam de upgrade para o provider atual. Evidências e reviews em `work/coach-pilot/iteration-02/`; não confundir validação canônica com precisão tática.
+- `MatchDetails.PatchId` preserva o ID de patch retornado pelo OpenDota no JSON da partida. Campo ausente é `null`; não significa patch atual. Não confundir com versão do parser nem considerar subpatch/mecânicas verificados.
+- O coletor local verifica `Collector:MaxDatabaseBytes` antes de novas coletas (padrão 40 GiB; 0 desliga o limite). Ao atingir o limite, aguarda uma hora sem apagar dados. Esse orçamento mede o banco, não o espaço livre do host nem o espelho Neon.
+- Executável, compose, amostras, tarefas e evidências do piloto ficam em `work/coach-pilot/` (local). Revisão técnica e tática será feita depois de concluir o piloto, por decisão do usuário. Nenhuma precisão tática foi aprovada; não tratar testes de estrutura como review especializado.
+
 O roteiro do que construir e em que ordem fica em `work/plan.md`. A pasta `work/` é local e está no `.gitignore` — leia esse arquivo antes de começar uma etapa nova e atualize-o quando uma etapa terminar ou a ordem mudar.

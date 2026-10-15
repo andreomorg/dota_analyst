@@ -12,16 +12,28 @@ A página de uma partida abre com o placar dos dois times e é dividida em **aba
 
 | Aba | O que tem |
 |---|---|
-| **Visão geral** | O mais importante primeiro: os 3 destaques (ponto forte, ponto de atenção, fase de rotas), seu desempenho em números grandes (K/D/A, participação em abates, GPM/XPM, dano, patrimônio…), o gráfico de como a partida andou e atalhos para as outras abas. |
-| **Dicas** | O que melhorar — mortes sem aliado por perto, morrer logo depois de voltar, trocas perdidas na rota, presença nas lutas, visão… —, comparado com o adversário da mesma posição, com a média da partida e com **jogadores profissionais e de alto nível** do mesmo herói e posição; e os percentis do OpenDota contra outros jogadores do herói. |
-| **Fase de rotas** | Até 10:00: sua rota, quem ganhou, last hits, patrimônio e experiência de quem estava nela, e o gráfico só da sua rota. |
-| **Itens** | Itens iniciais e a linha do tempo de quando cada item ficou pronto. |
-| **Economia e objetivos** | Vantagem de patrimônio/experiência com torres, barracks, Roshan e Tormentor marcados, e o placar de objetivos. |
-| **Lutas e dano** | Cada luta com o resultado e a sua participação; dano causado e recebido por herói e por habilidade/item. |
-| **Mapas** | Sobre o minimapa do jogo: **mapa de calor** de onde você passou o tempo vivo (como os de futebol), ao lado do adversário da mesma posição, por período e com as suas mortes; onde você morreu; os wards dos dois times. |
-| **Jogadores** | Os 10 jogadores, com itens finais. |
+| **Resumo** | Destaques, desempenho, gráfico de vantagem dos times e atalhos para os assuntos da partida. |
+| **Como melhorar** | Dicas das regras atuais, com links para os números que as sustentam, e percentis do OpenDota. O coach com LLM continua experimental. |
+| **Fase de rotas** | Resultado da rota, métricas, gráfico por estatística até 15 minutos e mapa de calor de 0–10 minutos. |
+| **Posicionamento** | Mapa de calor após a fase de rotas, mortes, wards e indicadores de posicionamento e visão. |
+| **Lutas e objetivos** | Lutas detectadas, participação, dano causado/recebido e eventos de objetivos. |
+| **Build** | Itens iniciais e compras, evolução econômica e ordem observada de habilidades. |
+| **Jogadores** | Os dez jogadores, itens finais e comparação de estatísticas minuto a minuto. |
+
+As comparações com profissionais e jogadores de alto nível do mesmo herói e posição ficam na aba do respectivo assunto, com seleção de momento quando disponível. Abas dependem dos dados existentes e do estado de processamento do replay.
 
 O visual segue o design "Obsidian Telemetry" feito no Google Stitch (tema escuro, números em fonte mono, verde/vermelho para bom/ruim, violeta para "você"), com as fontes servidas pelo próprio site.
+
+## Coach com modelo de linguagem — experimental
+
+O backend inclui um piloto local para a aba **Como melhorar**, ainda sem integração à API ou ao frontend. As dicas atuais do site continuam sendo geradas pelas regras existentes.
+
+- **Fatos verificáveis:** episódios de mortes e lutas, cobertura das posições e distinção entre situação confirmada e desconhecida. Horários e distância ao aliado observado são calculados pelo código, com os instantes das amostras preservados.
+- **Dois caminhos experimentais:** seleção restrita de achados/exercícios por IDs, com texto factual montado pela aplicação; e geração de hipóteses condicionais, alternativas e exercícios a partir de um contexto anterior ao evento. Referências válidas não garantem que o texto livre esteja correto.
+- **Observação separada da hipótese:** o contrato experimental de reflexão v2 mantém números e classificação na observação determinística. Posições oniscientes não representam visão, intenção ou recursos disponíveis ao jogador; o resultado posterior fica separado dos fatos na âncora de revisão.
+- **Aprendizado avaliado, sem promoção:** houve um experimento supervisionado com LoRA em um modelo Qwen3-0.6B separado do Qwen3 8B usado via Ollama. O formato melhorou, mas o conteúdo falhou. Os controles posteriores de prompt e exemplos também não demonstraram qualidade suficiente para publicação automática. Não há aprendizado automático a cada replay nem modelo treinado aprovado para o produto.
+
+Os contratos e testes ficam nas pastas `Coaching` de Domain, Application e Infrastructure. Provedores Ollama são opcionais e não são registrados na API. Dados de replay, conjuntos de avaliação, pesos e relatórios locais não são distribuídos pelo repositório; `docker compose up` não inicia treino nem instala modelos.
 
 ## Como funciona
 
@@ -37,7 +49,7 @@ O visual segue o design "Obsidian Telemetry" feito no Google Stitch (tema escuro
  └──────────────────────────────────────────────────────────┘
 ```
 
-- **O processamento pesado fica na máquina do dono do projeto:** ler replays (dezenas de MB cada), coletar milhares de partidas, calcular distribuições, guardar os documentos brutos. **O Neon guarda só o que é mostrado, já refinado** — a base de comparação, por exemplo, ocupa alguns KB lá, por maior que seja a coleta local; o mapa de calor de uma partida são poucos KB (uma grade de 32 × 32 por fase do jogo), nunca as posições cruas. O site local lê as mesmas tabelas prontas que a produção: o que aparece em `localhost` é o que vai ao ar.
+- **O processamento pesado fica na máquina do dono do projeto:** ler replays (dezenas de MB cada), coletar partidas, calcular distribuições e guardar os documentos brutos. **O Neon guarda os dados refinados para consulta** — distribuições de comparação e análises, incluindo grades compactas de mapa de calor, sem trilhas de posições cruas. O site local e a produção consultam a base de comparação publicada.
 - **A base de comparação cresce onde faz falta:** o coletor olha os heróis das últimas 20 partidas da conta foco e, enquanto algum tiver menos de 10 partidas de alto nível na base, busca primeiro partidas com esses heróis (o de menos dados antes); depois volta às profissionais.
 - Com essa máquina desligada o site continua no ar: o que já foi analisado aparece normalmente; replays novos ficam "indisponíveis" até ela voltar.
 - Dados: [OpenDota](https://www.opendota.com) (API pública) e replays dos servidores da Valve. O minimapa e os retratos/ícones de heróis e itens são arte do próprio Dota 2, servida localmente; projeto de fã, não comercial. Rever os direitos antes de monetizar.
@@ -119,6 +131,12 @@ Os diagramas abaixo são exibidos diretamente no README. O arquivo-fonte editáv
 ### Camadas DDD
 
 ![Camadas DDD e dependências entre os projetos](docs/diagrams/images/ddd-layers.png)
+
+### Coach experimental
+
+O fluxo abaixo é local e separado da análise servida ao jogador. Revisão estrutural e avaliação de conteúdo são etapas distintas; os experimentos de treino ainda não produziram um candidato aprovado.
+
+![Coach experimental: episódios, fatos canônicos, reflexão e avaliação antes de qualquer promoção](docs/diagrams/images/coaching.png)
 
 ### Fluxo da análise
 

@@ -15,12 +15,14 @@ public sealed record CoachingContext(
     int SchemaVersion, string MatchId, int HeroId, CoachingRole Role, CoachingPatch Patch,
     int DurationSeconds, string Perspective, IReadOnlyList<CoachingEvidence> Evidence,
     IReadOnlyList<string> Limitations,
-    IReadOnlyList<CoachingFinding>? Findings = null);
+    IReadOnlyList<CoachingFinding>? Findings = null,
+    IReadOnlyList<CoachingEpisode>? Episodes = null);
 
 public sealed record CoachingSuggestion(
     string Topic, string Interpretation, string Action, string Exercise,
     IReadOnlyList<string> EvidenceIds,
-    string? FindingId = null, string? ExerciseId = null);
+    string? FindingId = null, string? ExerciseId = null,
+    IReadOnlyList<CoachingEpisode>? Episodes = null);
 
 public sealed record CoachingAdvice(IReadOnlyList<CoachingSuggestion> Suggestions);
 

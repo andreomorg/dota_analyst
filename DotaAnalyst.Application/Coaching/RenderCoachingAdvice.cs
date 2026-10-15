@@ -16,22 +16,38 @@ public static class RenderCoachingAdvice
             var finding = eligible[choice.FindingId];
             double Value(string metric) => context.Evidence.Single(e => finding.EvidenceIds.Contains(e.Id) && e.Metric == metric).Value;
             string Number(double value) => value.ToString("0", CultureInfo.InvariantCulture);
-            var (topic, observation) = finding.Kind switch
+            var (topic, observation) = (context.SchemaVersion, finding.Kind) switch
             {
-                CoachingFindingKind.IsolatedDeathsReview => ("Revisar mortes sem aliados próximos",
+                (4, CoachingFindingKind.IsolatedDeathsReview) => ("Revisar mortes sem aliados próximos",
+                    $"Entre {Number(Value("ReviewedDeaths"))} mortes de 00:00 até o fim, {Number(Value("ConfirmedIsolatedDeaths"))} tiveram quatro aliados amostrados sem proximidade; em {Number(Value("UnknownIsolationDeaths"))}, o isolamento permaneceu desconhecido. Isso não comprova erro de decisão nem visão dos inimigos."),
+                (4, CoachingFindingKind.FightProximityReview) => ("Revisar proximidade das lutas",
+                    $"O detector encontrou {Number(Value("ReviewedFights"))} agrupamentos de mortes desde 00:00; em {Number(Value("ConfirmedDistantFights"))}, seu herói ficou distante do centro nas consultas cobertas da janela; em {Number(Value("UnknownFightProximity"))}, a proximidade permaneceu desconhecida. Distância não comprova oportunidade perdida, e confrontos sem mortes podem não aparecer."),
+                (_, CoachingFindingKind.IsolatedDeathsReview) => ("Revisar mortes sem aliados próximos",
                     $"O cálculo identificou {Number(Value("IsolatedDeaths"))} de {Number(Value("Deaths"))} mortes sem aliado próximo na amostra. Isso não comprova que a decisão foi errada nem que os inimigos estavam visíveis."),
-                CoachingFindingKind.FightProximityReview => ("Revisar proximidade das lutas",
+                (_, CoachingFindingKind.FightProximityReview) => ("Revisar proximidade das lutas",
                     $"O detector encontrou {Number(Value("TeamFights"))} lutas na partida; seu herói esteve próximo do centro amostrado de {Number(Value("FightsNearby"))}. Proximidade não comprova participação e estar longe pode ter sido uma troca adequada. Confrontos sem mortes podem não ter sido detectados."),
-                CoachingFindingKind.QuickRedeathsReview => ("Revisar retornos após morrer",
+                (_, CoachingFindingKind.QuickRedeathsReview) => ("Revisar retornos após morrer",
                     $"O cálculo identificou {Number(Value("QuickRedeaths"))} mortes pouco depois do retorno estimado ao jogo. O retorno é aproximado pelas amostras e não demonstra erro por si só."),
                 _ => throw new InvalidDataException("Unsupported finding.")
             };
             var (action, exercise) = Exercise(finding.Kind, finding.Role);
+            IReadOnlyList<CoachingEpisode>? episodes = null;
+            if (context.SchemaVersion >= 3)
+            {
+                episodes = (finding.EpisodeIds ?? []).Select(id => context.Episodes!.Single(e => e.Id == id)).ToArray();
+                observation += episodes.Count == 0
+                    ? " Este achado tem apenas o resumo agregado nesta versão."
+                    : " Trechos localizados a partir das amostras: " + string.Join("; ", episodes.Select(e =>
+                        $"{Clock(e.FromSeconds)}–{Clock(e.ToSeconds)} (evento em {Clock(e.EventSeconds)}{(e.Reincarnated ? "; reincarnação" : "")})")) + ".";
+            }
             if (context.Role.IsInferred) observation += " A função foi inferida e precisa ser considerada com essa incerteza.";
             return new CoachingSuggestion(topic, observation, action, exercise,
-                finding.EvidenceIds, finding.Id, choice.ExerciseId);
+                finding.EvidenceIds, finding.Id, choice.ExerciseId, episodes);
         }).ToArray());
     }
+
+    private static string Clock(int seconds) =>
+        (seconds / 60).ToString("00", CultureInfo.InvariantCulture) + ":" + (seconds % 60).ToString("00", CultureInfo.InvariantCulture);
 
     private static (string Action, string Exercise) Exercise(CoachingFindingKind kind, int role)
     {

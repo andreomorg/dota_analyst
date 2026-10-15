@@ -238,12 +238,7 @@ internal static class ReplayParserMappings
             .ToList();
 
         var timeline = new MatchTimeline(Seconds(count, duration), heroes);
-        var positions = Required(response.Timelines?.Positions, "timelines.positions")
-            .Select(entry => entry ?? throw Empty("positions entry"))
-            .Select(entry => new HeroPositions(
-                HeroOfPlayer(entry.Player ?? throw Missing("positions.player"))!.Value,
-                Required(entry.Samples, "positions.samples").Select(ToPositionSample).ToList()))
-            .ToList();
+        var positions = ReadPositions(response);
         // Role queue when every player has a role; otherwise (pro matches, Turbo, unranked) the roles are inferred,
         // and the metrics say so (they then only feed the comparison base, never the player's own analysis).
         var queueRoles = players.All(player => player.Role is not null)
@@ -339,6 +334,20 @@ internal static class ReplayParserMappings
 
         return new AbilityUpgrade(
             heroId, (int)Math.Round(tuple[0].GetDouble()), abilityName, level);
+    }
+
+    // Shared by replay analysis and opt-in coaching: one adapter for the Go position contract.
+    internal static IReadOnlyList<HeroPositions> ReadPositions(ReplayParserMatchResponse response)
+    {
+        var heroOf = Required(response.Players, "players").Select(p => p ?? throw Empty("player"))
+            .ToDictionary(p => p.Player ?? throw Missing("players.player"), p => p.HeroId ?? throw Missing("players.heroId"));
+        return Required(response.Timelines?.Positions, "timelines.positions")
+            .Select(entry => entry ?? throw Empty("positions entry"))
+            .Select(entry => new HeroPositions(
+                heroOf.TryGetValue(entry.Player ?? throw Missing("positions.player"), out var hero)
+                    ? hero : throw new InvalidDataException($"Unknown player {entry.Player}."),
+                Required(entry.Samples, "positions.samples").Select(ToPositionSample).ToList()))
+            .ToArray();
     }
 
     // [t, x, y] -> a position sample.

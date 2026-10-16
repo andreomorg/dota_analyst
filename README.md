@@ -136,6 +136,8 @@ Os diagramas abaixo são exibidos diretamente no README. O arquivo-fonte editáv
 
 O fluxo abaixo é local e separado da análise servida ao jogador. Revisão estrutural e avaliação de conteúdo são etapas distintas; os experimentos de treino ainda não produziram um candidato aprovado.
 
+A observação determinística e o contrato de reflexão v2 permanecem preservados. A projeção qualitativa v3 (`PrepareBoundedCoaching`) distingue disponibilidade de distância na âncora e cobertura do episódio posterior; `PrepareAliasedCoaching` substitui IDs por aliases e restaura as referências no backend. A projeção temporal v4 (`PrepareTemporalCoaching`) compara a distância registrada ao mesmo aliado entre a âncora e dez segundos antes, informa a cobertura intermediária e mantém valores e tempos de proveniência no backend. Essas amostras não reconstroem trajeto, visão, intenção ou causa do resultado. Validação de formato e referências não aprova o conteúdo tático.
+
 ![Coach experimental: episódios, fatos canônicos, reflexão e avaliação antes de qualquer promoção](docs/diagrams/images/coaching.png)
 
 ### Fluxo da análise

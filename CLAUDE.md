@@ -7,7 +7,7 @@ O dono do projeto está começando em C# — explique as decisões e os conceito
 ## Convenções
 
 - **Código sempre em inglês:** classes, interfaces, métodos, propriedades, variáveis, rotas e pastas (ex.: `PlayersController`, `GET /api/players/{accountId}/matches`). Explicações e conversas continuam em português.
-- **Diagramas do README:** usar blocos Mermaid nativos, no estilo simples da visão geral do coach, sem imagens PNG ou tema/cores fixos. A fonte de verdade é o próprio README; o visualizador controla tema e navegação. Draw.io e exportações anteriores ficam como arquivo histórico em `docs/diagrams/`.
+- **Diagramas do README:** usar blocos Mermaid nativos, no estilo simples da visão geral do coach, sem imagens PNG ou tema/cores fixos. A fonte de verdade é o próprio README; o visualizador controla tema e navegação. O índice e as convenções ficam em `docs/diagrams/README.md`.
 
 ## Git
 

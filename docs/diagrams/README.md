@@ -20,8 +20,4 @@ Edite diretamente o bloco Mermaid correspondente no README. Prefira rótulos cur
 
 Confira a renderização, a legibilidade e os contratos envolvidos. Uma mudança documental não exige rodar a suíte da aplicação. Cores e controles podem variar entre GitHub, IDE e outros visualizadores; fazem parte do renderizador, não da aplicação DotaAnalyst.
 
-## Arquivos anteriores
-
-[dotaanalyst.drawio](dotaanalyst.drawio) e a pasta `images/` preservam a versão anterior editável e suas exportações. Não são mais a fonte de verdade dos diagramas exibidos no README. Novas alterações devem ser feitas nos blocos Mermaid.
-
 O serviço HTTP Python e o treinamento são fluxos separados. Veja [a documentação do coach-ml](../../coach-ml/README.md) para configuração, execução e limites dos experimentos.

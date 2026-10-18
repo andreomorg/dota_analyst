@@ -5,7 +5,7 @@
 
 Analisador de partidas de Dota 2. Entre com a sua conta Steam (senha ou QR code no app Steam) — ou informe qualquer account ID do Dota/SteamID64 — e veja as partidas recentes e uma análise de cada uma, com dados do [OpenDota](https://www.opendota.com) e com o que o próprio projeto lê do **replay** da partida.
 
-**No ar:** https://dotaanalyst.onrender.com (plano grátis do Render: o primeiro acesso depois de 15 min parado demora ~1 min).
+**Demonstração:** https://dotaanalyst.onrender.com. A hospedagem está configurada no plano gratuito do Render; o primeiro acesso após inatividade pode demorar.
 
 ## O que a análise mostra
 
@@ -38,7 +38,7 @@ Os contratos e testes ficam nas pastas `Coaching` de Domain, Application e Infra
 
 A [documentação do coach-ml](coach-ml/README.md) descreve a separação entre dados, curadoria, treino e avaliação. O projeto Python audita treino/validação juntos, produz conjuntos sem entradas repetidas, confere orçamento de tokens e avalia previsões por competência. Esses controles verificam integridade e limites dos exemplos, sem conceder aprovação tática.
 
-O próximo experimento usa seis competências e uma política contextual versionada: cada exercício aponta para instantes/registros concretos e pede uma anotação verificável no replay. São 34.827 exemplos de treino e 3.442 de validação nas mesmas 968/96 partidas. **Registro de 18/10/2026:** o treino Python em container, na GPU, foi iniciado e pausado a pedido do usuário em 42,9%; o ensaio GPU e o primeiro checkpoint passaram nas verificações. Esse registro não é um indicador de execução em tempo real. Não há modelo treinado promovido ao serviço nem aprendizado automático a cada replay.
+O experimento contextual usa seis competências e uma política versionada: cada exercício aponta para instantes/registros concretos e pede uma anotação verificável no replay. O conjunto preparado tem 34.827 exemplos de treino e 3.442 de validação nas mesmas 968/96 partidas. O progresso das execuções é registrado em artefatos locais, fora do Git. Não há modelo treinado promovido ao serviço nem aprendizado automático a cada replay.
 
 ```mermaid
 flowchart LR
@@ -89,7 +89,7 @@ Abra http://localhost:8080. Sobem a API (com o React embutido), o PostgreSQL e o
 
 O `.env` define a porta da aplicação (`API_PORT`), a senha do PostgreSQL local (`POSTGRES_PASSWORD`, obrigatória), o token entre a API e o parser (`REPLAY_PARSER_API_KEY`, obrigatório), a porta do banco na sua máquina (`POSTGRES_PORT`, só em 127.0.0.1) e, opcionalmente, a [Steam Web API key](https://steamcommunity.com/dev/apikey) (`STEAM_API_KEY`) para mostrar nome e avatar de quem está logado. O login com a Steam funciona também em `http://localhost:8080`.
 
-Serviços opcionais, ligados por perfil (`COMPOSE_PROFILES` no `.env`, ex. `tunnel,collector`):
+Serviços opcionais, ligados por perfil (`COMPOSE_PROFILES` no `.env`, ex. `tunnel,collector`, ou `docker compose --profile <perfil> up -d`):
 
 - **`tunnel`** — túnel ngrok para a produção usar o parser desta máquina (`NGROK_AUTHTOKEN`, `NGROK_URL`).
 - **`collector`** — coletor da base de comparação: parseia partidas profissionais e de alto nível, guarda o bruto no PostgreSQL local e publica o resultado (`COLLECTOR_FOCUS_ACCOUNT_ID`; `COLLECTOR_TARGET_PER_HERO`, padrão 10, e `COLLECTOR_DAILY_LIMIT`, padrão 600; `MIRROR_DATABASE` para publicar também no Neon).
@@ -97,20 +97,45 @@ Serviços opcionais, ligados por perfil (`COMPOSE_PROFILES` no `.env`, ex. `tunn
 
 ## Rodando para desenvolver
 
-Precisa do .NET 10 SDK, do Node.js 24, do Go e do Docker (para o PostgreSQL e o parser).
+Para executar API e React no host, precisa do .NET 10 SDK, Node.js 24 e Docker para o PostgreSQL. Go é necessário para desenvolver ou executar o parser no host; Python 3.11+ é necessário para executar o coach fora do container.
 
-1. Suba o banco e o parser: `docker compose up -d db replay-parser`.
+1. Suba o banco: `docker compose up -d db`.
 2. Uma vez, diga à API onde está o banco (fica no user-secrets, fora do Git):
    ```sh
    dotnet user-secrets set "ConnectionStrings:Database" "Host=localhost;Port=5432;Database=dotaanalyst;Username=dotaanalyst;Password=<POSTGRES_PASSWORD do .env>" --project DotaAnalyst.Server
    ```
-3. **VS Code:** F5 → **"API + React"** (configuração em `.vscode/`). **Visual Studio 2026:** abra `DotaAnalyst.slnx` e aperte F5. **Linha de comando:** `dotnet run --project DotaAnalyst.Server` — o Vite é iniciado automaticamente.
+3. **VS Code:** F5 → **"API + React"** (configuração em `.vscode/`). **Visual Studio 2026:** abra `DotaAnalyst.slnx` e aperte F5. **Linha de comando:** `dotnet run --project DotaAnalyst.Server --launch-profile https` — o Vite é iniciado pelo SPA proxy.
 
 A aplicação abre em https://localhost:59438 (API em https://localhost:7208). Na primeira vez, confie no certificado de desenvolvimento: `dotnet dev-certs https --trust`. As tabelas são criadas sozinhas quando a API sobe (migrations). Documentação da API (só em Development): https://localhost:59438/api/docs.
 
 Para olhar o banco, use o pgAdmin (ou outro cliente): servidor `localhost`, porta `5432`, banco/usuário `dotaanalyst`, senha do `.env`.
 
-**Testes:** `dotnet test` (os testes do banco sobem um PostgreSQL descartável no Docker, então o Docker precisa estar rodando) e `go test ./...` em `replay-parser/`.
+**Replay com a API executada no host:** o serviço `replay-parser` do Compose não publica uma porta no host. Para esse modo de desenvolvimento, execute o parser Go em outro terminal, dentro de `replay-parser/`:
+
+```powershell
+$env:REPLAY_PARSER_API_KEY = '<token compartilhado com a API>'
+go run ./cmd/replay-parser
+```
+
+Na raiz do repositório, configure a API para acessá-lo:
+
+```sh
+dotnet user-secrets set "ReplayParser:BaseUrl" "http://localhost:8081/" --project DotaAnalyst.Server
+dotnet user-secrets set "ReplayParser:ApiKey" "<mesmo token do parser>" --project DotaAnalyst.Server
+```
+
+Sem parser configurado e acessível, o site continua oferecendo os dados disponíveis, mas o processamento de novos replays não fica habilitado. O arquivo `.env` é usado pelo Compose; a API executada diretamente recebe configuração por user-secrets, variáveis de ambiente ou arquivos de configuração.
+
+### Verificações de desenvolvimento
+
+| Parte | Comando | Diretório |
+|---|---|---|
+| .NET | `dotnet test DotaAnalyst.Tests -p:ExcludeSpaClient=true` | Raiz |
+| React | `npm ci`, `npm run lint` e `npm run build` | `dotaanalyst.client/` |
+| Parser Go | `go test ./...` | `replay-parser/` |
+| Python | `python -m pip install ./coach-ml` e `python -B -m unittest discover -s coach-ml/tests -v` | Raiz |
+
+Os testes .NET de persistência usam PostgreSQL descartável via Testcontainers e precisam do Docker. Os testes Python de contrato não exigem GPU nem pesos. Para alterações pequenas, use filtros .NET, pacotes Go ou módulos unittest correspondentes à mudança; não é necessário repetir todas as suítes a cada tarefa.
 
 **Mudou uma entidade ou tabela?** Crie uma migration:
 
@@ -131,6 +156,8 @@ dotnet ef migrations add <Nome> --project DotaAnalyst.Infrastructure --startup-p
 | `DotaAnalyst.Tests/` | Testes .NET, uma pasta por camada |
 | `dotaanalyst.client/` | Front-end React (`src/analysis/` as abas da análise, `src/ui/` peças comuns, `src/index.css` cores e fontes do design) |
 | `replay-parser/` | Serviço Go que lê os replays (`POST /v1/match`) |
+| `coach-ml/` | Serviço HTTP Python, curadoria, auditoria, treino LoRA e avaliação |
+| `docs/diagrams/` | Índice e convenções dos diagramas Mermaid do README |
 
 Regras de arquitetura, decisões e detalhes de cada parte: [`CLAUDE.md`](CLAUDE.md) e [`replay-parser/CLAUDE.md`](replay-parser/CLAUDE.md).
 
@@ -336,4 +363,4 @@ Os grupos mostram onde os dados ficam armazenados; as caixas não declaram relac
 
 ## Versões e publicação
 
-Versionamento semântico (`vMAJOR.MINOR.PATCH`; o MAJOR acompanha a versão da API, `/api/v1`). Uma tag `v*` no `main` roda os testes, publica a imagem no ghcr.io e faz o deploy no Render.
+Versionamento semântico (`vMAJOR.MINOR.PATCH`; o MAJOR acompanha a versão da API, `/api/v1`). O workflow de release é disparado por uma tag de versão e reutiliza o CI antes de publicar a imagem no GHCR. Crie releases a partir do `main`, usado pelo build do Render. O deploy é solicitado somente se o secret `RENDER_DEPLOY_HOOK_URL` estiver configurado; sem ele, essa etapa é pulada. O workflow Coach ML executa as verificações Python separadamente quando seus arquivos mudam.

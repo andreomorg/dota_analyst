@@ -1,6 +1,15 @@
 # Planejamento local (não versionado)
 work/
 
+# Python coach: local environments, builds, caches and package metadata
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+coach-ml/build/
+coach-ml/dist/
+coach-ml/.pytest_cache/
+
 # Visual Studio
 .vs/
 *.user

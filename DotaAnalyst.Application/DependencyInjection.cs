@@ -1,5 +1,6 @@
 using DotaAnalyst.Application.Abstractions;
 using DotaAnalyst.Application.Baseline;
+using DotaAnalyst.Application.Coaching;
 using DotaAnalyst.Application.Matches;
 using DotaAnalyst.Application.Players;
 using DotaAnalyst.Application.Replays;
@@ -16,6 +17,7 @@ public static class DependencyInjection
         services.TryAddSingleton(TimeProvider.System);
 
         services.AddScoped<GetRecentMatchesHandler>();
+        services.AddScoped<ReviewCoachingHandler>();
         services.AddScoped<GetMatchAnalysisHandler>();
         services.AddScoped<GetUserProfileHandler>();
         // Used by the background worker that empties the replay parse queue (Infrastructure), one scope per replay.

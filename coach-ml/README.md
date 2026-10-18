@@ -1,0 +1,163 @@
+# DotaAnalyst coach-ml
+
+Projeto Python para datasets, curadoria, auditoria, treino LoRA, avaliação e serviço interno de revisão. Python **3.11+**. C# mantém regras/cálculos/evidências e a API; Go mantém o parser de replay. O navegador continua falando somente com a API C#.
+
+## Serviço no Docker
+
+No arquivo local .env, configure COACH_ML_ENABLED=true e COACH_ML_API_KEY com uma chave aleatória de pelo menos dezesseis caracteres. Use a mesma chave entre os dois serviços. O padrão COACH_ML_ENGINE=policy-preview executa prévias por política, somente em CPU, identificadas como policy-preview-v1. Não é inferência do modelo treinado.
+
+```powershell
+docker compose --profile coach-ml up -d --build api coach-ml
+```
+
+O serviço Python fica em http://coach-ml:8090 na rede interna, sem porta publicada. As rotas protegidas recebem Authorization: Bearer e oferecem:
+
+| Rota | Operação |
+|---|---|
+| GET /health | Liveness do processo, sem afirmar que um modelo está pronto |
+| POST /v1/reviews | Recebe contexto preparado pelo C# e devolve revisão com engine/origem |
+| POST /v1/reviews/by-match | Recebe matchId como string e heroId inteiro, busca contexto no C# e revisa |
+
+O callback configurado em COACH_ML_CALLBACK_URL chama GET /api/internal/coach/contexts/{matchId}/{heroId}, usando COACH_ML_CALLBACK_KEY. C# também oferece POST /api/internal/coach/reviews/{matchId}/{heroId} para solicitar a revisão ao Python. Essas rotas ficam fora do OpenAPI público e exigem CoachMl habilitado e a chave de máquina; autenticação Steam permanece separada.
+
+A API lê somente replay já arquivado para esse fluxo, entrega no máximo três cenas e valida IDs/evidências da resposta. O Python não recebe acesso direto ao PostgreSQL nem às credenciais da aplicação. Os dois lados preservam o outcome retrospectivo separado das evidências anteriores à âncora.
+
+Para inferência via Ollama, configure COACH_ML_ENGINE=ollama, COACH_ML_OLLAMA_URL e COACH_ML_MODEL. O modelo deve existir nesse runtime; o serviço não baixa pesos e não promove adaptadores treinados automaticamente. Prompts e transporte de hipóteses Ollama agora ficam no Python. Não habilite essa inferência na GPU ocupada por outro treino. Payloads são limitados, redirects de upstream não são seguidos e a revisão é serializada para retornar busy em vez de sobrecarregar o backend.
+
+O Dockerfile tem o alvo service, sem dependências de ML e com usuário não root, e o alvo training, com dependências opcionais/CUDA para futuros experimentos. O perfil Compose constrói somente service. O alvo training ainda precisa de uma execução GPU controlada antes de substituir um runtime de treino existente.
+
+As duas bases estão fixadas por digest. Para construir a imagem de treino separada: `docker build --target training -t dotaanalyst-coach-ml-training:local coach-ml`. Construção e imports foram verificados em CPU; isso não substitui o ensaio GPU. Registre o ID da imagem e `python -m pip freeze` de cada experimento: dependências transitivas continuam sendo resolvidas na construção.
+
+Erros do serviço: 401 sem autenticação, 404 para contexto arquivado ausente, 413 para tamanho inválido, 415 para conteúdo diferente de JSON, 422 para contrato enviado inválido, 502 para falha/resposta inválida do upstream e 504 para timeout de upstream. Revisão ocupada retorna 503 com `Retry-After: 1`; `/health` continua disponível. Nenhuma dessas respostas inclui payload privado ou chave. Erros no JSON do modelo ou do callback são falhas do upstream, não erros de contrato do cliente.
+
+## Instalar e usar
+
+Na raiz do repositório, com Python disponível:
+
+```powershell
+python -m venv .venv
+.venv/Scripts/python -m pip install -e ./coach-ml
+.venv/Scripts/python -m coach_ml --help
+```
+
+Linux: use `.venv/bin/python`. A instalação fornece também o comando `coach-ml`. Auditoria, consulta de progresso e curadoria usam somente a biblioteca padrão, sem carregar PyTorch ou inicializar GPU.
+
+```powershell
+coach-ml status --experiment work/coach-learning/grounded-training
+coach-ml audit-sft --dataset work/coach-learning/grounded-training/validation.jsonl --metadata work/coach-learning/grounded-training/validation-metadata.json --manifest work/coach-learning/all-database/manifest.json --partition validation
+```
+
+O status descreve arquivos e seu horário de atualização; não confirma processo vivo. Consulte Docker separadamente para isso. Código zero na auditoria indica integridade aceita, código dois indica erro. Avisos de pouca diversidade ou origem provisória não conferem aprovação tática.
+
+O status usa schemaVersion 2: arquivos de progresso vazios, truncados ou preenchidos por bytes nulos geram `warnings` e código dois, com diagnóstico JSON. `checkpoint` mostra separadamente a última referência salva, seu hash de freeze e a presença dos arquivos esperados. Isso não valida o conteúdo dos tensores nem transforma a posição do checkpoint em progresso atual. O comando não corrige arquivos, desserializa checkpoints ou retoma processos automaticamente. Artefatos de resultado/avaliação corrompidos não são apresentados como disponíveis.
+
+## Preparar outro currículo
+
+```powershell
+coach-ml build-curriculum --source work/coach-learning/all-database --output work/coach-learning/new-curriculum
+```
+
+A saída deve ser um diretório novo. O builder confere hashes da fonte e usa somente train/train-known e validation-new. Produz development.jsonl, validation.jsonl, metadados alinhados, instructions.txt e build-audit.json. Não abre testes reservados, não chama modelo e não executa treino.
+
+O perfil experimental `competency-review-v1` cobre cobertura de posições, separação ao aliado, economia amostrada, compras, upgrades e objetivos. Seleciona até seis casos por competência/partida, equilibrando estados, funções e fases. Usar a mesma cena em tarefas diferentes não aumenta o número de partidas. Os alvos são política provisória do assistente, sem revisão humana fictícia; variedade de exercícios não prova qualidade tática.
+
+`build-curriculum --policy-version 2` ativa exercícios contextuais: o request recebe `reviewPolicyVersion: 2`, e o alvo liga a conferência à âncora, aos registros e a uma anotação verificável no replay. O padrão permanece 1, com as respostas anteriores preservadas. O perfil de auditoria continua `competency-review-v1` porque a estrutura das seis competências permanece; a versão da política é explícita no request e no build-audit. Ambos são alvos provisórios: variação de timestamps/contagens não equivale a diversidade de conceitos táticos. Preserve datasets e runtimes congelados; gere outra pasta ao mudar de política.
+
+Use `audit-sft --profile competency-review-v1` para esse contrato. O perfil padrão factual-review mantém o contrato antigo do treino em andamento. A auditoria confere identidade/hash declarados, partições, JSON estrito, fidelidade do alvo ao input e diversidade; não reprocessa replay bruto nem certifica toda prosa livre. Os metadados JSON são lidos incrementalmente, com memória adicional proporcional aos IDs/hashes únicos.
+
+Para conferir treino e validação juntos, inclusive entradas idênticas provenientes de partidas diferentes:
+
+```powershell
+coach-ml audit-experiment --experiment work/coach-learning/new-curriculum --manifest work/coach-learning/all-database/manifest.json --profile competency-review-v1
+```
+
+O comando apenas lê os dados e retorna código dois se houver entrada repetida dentro de um conjunto ou compartilhada entre treino/validação. Não remove dados automaticamente. Partidas diferentes podem produzir entradas idênticas depois de uma projeção limitada; por isso conferir somente matchId não basta. A inspeção de novos treinos também exige esse isolamento.
+
+Para medir a cobertura do conjunto já validado:
+
+```powershell
+coach-ml coverage --experiment work/coach-learning/new-curriculum-clean --manifest work/coach-learning/all-database/manifest.json --profile competency-review-v1 --output work/coach-learning/coverage-report.json
+```
+
+O relatório separa exemplos, perspectivas de jogador/episódio e partidas, por herói, posição, fase e competência. Mostra heróis presentes só no treino ou só na validação e combinações da validação ausentes no treino. Essas combinações podem representar generalização deliberada, não um erro a corrigir misturando as partições. As fases usam a âncora: antes de 10 min, 10–25 min e a partir de 25 min. Não atribui nomes externos aos heróis nem transforma papel declarado em revisão humana. O contrato atual não projeta patch; sua cobertura não é inferida. Nenhum peso ou replay bruto é aberto, e cobertura não concede aprovação tática.
+
+Com `--output`, o relatório completo vai para um arquivo novo e o terminal recebe só um resumo. O diretório de saída precisa existir e arquivos anteriores não são sobrescritos. Sem essa opção, o comando imprime o JSON completo para permitir redirecionamento.
+
+Para produzir outro conjunto sem entradas repetidas:
+
+```powershell
+coach-ml deduplicate --source work/coach-learning/new-curriculum --output work/coach-learning/new-curriculum-clean --manifest work/coach-learning/all-database/manifest.json --profile competency-review-v1
+```
+
+O destino precisa ser novo. O comando valida a origem, mantém a primeira ocorrência no treino e remove da validação entradas já vistas. Preserva mensagens/alvos e renumera somente as linhas dos metadados. Se a limpeza eliminaria todas as amostras de uma partida, falha para permitir outra seleção sem esconder perda de cobertura. Confere hashes da origem antes/depois e audita o resultado. `curation-audit.json` registra sucesso e hashes; uma pasta parcial sem esse arquivo não é um conjunto aprovado. Arquivos anteriores permanecem intactos.
+
+## Orçamento de tokens em CPU
+
+Antes de congelar outro treino, confira o tamanho real dos exemplos com o tokenizer da revisão local do modelo. Use um ambiente com o extra `tokenizer` (`python -m pip install -e "./coach-ml[tokenizer]"`) ou o ambiente de treino já existente. A imagem leve do serviço continua sem essas dependências opcionais.
+
+```powershell
+coach-ml token-budget --dataset work/coach-learning/new-run/development.jsonl --dataset work/coach-learning/new-run/validation.jsonl --snapshot work/coach-learning/training-smoke/cache/hub/models--Qwen--Qwen3-0.6B/snapshots/c1899de289a04d12100db370d81485cdf75e47ca --max-training-tokens 2048 --max-new-tokens 384
+```
+
+O comando aplica o mesmo template sem thinking do treinador, inclui EOS na resposta e relata máximos, percentil 95 e excessos separados de entrada/saída. Não carrega pesos, não treina nem trunca exemplos. Código dois indica orçamento excedido ou erro; aumentar o limite exige revisar a configuração do próximo experimento. Monte o snapshot somente leitura e desative rede/GPU no container usado para essa checagem.
+
+## Novos treinos
+
+O treinador foi extraído para novos experimentos. **O treino que já estava rodando continua no seu runtime congelado em work.** Este pacote recusa executar experimentos congelados pelo runtime antigo.
+
+Instale o extra `train` somente em ambiente de ML compatível:
+
+```powershell
+python -m pip install -e "./coach-ml[train]"
+```
+
+O extra fixa as versões diretas usadas no ambiente local: PyTorch 2.8.0, Transformers 4.56.2, PEFT 0.17.1, Safetensors 0.8.0 e Accelerate 1.10.1. A instalação do PyTorch com CUDA depende da plataforma; o extra não configura driver nem garante aceleração. O ambiente Docker já existente evita alterar o host e o treino ativo. Versões transitivas e imagem também devem ser registradas/congeladas em cada experimento.
+
+Em um diretório novo dentro de work, prepare os JSONL/metadados, instructions.txt, config.json e experimental-authorization.json. O último registra um `scope` textual do experimento autorizado, sem representar aprovação tática humana. A [configuração de exemplo](configs/lora.example.json) tem contagens ilustrativas: substitua samples e validationSamples pelos números auditados. Use o perfil correto e o cache local da revisão fixada do modelo.
+
+```powershell
+coach-ml train --stage inspect --experiment work/coach-learning/new-run --model-cache work/coach-learning/training-smoke/cache --manifest work/coach-learning/all-database/manifest.json
+```
+
+`inspect` valida configuração, fontes/partições e contagens sem importar ML. `prepare` exige GPU CUDA compatível com BF16, tokeniza sem truncamento, verifica gradientes/memória e congela fontes/código/pesos-base. `run` executa uma época, salva checkpoints retomáveis e um adaptador separado e compara base/adaptado automaticamente. Para essas duas etapas, troque somente `--stage` no comando anterior. Não execute enquanto outro treino ocupa a GPU.
+
+Use cache montado somente leitura e rede desligada no Docker. O runtime exige arquivos locais, trust_remote_code=False e local_files_only=True. Não baixa modelos. O congelamento inclui todos os módulos Python do pacote; mudanças no pacote após prepare exigem um novo experimento. Não alterar código congelado para retomar uma execução.
+
+O fingerprint inclui também Python, sistema/arquitetura e versões das distribuições instaladas, incluindo dependências transitivas. Uma retomada com bibliotecas diferentes é recusada mesmo se os JSONL e o código do projeto não mudaram. Preserve a imagem original do experimento.
+
+O arquivo `.coach-ml.lock` impede processos concorrentes no mesmo diretório. Após desligamento abrupto, confirme que o processo terminou antes de remover uma trava residual. Retome com o mesmo estágio run e os mesmos arquivos; os checkpoints incluem otimizador e RNG. Falhas ao salvar um checkpoint parcial podem exigir investigação antes de retomar.
+
+Nos novos experimentos, cada checkpoint recebe `checkpoint-manifest.json` com tamanho e SHA-256 do adaptador, configuração e estado do otimizador. O runtime confere o selo antes de desserializar e publica o ponteiro somente após conferir o diretório final. Checkpoints antigos sem selo são recusados por esse runtime; mantenha seu runtime original, sem criar selos retroativos. Diretórios parciais são preservados para investigação. Essa verificação detecta alteração acidental, não autentica a origem dos arquivos nem torna um `state.pt` externo confiável. Não há garantia contra toda falha de disco ou perda de energia. O comando `status` continua uma inspeção leve de referências, sem verificar esses hashes nem carregar tensores.
+
+Antes de iniciar inferência, o runtime futuro valida os prefixos de previsões base/adaptado em CPU: sequência, identidade, tipos e linhas completas. Prefixos válidos são continuados; arquivos completos dispensam geração. Linhas interrompidas, inclusive JSON válido sem newline final, são recusadas sem reparo ou descarte automático. Preserve o arquivo para investigação. Essa checagem não atesta qualidade do texto nem autentica sua procedência; a avaliação completa continua obrigatória.
+
+Execute o treinador sem `-O` ou `PYTHONOPTIMIZE`: o runtime contém verificações obrigatórias que não podem ser desativadas. Dependências opcionais ausentes retornam erro controlado e liberam a trava; o serviço leve não instala PyTorch automaticamente.
+
+Resultados: output/training-result.json, output/adapter-final, previsões base/adaptado e evaluation-audit.json. A avaliação distingue JSON estrito/normalizado, observação factual, foco e reprodução da política. Review de conteúdo continua pendente; nenhuma promoção automática ou aprendizagem geral de Dota é inferida pela loss.
+
+Para avaliar previsões já salvas, sem importar ML:
+
+```powershell
+coach-ml evaluate --experiment work/coach-learning/new-run
+```
+
+A avaliação exige os dois arquivos de previsões completos, alinha cada exemplo e produz métricas por competência. Predições de competências devem carregar `heroId`, `competencyId` e `exampleId`, além de linha/partida/episódio/variante; `hitTokenLimit` deve ser booleano. Saída truncada não recebe crédito. JSON com cercas Markdown conta somente nas métricas normalizadas. O comando preserva relatórios existentes, usa trava exclusiva e não altera o progresso do treino. Não acrescente identidades fictícias a previsões antigas para forçar compatibilidade: preserve seu avaliador original.
+
+O relatório schemaVersion 2 inclui comparação pareada: casos corretos nos dois modelos, ganhos, regressões e erros comuns, por competência e partida. `evaluation-cases.jsonl` referencia cada exemplo e seus motivos de falha, sem duplicar textos/contextos. Uma diferença de redação da política não é automaticamente erro factual. Os hashes dos inputs e do JSONL acompanham o agregado; este é publicado por último. Artefatos finais ou parciais existentes não são sobrescritos. Se houver falha durante a publicação, preserve a pasta para investigação e use outra pasta para nova comparação. A comparação mantém os escores base em memória, proporcionalmente ao número de exemplos. Casos da mesma partida não são partidas independentes, e ganho nessas métricas não aprova qualidade tática.
+
+Para avaliar adicionalmente um treino concluído preservando seu pipeline original:
+
+```powershell
+coach-ml snapshot-evaluation --source work/coach-learning/grounded-training --output work/coach-learning/grounded-training-comparison
+```
+
+O destino deve ser novo e ficar fora da origem. O comando exige `output/training-result.json` com contagem válida, confere a configuração quando presente, copia metadados e previsões e verifica hashes antes/depois. A avaliação ocorre na cópia, somente em CPU. `snapshot-audit.json` é publicado por último; sem ele, não considere o snapshot concluído. Resultado ausente, previsões incompletas ou contrato incompatível são recusados sem reescrever rótulos. Isso não detecta processo vivo nem prova qualidade do adaptador. Não execute no treino ainda em andamento; arquivos originais, pesos e código congelado permanecem separados.
+
+## Testar e empacotar
+
+```powershell
+python -B -m unittest discover -s coach-ml/tests -v
+python -m pip wheel ./coach-ml --no-deps --wheel-dir work/coach-learning/package-wheels
+```
+
+Os testes não precisam de GPU, internet ou dados privados. Dados, pesos, cache de modelos, relatórios e ambientes virtuais ficam locais e ignorados. O pacote é privado e não será publicado automaticamente. Código mantido e testes ficam neste projeto; use `coach-ml` ou `python -m coach_ml` para executar os comandos.

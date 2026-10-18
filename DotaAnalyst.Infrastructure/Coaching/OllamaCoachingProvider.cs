@@ -11,7 +11,7 @@ namespace DotaAnalyst.Infrastructure.Coaching;
 public sealed class OllamaCoachingProvider(HttpClient client, string model) : ICoachingProvider
 {
     public OllamaRunMetrics? LastMetrics { get; private set; }
-    public static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web) { WriteIndented = true };
+    public static readonly JsonSerializerOptions JsonOptions = CoachingJson.Options;
     private static readonly JsonSerializerOptions SelectionOptions = new(JsonOptions)
     {
         UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow

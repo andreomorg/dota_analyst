@@ -4,6 +4,7 @@ using DotaAnalyst.Domain.Players;
 using DotaAnalyst.Infrastructure.Baseline;
 using DotaAnalyst.Infrastructure.Caching;
 using DotaAnalyst.Infrastructure.Catalogs;
+using DotaAnalyst.Infrastructure.Coaching;
 using DotaAnalyst.Infrastructure.OpenDota;
 using DotaAnalyst.Infrastructure.Persistence;
 using DotaAnalyst.Infrastructure.Persistence.Baseline;
@@ -36,6 +37,7 @@ public static class DependencyInjection
         AddOpenDotaParsing(services, configuration, hasDatabase);
         var parsesReplays = AddReplayParsing(services, configuration, hasDatabase);
         AddBaselineCollector(services, configuration, hasDatabase && parsesReplays);
+        services.AddCoachMl(configuration);
 
         return services;
     }

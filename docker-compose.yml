@@ -20,6 +20,9 @@ services:
       ReplayParser__ApiKey: "${REPLAY_PARSER_API_KEY}"
       # This machine keeps the raw replay documents (replay_documents); production (Render) doesn't.
       ReplayParser__KeepDocuments: "true"
+      CoachMl__Enabled: "${COACH_ML_ENABLED:-false}"
+      CoachMl__BaseUrl: "http://coach-ml:8090/"
+      CoachMl__ApiKey: "${COACH_ML_API_KEY:-}"
     # No depends_on replay-parser on purpose: the API must work without it (the laning phase just shows as
     # unavailable), and waiting for its health check would let a broken parser keep the whole site down.
     depends_on:
@@ -65,6 +68,24 @@ services:
       replay-parser:
         condition: service_healthy
     restart: unless-stopped
+  coach-ml:
+    build:
+      context: ./coach-ml
+      target: service
+    image: dotaanalyst-coach-ml
+    profiles: [coach-ml]
+    environment:
+      COACH_ML_API_KEY: "${COACH_ML_API_KEY:-}"
+      COACH_ML_CALLBACK_URL: "http://api:8080/"
+      COACH_ML_CALLBACK_KEY: "${COACH_ML_API_KEY:-}"
+      COACH_ML_ENGINE: "${COACH_ML_ENGINE:-policy-preview}"
+      COACH_ML_OLLAMA_URL: "${COACH_ML_OLLAMA_URL:-http://host.docker.internal:11434/}"
+      COACH_ML_MODEL: "${COACH_ML_MODEL:-qwen3:8b}"
+    # Internal network only. Neither the browser nor the public internet calls this port.
+    cpus: 1
+    mem_limit: 256m
+    restart: unless-stopped
+
   db:
     image: postgres:17-alpine
     environment:

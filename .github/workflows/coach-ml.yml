@@ -1,0 +1,22 @@
+name: Coach ML
+
+on:
+  push:
+    paths: ["coach-ml/**", ".github/workflows/coach-ml.yml"]
+  pull_request:
+    paths: ["coach-ml/**", ".github/workflows/coach-ml.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - run: python -m pip install ./coach-ml
+      - run: python -B -m unittest discover -s coach-ml/tests -v
+      - run: coach-ml --help

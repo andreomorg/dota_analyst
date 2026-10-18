@@ -1,6 +1,7 @@
 # DotaAnalyst
 
 [![CI](https://github.com/andreomorg/dota_analyst/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/andreomorg/dota_analyst/actions/workflows/ci.yml)
+[![Coach ML](https://github.com/andreomorg/dota_analyst/actions/workflows/coach-ml.yml/badge.svg?branch=main)](https://github.com/andreomorg/dota_analyst/actions/workflows/coach-ml.yml)
 
 Analisador de partidas de Dota 2. Entre com a sua conta Steam (senha ou QR code no app Steam) — ou informe qualquer account ID do Dota/SteamID64 — e veja as partidas recentes e uma análise de cada uma, com dados do [OpenDota](https://www.opendota.com) e com o que o próprio projeto lê do **replay** da partida.
 
@@ -26,14 +27,35 @@ O visual segue o design "Obsidian Telemetry" feito no Google Stitch (tema escuro
 
 ## Coach com modelo de linguagem — experimental
 
-O backend inclui um piloto local para a aba **Como melhorar**, ainda sem integração à API ou ao frontend. As dicas atuais do site continuam sendo geradas pelas regras existentes.
+O backend inclui um fluxo experimental para a aba **Como melhorar**, integrado por rotas internas entre a API C# e o serviço Python. O frontend público continua usando as dicas das regras existentes.
 
 - **Fatos verificáveis:** episódios de mortes e lutas, cobertura das posições e distinção entre situação confirmada e desconhecida. Horários e distância ao aliado observado são calculados pelo código, com os instantes das amostras preservados.
 - **Dois caminhos experimentais:** seleção restrita de achados/exercícios por IDs, com texto factual montado pela aplicação; e geração de hipóteses condicionais, alternativas e exercícios a partir de um contexto anterior ao evento. Referências válidas não garantem que o texto livre esteja correto.
 - **Observação separada da hipótese:** o contrato experimental de reflexão v2 mantém números e classificação na observação determinística. Posições oniscientes não representam visão, intenção ou recursos disponíveis ao jogador; o resultado posterior fica separado dos fatos na âncora de revisão.
-- **Aprendizado avaliado, sem promoção:** houve um experimento supervisionado com LoRA em um modelo Qwen3-0.6B separado do Qwen3 8B usado via Ollama. O formato melhorou, mas o conteúdo falhou. Os controles posteriores de prompt e exemplos também não demonstraram qualidade suficiente para publicação automática. Não há aprendizado automático a cada replay nem modelo treinado aprovado para o produto.
+- **Aprendizado avaliado, sem promoção:** o experimento factual LoRA no Qwen3-0.6B concluiu uma época com 159.335 exemplos de 968 partidas. Em 288 casos de 96 partidas separadas, o adaptador reproduziu os alvos provisórios em 288/288; o modelo base acertou os fatos em 27/288 após normalização. A revisão mostrou somente dois exercícios fixos: o ganho demonstra extração e reprodução da política ensinada, sem comprovar coaching tático individualizado. Os casos incluem uma entrada repetida dentro da validação (287 inputs únicos), sem sobreposição exata com treino.
 
-Os contratos e testes ficam nas pastas `Coaching` de Domain, Application e Infrastructure. Provedores Ollama são opcionais e não são registrados na API. Dados de replay, conjuntos de avaliação, pesos e relatórios locais não são distribuídos pelo repositório; `docker compose up` não inicia treino nem instala modelos.
+Os contratos e testes ficam nas pastas `Coaching` de Domain, Application e Infrastructure. O projeto [coach-ml](coach-ml/README.md) concentra curadoria, auditoria, treino, avaliação e serviço HTTP Python. A API C# entrega contextos de replays arquivados e consome revisões por rotas internas autenticadas; o Python pode buscar esses contextos por callback. O perfil Docker `coach-ml` inicia o serviço, com prévia por política em CPU por padrão e Ollama configurável. As dicas públicas continuam nas regras existentes. Dados, conjuntos de avaliação e pesos locais não são distribuídos pelo repositório; `docker compose up` não inicia treino nem instala modelos.
+
+A [estrutura de aprendizado](docs/coach-learning.md) documenta a separação entre dados, curadoria, treino e avaliação. O projeto Python audita treino/validação juntos, produz conjuntos sem entradas repetidas, confere orçamento de tokens e avalia previsões por competência. Esses controles verificam integridade e limites dos exemplos, sem conceder aprovação tática.
+
+O próximo experimento usa seis competências e uma política contextual versionada: cada exercício aponta para instantes/registros concretos e pede uma anotação verificável no replay. São 34.827 exemplos de treino e 3.442 de validação nas mesmas 968/96 partidas. **Registro de 18/10/2026:** o treino Python em container, na GPU, foi iniciado e pausado a pedido do usuário em 42,9%; o ensaio GPU e o primeiro checkpoint passaram nas verificações. Esse registro não é um indicador de execução em tempo real. Não há modelo treinado promovido ao serviço nem aprendizado automático a cada replay.
+
+```mermaid
+flowchart LR
+    Browser[React / Steam] --> API[API C#]
+    API --> Domain[Domain / evidências de replay]
+    API -->|Revisão interna autenticada| Python[Python coach-ml]
+    Python -->|Callback de contexto arquivado| API
+    Python --> Preview[Prévia CPU por política]
+    Python --> Ollama[Ollama opcional]
+    Corpus[Corpus local separado por partida] --> Audit[Curadoria / auditoria / tokenização]
+    Audit --> Train[Treino LoRA no container com GPU]
+    Train --> Checkpoints[Adaptador separado / checkpoints selados]
+    Checkpoints --> Evaluation[Avaliação base versus adaptado / review]
+    Evaluation --> Decision[Decisão explícita de promoção]
+```
+
+O treinamento é independente do serviço HTTP. A promoção exige decisão explícita; o fluxo acima não instala o adaptador automaticamente. Código é versionado, enquanto replays, datasets, pesos, credenciais e relatórios permanecem locais.
 
 ## Como funciona
 
@@ -60,8 +82,9 @@ Os contratos e testes ficam nas pastas `Coaching` de Domain, Application e Infra
 - **Banco:** PostgreSQL com EF Core — local no Docker; [Neon](https://neon.tech) em produção.
 - **Front-end:** React 19 + Vite, CSS próprio (sem framework), gráficos e mapas em SVG/canvas feitos à mão.
 - **Leitura de replays:** serviço próprio em Go (`replay-parser/`).
+- **Coach experimental:** Python 3.11+, serviço HTTP interno, auditoria e curadoria em CPU; PyTorch/Transformers/PEFT opcionais para LoRA offline no container com GPU.
 - **Login:** Steam OpenID — o site nunca vê senha nem token; recebe só o SteamID.
-- **Testes e entrega:** xUnit (com PostgreSQL real via [Testcontainers](https://dotnet.testcontainers.org)) e testes Go; GitHub Actions (CI e publicação da imagem `ghcr.io/andreomorg/dota_analyst`).
+- **Testes e entrega:** xUnit (com PostgreSQL real via [Testcontainers](https://dotnet.testcontainers.org)), testes Go e unittest Python; GitHub Actions (CI, workflow Coach ML e publicação da imagem `ghcr.io/andreomorg/dota_analyst`).
 
 ## Rodando com Docker
 
@@ -80,6 +103,7 @@ Serviços opcionais, ligados por perfil (`COMPOSE_PROFILES` no `.env`, ex. `tunn
 
 - **`tunnel`** — túnel ngrok para a produção usar o parser desta máquina (`NGROK_AUTHTOKEN`, `NGROK_URL`).
 - **`collector`** — coletor da base de comparação: parseia partidas profissionais e de alto nível, guarda o bruto no PostgreSQL local e publica o resultado (`COLLECTOR_FOCUS_ACCOUNT_ID`; `COLLECTOR_TARGET_PER_HERO`, padrão 10, e `COLLECTOR_DAILY_LIMIT`, padrão 600; `MIRROR_DATABASE` para publicar também no Neon).
+- **`coach-ml`** — serviço Python interno, habilitado com `COACH_ML_ENABLED=true` e chave compartilhada `COACH_ML_API_KEY`. O padrão é prévia CPU por política; esse perfil não inicia treinamento. Configuração e comandos em [coach-ml/README.md](coach-ml/README.md).
 
 ## Rodando para desenvolver
 

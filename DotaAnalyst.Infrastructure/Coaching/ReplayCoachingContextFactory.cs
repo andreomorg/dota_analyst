@@ -32,7 +32,7 @@ public static class ReplayCoachingContextFactory
             || !match.TryGetProperty("matchId", out var id) || id.ValueKind != JsonValueKind.String
             || id.GetString() != matchId.ToString())
             throw new InvalidDataException("The replay document belongs to a different or unknown match.");
-        var response = JsonSerializer.Deserialize<ReplayParserMatchResponse>(document, OllamaCoachingProvider.JsonOptions)
+        var response = JsonSerializer.Deserialize<ReplayParserMatchResponse>(document, CoachingJson.Options)
             ?? throw new InvalidDataException("Missing replay document.");
         return response;
     }

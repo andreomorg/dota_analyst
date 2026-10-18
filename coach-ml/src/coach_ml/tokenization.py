@@ -6,7 +6,8 @@ from pathlib import Path
 import re
 import sys
 
-from .audit import AuditError, iter_jsonl, require
+from .core.validation import AuditError, require
+from .core.streams import iter_jsonl
 
 
 def percentile(counts, fraction):

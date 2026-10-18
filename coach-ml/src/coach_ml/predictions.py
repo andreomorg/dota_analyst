@@ -1,7 +1,8 @@
 """Validate saved generation prefixes before loading an ML model or appending."""
 from pathlib import Path
 
-from .audit import parse_json, require
+from .core.validation import require
+from .core.json import parse_json
 
 MAX_ROW_BYTES = 1024 * 1024
 

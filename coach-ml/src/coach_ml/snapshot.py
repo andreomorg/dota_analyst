@@ -5,7 +5,8 @@ from pathlib import Path
 import shutil
 import sys
 
-from .audit import AuditError, canonical, require
+from .core.validation import AuditError, require
+from .core.json import canonical
 from .evaluation import evaluate
 from .hashing import file_hash
 from .progress import read_object

@@ -17,6 +17,8 @@ def main(argv=None):
                             ("evaluate", "Compare saved base/adapted predictions without ML"),
                             ("snapshot-evaluation", "Copy completed predictions and evaluate without changing their source"),
                             ("serve", "Run the authenticated internal review service"),
+                            ("run-control", "Inspect or request cooperative pause for a managed run"),
+                            ("promotion-check", "Validate and record explicit promotion without installing a model"),
                             ("train", "Inspect, prepare or run a separate LoRA experiment")]:
         commands.add_parser(name, help=help_text, add_help=False)
     args, remaining = parser.parse_known_args(argv)
@@ -41,6 +43,12 @@ def main(argv=None):
     if args.command == "serve":
         from .service import main as service_main
         return service_main(remaining)
+    if args.command == "run-control":
+        from .experiments.control import main as control_main
+        return control_main(remaining)
+    if args.command == "promotion-check":
+        from .experiments.capabilities import main as promotion_main
+        return promotion_main(remaining)
     if args.command == "evaluate":
         from .evaluation import main as evaluation_main
         return evaluation_main(remaining)

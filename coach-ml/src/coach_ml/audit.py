@@ -3,124 +3,17 @@ from __future__ import annotations
 
 import argparse
 from collections import Counter
-import hashlib
 from itertools import zip_longest
 import json
-import math
 from pathlib import Path
 import re
 import sys
 
 
-class AuditError(ValueError):
-    pass
-
-
-def unique_object(pairs):
-    result = {}
-    for key, value in pairs:
-        if key in result:
-            raise AuditError(f"Duplicate JSON key: {key}")
-        result[key] = value
-    return result
-
-
-def finite_float(value):
-    number = float(value)
-    if not math.isfinite(number):
-        raise AuditError("Nonfinite JSON number")
-    return number
-
-
-def reject_constant(value):
-    raise AuditError(f"Nonstandard JSON constant: {value}")
-
-
-DECODER = json.JSONDecoder(object_pairs_hook=unique_object, parse_float=finite_float,
-                           parse_constant=reject_constant)
-
-
-def parse_json(text):
-    try:
-        return DECODER.decode(text)
-    except (ValueError, RecursionError) as exc:
-        raise AuditError(f"Invalid JSON: {exc}") from exc
-
-
-def canonical(value):
-    return json.dumps(value, sort_keys=True, ensure_ascii=False, allow_nan=False,
-                      separators=(",", ":"))
-
-
-def digest(value):
-    return hashlib.sha256(canonical(value).encode("utf-8")).hexdigest()
-
-
-def require(condition, message):
-    if not condition:
-        raise AuditError(message)
-
-
-def iter_json_array(file, chunk_size=65536):
-    """Stream a metadata array, retaining at most a chunk plus the current object."""
-    with Path(file).open(encoding="utf-8-sig") as stream:
-        buffer, position, eof = "", 0, False
-
-        def more():
-            nonlocal buffer, position, eof
-            fragment = stream.read(chunk_size)
-            buffer = buffer[position:] + fragment
-            position = 0
-            eof = not fragment
-
-        def peek():
-            nonlocal position
-            while True:
-                while position < len(buffer) and buffer[position].isspace():
-                    position += 1
-                if position < len(buffer):
-                    return buffer[position]
-                if eof:
-                    return None
-                more()
-
-        require(peek() == "[", "Metadata must be a JSON array")
-        position += 1
-        if peek() != "]":
-            while True:
-                require(peek() is not None, "Unterminated metadata array")
-                while True:
-                    try:
-                        value, end = DECODER.raw_decode(buffer, position)
-                        if end == len(buffer) and not eof:
-                            more()
-                            continue
-                        position = end
-                        break
-                    except json.JSONDecodeError as exc:
-                        if eof:
-                            raise AuditError("Invalid metadata JSON") from exc
-                        more()
-                yield value
-                separator = peek()
-                if separator == "]":
-                    break
-                require(separator == ",", "Expected comma or closing metadata bracket")
-                position += 1
-                require(peek() != "]", "Trailing comma in metadata")
-        require(peek() == "]", "Unterminated metadata array")
-        position += 1
-        require(peek() is None, "Trailing data after metadata array")
-
-
-def iter_jsonl(file):
-    with Path(file).open(encoding="utf-8-sig") as stream:
-        for index, line in enumerate(stream):
-            require(bool(line.strip()), f"Empty JSONL row {index}")
-            try:
-                yield parse_json(line)
-            except AuditError as exc:
-                raise AuditError(f"JSONL row {index}: {exc}") from exc
+# Compatibility exports retain existing public imports. New modules use core directly.
+from .core.validation import AuditError, require
+from .core.json import DECODER, canonical, digest, finite_float, parse_json, reject_constant, unique_object
+from .core.streams import iter_json_array, iter_jsonl
 
 
 PARTITIONS = {

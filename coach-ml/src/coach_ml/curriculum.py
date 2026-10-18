@@ -5,7 +5,10 @@ import json
 from pathlib import Path
 import sys
 
-from .audit import AuditError, canonical, digest, iter_jsonl, load_manifest, parse_json, require
+from .core.validation import AuditError, require
+from .core.json import canonical, digest, parse_json
+from .core.streams import iter_jsonl
+from .audit import load_manifest
 from .competencies import COMPETENCIES, expected_response, instructions_for, project_request
 from .hashing import file_hash
 

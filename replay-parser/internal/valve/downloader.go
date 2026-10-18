@@ -12,18 +12,20 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/andreomorg/dota_analyst/replay-parser/internal/parsing"
 )
 
 // Errors returned by Downloader. Callers map them to HTTP statuses with errors.Is.
 var (
 	// ErrInvalidURL means the URL is not a Valve replay URL (http(s)://*.valve.net/570/<file>.dem.bz2).
-	ErrInvalidURL = errors.New("invalid replay URL")
+	ErrInvalidURL = parsing.ErrInvalidURL
 	// ErrReplayNotFound means Valve no longer has the replay (replays expire after a few weeks).
-	ErrReplayNotFound = errors.New("replay not found on Valve's CDN")
+	ErrReplayNotFound = parsing.ErrReplayNotFound
 	// ErrDownloadFailed means the download failed for a reason that may go away on a retry (network, CDN error).
-	ErrDownloadFailed = errors.New("replay download failed")
+	ErrDownloadFailed = parsing.ErrDownloadFailed
 	// ErrTooLarge means the replay is bigger than the configured limits; retrying will not help.
-	ErrTooLarge = errors.New("replay exceeds the size limit")
+	ErrTooLarge = parsing.ErrTooLarge
 )
 
 // Default limits. A real replay is ~30 MB compressed and a few hundred MB decompressed.

@@ -161,6 +161,50 @@ dotnet ef migrations add <Nome> --project DotaAnalyst.Infrastructure --startup-p
 
 Regras de arquitetura, decisões e detalhes de cada parte: [`CLAUDE.md`](CLAUDE.md) e [`replay-parser/CLAUDE.md`](replay-parser/CLAUDE.md).
 
+### Módulos internos do Go e Python
+
+Os dois serviços usam módulos com responsabilidades separadas e interfaces nas fronteiras externas. No Go, `parsing` coordena download, timeout, capacidade compartilhada e consumo do resultado; `httpapi` mantém autenticação e contrato HTTP. Os coletores Manta e o documento `/v1/match` permanecem compatíveis. O comando `inspect` pode gerar um manifesto local separado com hashes e identificação do build, sem modificar o documento v1.
+
+No Python, `core` reúne JSON estrito, validação e leitura limitada de artefatos. `reviews` separa contratos, casos de uso, engines e cliente de rede; `experiments` separa preparação e coordenação do backend LoRA. A CLI e o HTTP compõem as implementações, e os comandos CPU continuam sem inicializar PyTorch. Novos fingerprints de treino incluem os arquivos das subpastas; experimentos congelados mantêm seu runtime original.
+
+```mermaid
+flowchart LR
+    CSharp[API C#] --> GoHTTP[Go: httpapi]
+    GoHTTP --> Parsing[parsing: coordenação e capacidade]
+    Parsing --> Source[Porta de aquisição]
+    Valve[Adaptador Valve] --> Source
+    Parsing --> Decoder[Porta de análise]
+    Manta[Manta e coletores] --> Decoder
+    CSharp --> PythonHTTP[Python: transporte HTTP]
+    PythonHTTP --> Reviews[reviews: casos de uso]
+    Reviews --> Engines[Porta de engine e contexto]
+    Adapters[Política, Ollama e cliente JSON] --> Engines
+    CLI[CLI Python] --> Experiments[experiments: preparação e execução]
+    Experiments --> Backend[Porta TrainingBackend]
+    LoRA[Runtime LoRA com import tardio] --> Backend
+```
+
+As setas para portas mostram dependências e implementações. Testes de arquitetura verificam as fronteiras; testes de ciclo de vida verificam limites e liberação de recursos. Essa separação facilita manutenção e avaliação, mas não comprova melhoria tática do modelo.
+
+Novos treinos Python podem usar um store SQLite local compartilhado para controlar tentativas, posse de GPU e pausa cooperativa após checkpoint selado. O runtime foi dividido em preparação, otimização, checkpoints e geração; um ensaio CUDA/BF16 mínimo confirmou tensores idênticos entre execução contínua e interrompida/retomada. O contrato de promoção vincula tarefa, dados, base e adaptador, exigindo decisão explícita; não instala modelos. Dependências de treino estão fixadas para a plataforma Docker atual. [Operação e limites](coach-ml/README.md#execução-gerenciada-e-pausa-persistente).
+
+```mermaid
+flowchart LR
+    CLI[CLI de novo experimento] --> Store[Store SQLite local compartilhado]
+    Store --> Attempt[Tentativa com posse de GPU]
+    Attempt --> Optimize[Otimização]
+    Pause[Solicitação de pausa] --> Store
+    Optimize --> Checkpoint[Checkpoint selado e verificado]
+    Checkpoint --> Paused[Pausa persistente e saída do worker]
+    Paused --> Resume[Nova tentativa com mesmo freeze]
+    Resume --> Optimize
+    Optimize --> Generate[Geração e avaliação]
+    Generate --> Candidate[Candidato com hashes e contrato]
+    Candidate --> Decision[Decisão explícita com rollback]
+```
+
+O store coordena somente processos que usam o mesmo banco; não assume que um processo morreu por falta de atualização. Execuções legadas mantêm sua imagem original. No Go, três replays reais de diferentes durações produziram documentos idênticos aos anteriores; o cliente C# leu os três. Um teste de dois parses simultâneos com detector de corrida passou sob limite de 1 GiB. São evidências locais, sem garantia de capacidade de produção.
+
 ## Diagramas
 
 Todos os diagramas são blocos Mermaid editáveis neste README, no mesmo estilo da visão geral do coach. O tema e os controles de navegação dependem do visualizador Markdown. Veja também o [índice dos diagramas](docs/diagrams/README.md).

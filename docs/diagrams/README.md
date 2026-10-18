@@ -4,6 +4,7 @@ A fonte atual dos diagramas são os blocos `mermaid` no [README principal](../..
 
 | Diagrama | Escopo |
 |---|---|
+| [Módulos Go e Python](../../README.md#módulos-internos-do-go-e-python) | Casos de uso, portas, adaptadores e ciclo de pausa/retomada gerenciada |
 | [Arquitetura](../../README.md#arquitetura) | Processamento local, nuvem, Python HTTP e treino separado |
 | [Camadas DDD](../../README.md#camadas-ddd) | Dependências .NET e processos externos |
 | [Coach experimental](../../README.md#coach-experimental) | Evidências C#, revisão Python e validação |

@@ -1,0 +1,3 @@
+# Build toolchain pinned independently of optional GPU dependencies.
+setuptools==79.0.1
+wheel==0.45.1

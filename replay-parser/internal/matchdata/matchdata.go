@@ -12,8 +12,9 @@
 //     name (npc_dota_roshan) or a UnitKind;
 //   - steamId and matchId: text (64-bit numbers; JavaScript would round them).
 //
-// A null field is something the replay does not tell; an empty list ([], never null) is something that did not
-// happen. Adding a field is compatible; renaming, removing or changing the meaning of one is /v2/ (SchemaVersion 2).
+// Null represents unavailable optional data. Empty lists ([], never null) contain no collected records;
+// they do not independently certify that every possible event was observed. Adding fields requires consumer
+// compatibility checks; renaming, removing or changing meaning requires /v2/ (SchemaVersion 2).
 package matchdata
 
 // SchemaVersion is the version of this contract, written at the top of every document.

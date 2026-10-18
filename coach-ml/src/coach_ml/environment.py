@@ -3,8 +3,19 @@ from importlib import metadata
 import platform
 import re
 import sys
+from pathlib import Path
 
-from .audit import require
+from .core.validation import require
+from .hashing import file_hash
+
+
+def runtime_code_hashes(root=None):
+    """Include feature subpackages in new experiment fingerprints."""
+    root = Path(root) if root is not None else Path(__file__).parent
+    files = sorted(root.rglob('*.py'))
+    require(bool(files), 'Runtime source tree is empty')
+    require(all(not path.is_symlink() for path in files), 'Unsafe runtime source file')
+    return {path.relative_to(root).as_posix(): file_hash(path) for path in files}
 
 
 def runtime_environment(distributions=None):

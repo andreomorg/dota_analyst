@@ -38,7 +38,15 @@ func main() {
 	download := flag.String("download", "", "download this Valve replay URL, decompressed, to the -replay path and exit")
 	match := flag.Bool("match", false, "run the POST /v1/match analyzer and write its JSON (to -out, or the standard output)")
 	out := flag.String("out", "", "with -match: file to write the JSON to")
+	manifest := flag.String("manifest", "", "with -match and -out: publish a new local provenance sidecar")
+	metrics := flag.String("metrics", "", "with -match: record Go memory samples in a new local JSON file")
 	flag.Parse()
+	if *metrics != "" && !*match {
+		log.Fatal("-metrics requires -match")
+	}
+	if *manifest != "" && (!*match || *out == "" || *download != "") {
+		log.Fatal("-manifest requires -match and -out, without -download")
+	}
 
 	if *download != "" {
 		if err := downloadReplay(*download, *path); err != nil {
@@ -60,7 +68,7 @@ func main() {
 	defer replay.Close()
 
 	if *match {
-		if err := runMatch(replay, *out); err != nil {
+		if err := profileMatch(*metrics, func() error { return runMatch(replay, *out, *manifest, *path) }); err != nil {
 			log.Fatal(err)
 		}
 		return

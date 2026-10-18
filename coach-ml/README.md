@@ -2,6 +2,63 @@
 
 Projeto Python para datasets, curadoria, auditoria, treino LoRA, avaliação e serviço interno de revisão. Python **3.11+**. C# mantém regras/cálculos/evidências e a API; Go mantém o parser de replay. O navegador continua falando somente com a API C#.
 
+## Arquitetura interna
+
+Um pacote modular com portas e adaptadores, executado separadamente como serviço HTTP CPU ou processo de treino GPU:
+
+| Módulo | Responsabilidade |
+|---|---|
+| `core` | Erros comuns, JSON estrito/canônico, metadados streaming e leitura limitada de artefatos |
+| `reviews.contracts` | Settings e validação dos contratos internos |
+| `reviews.application` | Casos de uso de revisão e portas `ReviewEngine`/`JsonFetcher` |
+| `reviews.engines`, `reviews.upstream` | Política de prévia, integração Ollama e cliente HTTP limitado sem redirects |
+| `experiments.preparation` | Configuração, arquivos e isolamento dos conjuntos antes de carregar ML |
+| `experiments.application` | Coordenação do experimento por `TrainingBackend` |
+| `experiments.backend`, `lora` | Adaptador com import tardio e algoritmo LoRA existente |
+| `runtime` | Fases independentes de preparação, otimização, checkpoint e geração; dependências tensoriais recebidas do runtime |
+| `experiments.runs`, `experiments.control` | Tentativas persistidas em SQLite, posse exclusiva de recurso e pausa cooperativa |
+| `experiments.capabilities` | Identidade de tarefa/dataset/modelo, candidato treinado e registro explícito de decisão de promoção |
+| `service`, `training` | Composição, transporte HTTP/CLI e imports compatíveis com consumidores anteriores |
+
+Os casos de uso aceitam implementações falsas para testar sem rede/modelos. O núcleo não depende da auditoria nem dos adaptadores. Os testes de arquitetura conferem essas fronteiras. Validações e formato público do C# permanecem preservados; nenhuma migração de framework HTTP ou hiperparâmetro é necessária para essa separação.
+
+O fingerprint dos **novos** experimentos usa caminhos relativos e hashes de todas as subpastas Python. Alterar um engine ou caso de uso também altera a identidade do runtime. Um freeze anterior não deve ser atualizado para forçar retomada; preserve sua imagem original. Execuções previamente congeladas permanecem separadas. Novas execuções gerenciadas têm controle durável e pausa cooperativa; não existe agendamento distribuído nem promoção automática.
+
+## Execução gerenciada e pausa persistente
+
+Use um único arquivo SQLite em **volume Linux local compartilhado** por todos os workers da mesma GPU. Não compartilhe esse banco por SMB, pelo PostgreSQL da aplicação ou com o serviço HTTP. A imagem `training` define `COACH_ML_RUN_STORE=/run-state/runs.sqlite3`; monte o mesmo volume em `/run-state` em todas as execuções. Um banco isolado por container não coordena a GPU entre containers.
+
+```powershell
+docker volume create coach-ml-run-state
+```
+
+Ao executar um novo experimento no container de treino, acrescente `--mount type=volume,source=coach-ml-run-state,target=/run-state` aos mounts do experimento/modelo. Fora do Docker, use `coach-ml train ... --run-store <arquivo-local>`. Sem configuração do store, a CLI do host mantém o modo anterior com trava apenas por experimento. O treino já congelado não recebe essa migração.
+
+O início imprime `runId` e `attemptId`. A pausa cooperativa é suportada em `stage run`; `prepare` tem estado próprio e não é tratado como treino com checkpoint de otimizador. Para solicitar pausa, use o mesmo store e ID em outro processo:
+
+```powershell
+coach-ml run-control --store <arquivo-local> --run-id <runId> --action pause
+coach-ml run-control --store <arquivo-local> --run-id <runId> --action status
+```
+
+No Docker, esses comandos podem usar a imagem `training` e o mesmo volume, **sem** `--gpus`: consultar ou solicitar pausa não carrega pesos. A solicitação muda o estado para `pause-requested`; não suspenda o container com `docker pause`. Durante otimização, o worker conclui o passo, sela o checkpoint, libera seus tensores e encerra. Durante geração, pausa entre batches, preservando o prefixo das previsões. O caso de uso confere o checkpoint antes de registrar `paused` e liberar a posse no store. A CLI deve encerrar normalmente para liberar também o contexto CUDA do processo.
+
+Retome executando `train --stage run` no mesmo experimento, imagem e store. Uma nova tentativa restaura o checkpoint e mantém a identidade congelada. Treino, geração, avaliação e conclusão têm estados separados. Tentativa antiga não altera a atual. Falha abrupta/SIGKILL mantém a posse bloqueada para investigação; não há expiração automática nem comando que roube o recurso de um processo pausado. O store coordena apenas workers configurados nele; não detecta nem substitui reservas de outros processos, incluindo o treino legado pausado.
+
+## Candidatos e promoção
+
+`prepare` registra `model-capability.json`: tarefa, esquemas de entrada/saída, políticas observadas, modelo/tokenizer fixados, template, avaliador e hashes dos conjuntos. O freeze vincula esse manifesto. Ao concluir a execução, `model-candidate.json` vincula a capacidade aos hashes do adaptador e freeze.
+
+O contrato `competency-review-v1` não é o contrato HTTP `assessments`. Não converter campos ou promover esse adaptador diretamente ao serviço. `coach-ml promotion-check --capability <model-candidate.json> --evaluation <avaliacao.json> --decision <decisao.json> --output <registro-novo.json>` verifica compatibilidade, hashes da decisão, aprovação tática explícita e modelo de rollback. Ele registra a decisão e retorna `installed: false`; não instala nem aprova modelo. As avaliações automáticas atuais não concedem aprovação tática, portanto não passam esse gate sozinhas.
+
+## Dependências e verificação GPU
+
+`constraints-training.txt` fixa 43 versões diretas/transitivas para a base Docker atual, Python 3.11/Linux x86_64/CUDA 12.8. A instalação Docker aplica essas restrições; `pyproject.toml` e `constraints-build.txt` fixam setuptools/wheel. Esse lock tem escopo de plataforma e versões, não é um inventário de hashes de wheels para todas as plataformas. Preserve a imagem por digest e o fingerprint de ambiente por experimento. Não aplique o lock Linux ao Python Windows nem atualize um runtime congelado.
+
+O tracking operacional usa os eventos duráveis do store e os manifestos/relatórios existentes. MLflow permanece opcional, sem dependência adicionada ou novo serviço obrigatório.
+
+O ensaio GPU reproduzível fica em `tests/gpu/verify_resume.py` e exige `COACH_ML_GPU_TEST=1`, `CUBLAS_WORKSPACE_CONFIG=:4096:8` e `COACH_ML_GPU_EVIDENCE=<arquivo-novo>`. Com o extra `train`, execute `python -m gpu.verify_resume` incluindo `coach-ml/tests` no `PYTHONPATH`. Usa um modelo Llama sintético mínimo em BF16, teto de alocação de 256 MiB e compara o loop anterior contínuo com o loop extraído interrompido/retomado. Os quatro tensores LoRA ficaram exatamente iguais em CUDA; isso valida a mecânica do ensaio, sem medir qualidade tática ou capacidade do corpus completo.
+
 ## Serviço no Docker
 
 No arquivo local .env, configure COACH_ML_ENABLED=true e COACH_ML_API_KEY com uma chave aleatória de pelo menos dezesseis caracteres. Use a mesma chave entre os dois serviços. O padrão COACH_ML_ENGINE=policy-preview executa prévias por política, somente em CPU, identificadas como policy-preview-v1. Não é inferência do modelo treinado.
@@ -24,9 +81,9 @@ A API lê somente replay já arquivado para esse fluxo, entrega no máximo três
 
 Para inferência via Ollama, configure COACH_ML_ENGINE=ollama, COACH_ML_OLLAMA_URL e COACH_ML_MODEL. O modelo deve existir nesse runtime; o serviço não baixa pesos e não promove adaptadores treinados automaticamente. Prompts e transporte de hipóteses Ollama agora ficam no Python. Não habilite essa inferência na GPU ocupada por outro treino. Payloads são limitados, redirects de upstream não são seguidos e a revisão é serializada para retornar busy em vez de sobrecarregar o backend.
 
-O Dockerfile tem o alvo service, sem dependências de ML e com usuário não root, e o alvo training, com dependências opcionais/CUDA para futuros experimentos. O perfil Compose constrói somente service. O alvo training ainda precisa de uma execução GPU controlada antes de substituir um runtime de treino existente.
+O Dockerfile tem o alvo service, sem dependências de ML e com usuário não root, e o alvo training, com dependências opcionais/CUDA para novos experimentos. O perfil Compose constrói somente service. Uma execução nova exige preflight do próprio conjunto; o ensaio sintético de retomada não autoriza substituir um runtime congelado.
 
-As duas bases estão fixadas por digest. Para construir a imagem de treino separada: `docker build --target training -t dotaanalyst-coach-ml-training:local coach-ml`. Construção e imports foram verificados em CPU; isso não substitui o ensaio GPU. Registre o ID da imagem e `python -m pip freeze` de cada experimento: dependências transitivas continuam sendo resolvidas na construção.
+As duas bases estão fixadas por digest. Para construir uma imagem de treino candidata separada: `docker build --target training -t dotaanalyst-coach-ml-training:next coach-ml`. Não substitua a imagem de um treino congelado. Registre seu ID e `python -m pip freeze`: a construção aplica `constraints-training.txt`, enquanto o fingerprint registra os pacotes efetivamente instalados. O ensaio GPU mínimo descrito acima não substitui preflight do corpus real.
 
 Erros do serviço: 401 sem autenticação, 404 para contexto arquivado ausente, 413 para tamanho inválido, 415 para conteúdo diferente de JSON, 422 para contrato enviado inválido, 502 para falha/resposta inválida do upstream e 504 para timeout de upstream. Revisão ocupada retorna 503 com `Retry-After: 1`; `/health` continua disponível. Nenhuma dessas respostas inclui payload privado ou chave. Erros no JSON do modelo ou do callback são falhas do upstream, não erros de contrato do cliente.
 
@@ -154,6 +211,15 @@ coach-ml snapshot-evaluation --source work/coach-learning/grounded-training --ou
 O destino deve ser novo e ficar fora da origem. O comando exige `output/training-result.json` com contagem válida, confere a configuração quando presente, copia metadados e previsões e verifica hashes antes/depois. A avaliação ocorre na cópia, somente em CPU. `snapshot-audit.json` é publicado por último; sem ele, não considere o snapshot concluído. Resultado ausente, previsões incompletas ou contrato incompatível são recusados sem reescrever rótulos. Isso não detecta processo vivo nem prova qualidade do adaptador. Não execute no treino ainda em andamento; arquivos originais, pesos e código congelado permanecem separados.
 
 ## Testar e empacotar
+
+Para alterações de arquitetura/serviço, rode primeiro os testes diretamente afetados:
+
+```powershell
+python -B -m unittest discover -s coach-ml/tests -p test_architecture.py -v
+python -B -m unittest discover -s coach-ml/tests -p test_service.py -v
+```
+
+A suíte abaixo continua disponível para validação ampla quando necessária:
 
 ```powershell
 python -B -m unittest discover -s coach-ml/tests -v

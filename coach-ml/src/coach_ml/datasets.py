@@ -4,7 +4,10 @@ import json
 from pathlib import Path
 import sys
 
-from .audit import AuditError, audit_sft, digest, iter_json_array
+from .core.validation import AuditError
+from .core.json import digest
+from .core.streams import iter_json_array
+from .audit import audit_sft
 
 
 def audit_experiment(experiment, manifest, profile='factual-review'):

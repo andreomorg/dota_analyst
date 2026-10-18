@@ -5,8 +5,10 @@ from pathlib import Path
 import shutil
 import sys
 
-from .audit import AuditError, canonical, digest, iter_json_array, iter_jsonl, require
-from .curriculum import file_hash
+from .core.validation import AuditError, require
+from .core.json import canonical, digest
+from .core.streams import iter_json_array, iter_jsonl
+from .hashing import file_hash
 from .datasets import audit_experiment
 
 

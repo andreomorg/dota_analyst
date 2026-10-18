@@ -7,7 +7,7 @@ O dono do projeto está aprendendo Go (e C#): explique as decisões e os conceit
 ## Regras (as mesmas do projeto C#, no jeito do Go)
 
 - **Código em inglês** (pacotes, tipos, funções, rotas); conversa em português.
-- **Dependências só apontam para dentro:** `cmd → httpapi → (replay, valve) → (laning, matchdata)`. O `laning` (a regra) e o `matchdata` (tipos do contrato do `/v1/match`) só usam a biblioteca padrão; não conhecem HTTP, `manta` nem a Valve.
+- **Dependências só apontam para dentro:** `cmd` compõe `httpapi`, `replay` e `valve`; `httpapi → parsing → laning`. `valve → parsing` usa erros estáveis; `replay → (laning, matchdata)` implementa análise. `httpapi` não importa adaptadores Valve/Manta. `laning` e `matchdata` só usam a biblioteca padrão. `internal/architecture` verifica essas fronteiras.
 - **Interfaces no lugar de quem usa** (idioma do Go): o pacote que precisa de algo declara a interface; o `main.go` entrega a implementação; testes entregam falsos.
 - **Contrato versionado na URL** (`/v1/laning`, `/v1/match`); mudança que quebra → `/v2/`. Contrato abaixo, testado aqui e no cliente C#.
 - **Erros como `application/problem+json`** (mesmo formato da API).
@@ -25,9 +25,26 @@ O dono do projeto está aprendendo Go (e C#): explique as decisões e os conceit
 | `internal/matchdata/` | Contrato do `/v1/match`: só tipos com tags JSON e comentários (unidades); `List[T]` nunca vira `null`; tuplas `[t, x, y]`/`[t, "nome"]` | DTOs |
 | `internal/replay/` | Adaptador do `manta`. `analyzer.go`: `/v1/laning`. `clock.go`: relógio do jogo e pausas (dos dois). `match.go`: `MatchAnalyzer` + interface `Collector`. `session.go`/`players.go`: a `Session` (ganchos e serviços comuns). `collect_*.go`: um coletor por seção (`match` = partida + draft; `players`, `combat`, `items`, `vision` = cards 03–06; `laning` = a rota de cada jogador pela mesma regra do `/v1/laning`, sprint 11 — os números aos 10:00 são o minuto 10 de `timelines.perMinute`) | Infrastructure |
 | `internal/valve/` | Baixa o `.dem.bz2` (só `*.valve.net`), limites de tamanho/tempo, descompacta em streaming | Infrastructure |
-| `internal/httpapi/` | `POST /v1/laning`, `POST /v1/match` (`match.go`: gzip e teto de 4 MB), `GET /health`, JSON, erros → ProblemDetails; o caminho comum (corpo, semáforo, tempo, download, erros) é `serveReplay` | Controllers |
+| `internal/httpapi/` | Rotas, autenticação, JSON, gzip/teto de 4 MB e tradução de erros para ProblemDetails; delega coordenação a `parsing` | Controllers |
+| `internal/parsing/` | Caso de uso compartilhado: stream, timeout, capacidade, precedência de erros de leitura e consumo do resultado; sem HTTP/Manta/Valve | Application |
+| `internal/provenance/` | Manifesto local opcional com hashes, build e limitações; não muda o contrato v1 | Exportação local |
+| `internal/architecture/` | Testes das dependências permitidas entre pacotes | Testes |
 
 `internal/` é especial no Go: nada fora deste módulo pode importar o que está lá dentro.
+
+O slot permanece ocupado até o resultado ser consumido, incluindo escrita HTTP; o stream fecha antes dessa escrita. Não criar nova fila ou retry no Go: a coordenação de solicitações permanece no C#. Os logs `parse resources` medem abertura, análise, leitura e duração sem anexar a URL do replay; a fase de abertura não inclui todo download, pois a leitura é streaming durante o parse.
+
+### Manifesto local de procedência
+
+```powershell
+go run ./cmd/inspect -replay ../work/replays/9034320024.dem.bz2 -match -out ../work/match-new.json -manifest ../work/match-new.manifest.json
+```
+
+Com `-manifest`, ambos os destinos devem ser novos. O manifesto é publicado sem sobrescrita e contém hashes dos bytes locais do documento, replay e binário, versão do contrato, informações disponíveis do build/Manta e data UTC. Não inclui caminhos locais ou URL. Patch desconhecido fica `null`; lista vazia não certifica cobertura observada. Os arquivos de entrada devem permanecer imutáveis durante a exportação. Manifesto ausente após falha significa exportação incompleta; preserve os arquivos para investigação e use outro destino. Nada é baixado nem enviado ao treinamento por esse comando.
+
+Verificações direcionadas: `go test ./internal/parsing ./internal/architecture ./internal/provenance ./internal/httpapi`. `go test -race ./internal/parsing ./internal/httpapi` requer CGO e compilador C compatível; o CI Linux executa essa checagem e fuzzing limitado de URL. Fuzzing de URLs não acessa a rede nem alimenta arquivos arbitrários ao Manta.
+
+`inspect -match -metrics <arquivo-novo.json>` mede tempo e picos amostrados de heap/runtime Go; em Linux com cgroup v2, também registra `cgroupPeakBytes`. O arquivo não é sobrescrito. Amostragem tem custo e não deve ser usada para comparar latência de produção; o tempo sem profiling deve ser medido separadamente. Dados de cgroup não equivalem a RSS de um processo e dependem dos limites/mounts do container. A aceitação local incluiu três replays (cerca de 17, 29 e 56 minutos), igualdade com o código anterior e dois parses simultâneos da partida longa com `-race` dentro de 1 GiB; não elevar concorrência ou memória a partir dessa amostra.
 
 ## Contrato
 

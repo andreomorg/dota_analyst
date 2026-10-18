@@ -6,7 +6,10 @@ from itertools import zip_longest
 from pathlib import Path
 import sys
 
-from .audit import AuditError, canonical, check_factual_target, iter_json_array, iter_jsonl, parse_json, require
+from .core.validation import AuditError, require
+from .core.json import canonical, parse_json
+from .core.streams import iter_json_array, iter_jsonl
+from .audit import check_factual_target
 from .comparison import PairedComparison, failure_reasons
 from .hashing import file_hash
 

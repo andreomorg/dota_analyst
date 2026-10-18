@@ -18,7 +18,7 @@ import (
 
 	"github.com/andreomorg/dota_analyst/replay-parser/internal/laning"
 	"github.com/andreomorg/dota_analyst/replay-parser/internal/matchdata"
-	"github.com/andreomorg/dota_analyst/replay-parser/internal/valve"
+	"github.com/andreomorg/dota_analyst/replay-parser/internal/parsing"
 )
 
 // Analyzer reads a decompressed replay and returns its laning phase (implemented by replay.Analyzer).
@@ -26,10 +26,8 @@ type Analyzer interface {
 	Analyze(ctx context.Context, r io.Reader) (laning.Result, error)
 }
 
-// ReplaySource opens a replay by its URL and returns it decompressed (implemented by valve.Downloader).
-type ReplaySource interface {
-	Open(ctx context.Context, replayURL string) (io.ReadCloser, error)
-}
+// ReplaySource is kept as a compatibility name for handler construction.
+type ReplaySource = parsing.ReplaySource
 
 // Config tunes the handler. Zero values mean the defaults.
 type Config struct {
@@ -65,7 +63,7 @@ func WithMatchAnalyzer(analyzer MatchAnalyzer) Option {
 }
 
 type server struct {
-	source        ReplaySource
+	parser        *parsing.Service
 	analyzer      Analyzer
 	matchAnalyzer MatchAnalyzer
 	// maxMatchBytes is the largest /v1/match answer (uncompressed); bigger is a bug, answered with 500.
@@ -73,8 +71,6 @@ type server struct {
 	authEnabled   bool
 	// The key is kept as a SHA-256 hash so the comparison has a fixed length and does not leak the key's length.
 	apiKeyHash [sha256.Size]byte
-	slots      chan struct{}
-	timeout    time.Duration
 	logger     *slog.Logger
 }
 
@@ -88,12 +84,13 @@ func NewHandler(source ReplaySource, analyzer Analyzer, config Config, logger *s
 		config.RequestTimeout = DefaultRequestTimeout
 	}
 	s := &server{
-		source:      source,
+		parser:      parsing.New(source, config.MaxConcurrentParses, config.RequestTimeout, parsing.WithObserver(func(m parsing.Measurement) {
+			logger.Info("parse resources", "openMs", m.Open.Milliseconds(), "analyzeMs", m.Analyze.Milliseconds(),
+				"elapsedMs", m.Elapsed.Milliseconds(), "readBytes", m.ReadBytes, "activeAtStart", m.ActiveAtStart)
+		})),
 		analyzer:    analyzer,
 		authEnabled: config.APIKey != "",
 		apiKeyHash:  sha256.Sum256([]byte(config.APIKey)),
-		slots:       make(chan struct{}, config.MaxConcurrentParses),
-		timeout:     config.RequestTimeout,
 		logger:      logger,
 
 		maxMatchBytes: maxMatchResponseBytes,
@@ -153,58 +150,32 @@ func (s *server) serveReplay(w http.ResponseWriter, r *http.Request, analyze ana
 		return
 	}
 
-	// Taken without waiting: a caller that waited here could hold its HTTP request open for minutes; 503 lets it
-	// retry later instead.
-	select {
-	case s.slots <- struct{}{}:
-		defer func() { <-s.slots }()
-	default:
-		w.Header().Set("Retry-After", strconv.Itoa(retryAfterSeconds))
-		writeProblem(w, http.StatusServiceUnavailable, "Busy",
-			"the maximum number of replays is already being parsed; try again later")
-		return
-	}
-
-	ctx, cancel := context.WithTimeout(r.Context(), s.timeout)
-	defer cancel()
 	started := time.Now()
-	respond, err := s.analyze(ctx, request.ReplayURL, analyze)
-	logger := s.logger.With("path", r.URL.Path, "replayUrl", request.ReplayURL,
-		"elapsedMs", time.Since(started).Milliseconds())
-	if err != nil {
-		s.writeAnalyzeError(ctx, w, r, logger, err)
+	var respond respondFunc
+	logger := s.logger.With("path", r.URL.Path)
+	err := s.parser.Run(r.Context(), request.ReplayURL, func(ctx context.Context, stream io.Reader) error {
+		var err error
+		respond, err = analyze(ctx, stream)
+		return err
+	}, func() { respond(w, r, logger.With("elapsedMs", time.Since(started).Milliseconds())) })
+	logger = logger.With("elapsedMs", time.Since(started).Milliseconds())
+	if errors.Is(err, parsing.ErrBusy) {
+		w.Header().Set("Retry-After", strconv.Itoa(retryAfterSeconds))
+		writeProblem(w, http.StatusServiceUnavailable, "Busy", err.Error())
 		return
 	}
-	respond(w, r, logger)
-}
-
-// analyze downloads and parses the replay. When reading the replay itself failed (network, size limit), that error
-// wins over the analyzer's: the analyzer may only see "unreadable replay", but the cause is the download.
-func (s *server) analyze(ctx context.Context, replayURL string, analyze analyzeFunc) (respondFunc, error) {
-	stream, err := s.source.Open(ctx, replayURL)
 	if err != nil {
-		return nil, err
+		s.writeAnalyzeError(w, r, logger, err)
+		return
 	}
-	defer stream.Close()
-
-	tracked := &readErrorTracker{r: stream}
-	respond, err := analyze(ctx, tracked)
-	if err != nil && tracked.err != nil {
-		if status, _ := classify(tracked.err); status != http.StatusInternalServerError {
-			err = tracked.err
-		}
-	}
-	return respond, err
 }
-func (s *server) writeAnalyzeError(ctx context.Context, w http.ResponseWriter, r *http.Request, logger *slog.Logger,
+
+func (s *server) writeAnalyzeError(w http.ResponseWriter, r *http.Request, logger *slog.Logger,
 	err error) {
 	if r.Context().Err() != nil {
 		// The caller gave up (or the server is shutting down): nobody is left to read an answer.
 		logger.Info("caller went away before the replay was analyzed", "error", err)
 		return
-	}
-	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
-		err = fmt.Errorf("%w: gave up after %s: %w", errTimedOut, s.timeout, err)
 	}
 	status, title := classify(err)
 	detail := err.Error()
@@ -217,41 +188,27 @@ func (s *server) writeAnalyzeError(ctx context.Context, w http.ResponseWriter, r
 	writeProblem(w, status, title, detail)
 }
 
-var errTimedOut = errors.New("timed out")
+var errTimedOut = parsing.ErrTimedOut
 
 // classify maps an error to its HTTP status and ProblemDetails title.
 func classify(err error) (int, string) {
 	switch {
-	case errors.Is(err, valve.ErrInvalidURL):
+	case errors.Is(err, parsing.ErrInvalidURL):
 		return http.StatusBadRequest, "Invalid replay URL"
-	case errors.Is(err, valve.ErrReplayNotFound):
+	case errors.Is(err, parsing.ErrReplayNotFound):
 		return http.StatusNotFound, "Replay not found"
 	// Size limits are a property of the replay: retrying cannot help, so it is "unreadable" (422), not 502.
-	case errors.Is(err, valve.ErrTooLarge):
+	case errors.Is(err, parsing.ErrTooLarge):
 		return http.StatusUnprocessableEntity, "Replay too large"
-	case errors.Is(err, laning.ErrUnreadableReplay):
+	case errors.Is(err, parsing.ErrUnreadableReplay):
 		return http.StatusUnprocessableEntity, "Unreadable replay"
 	case errors.Is(err, errTimedOut):
 		return http.StatusBadGateway, "Replay download timed out"
-	case errors.Is(err, valve.ErrDownloadFailed):
+	case errors.Is(err, parsing.ErrDownloadFailed):
 		return http.StatusBadGateway, "Replay download failed"
 	default:
 		return http.StatusInternalServerError, "Unexpected error"
 	}
-}
-
-// readErrorTracker remembers the first error (other than EOF) the replay stream returned.
-type readErrorTracker struct {
-	r   io.Reader
-	err error
-}
-
-func (t *readErrorTracker) Read(p []byte) (int, error) {
-	n, err := t.r.Read(p)
-	if err != nil && err != io.EOF && t.err == nil {
-		t.err = err
-	}
-	return n, err
 }
 
 // decodeJSON reads one JSON object from a size-limited body. Unknown fields are ignored (like ASP.NET's default), so

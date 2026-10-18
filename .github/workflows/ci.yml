@@ -106,6 +106,12 @@ jobs:
       # The real-replay tests skip themselves: the replay is not in the repository.
       - run: go test ./...
 
+      - name: Replay lifecycle race checks
+        run: go test -race ./internal/parsing ./internal/httpapi
+
+      - name: Bounded URL fuzzing
+        run: go test ./internal/valve -run '^$' -fuzz '^FuzzReplayURL$' -fuzztime=5s -parallel=2
+
       # Like "Vulnerable packages" in the .NET job, but only for code we actually call (standard library
       # included: a Go patch release with security fixes means bumping "go" in go.mod and the Dockerfile).
       - name: Vulnerabilities

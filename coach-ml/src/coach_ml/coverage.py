@@ -5,7 +5,8 @@ import json
 from pathlib import Path
 import sys
 
-from .audit import AuditError, iter_json_array, require
+from .core.validation import AuditError, require
+from .core.streams import iter_json_array
 from .datasets import audit_experiment
 from .hashing import file_hash
 

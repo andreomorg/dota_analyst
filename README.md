@@ -36,7 +36,7 @@ O backend inclui um fluxo experimental para a aba **Como melhorar**, integrado p
 
 Os contratos e testes ficam nas pastas `Coaching` de Domain, Application e Infrastructure. O projeto [coach-ml](coach-ml/README.md) concentra curadoria, auditoria, treino, avaliação e serviço HTTP Python. A API C# entrega contextos de replays arquivados e consome revisões por rotas internas autenticadas; o Python pode buscar esses contextos por callback. O perfil Docker `coach-ml` inicia o serviço, com prévia por política em CPU por padrão e Ollama configurável. As dicas públicas continuam nas regras existentes. Dados, conjuntos de avaliação e pesos locais não são distribuídos pelo repositório; `docker compose up` não inicia treino nem instala modelos.
 
-A [estrutura de aprendizado](docs/coach-learning.md) documenta a separação entre dados, curadoria, treino e avaliação. O projeto Python audita treino/validação juntos, produz conjuntos sem entradas repetidas, confere orçamento de tokens e avalia previsões por competência. Esses controles verificam integridade e limites dos exemplos, sem conceder aprovação tática.
+A [documentação do coach-ml](coach-ml/README.md) descreve a separação entre dados, curadoria, treino e avaliação. O projeto Python audita treino/validação juntos, produz conjuntos sem entradas repetidas, confere orçamento de tokens e avalia previsões por competência. Esses controles verificam integridade e limites dos exemplos, sem conceder aprovação tática.
 
 O próximo experimento usa seis competências e uma política contextual versionada: cada exercício aponta para instantes/registros concretos e pede uma anotação verificável no replay. São 34.827 exemplos de treino e 3.442 de validação nas mesmas 968/96 partidas. **Registro de 18/10/2026:** o treino Python em container, na GPU, foi iniciado e pausado a pedido do usuário em 42,9%; o ensaio GPU e o primeiro checkpoint passaram nas verificações. Esse registro não é um indicador de execução em tempo real. Não há modelo treinado promovido ao serviço nem aprendizado automático a cada replay.
 
@@ -146,7 +146,7 @@ Regras de arquitetura, decisões e detalhes de cada parte: [`CLAUDE.md`](CLAUDE.
 
 ## Diagramas
 
-Os diagramas abaixo são exibidos diretamente no README. O arquivo-fonte editável está em [`docs/diagrams/dotaanalyst.drawio`](docs/diagrams/dotaanalyst.drawio) e pode ser aberto no draw.io.
+Os diagramas abaixo são exibidos diretamente no README. O arquivo-fonte editável, com nove páginas, está em [`docs/diagrams/dotaanalyst.drawio`](docs/diagrams/dotaanalyst.drawio) e pode ser aberto no draw.io. O [índice e as instruções de exportação](docs/diagrams/README.md) mantêm as imagens alinhadas à fonte.
 
 ### Arquitetura
 
@@ -158,11 +158,23 @@ Os diagramas abaixo são exibidos diretamente no README. O arquivo-fonte editáv
 
 ### Coach experimental
 
-O fluxo abaixo é local e separado da análise servida ao jogador. Revisão estrutural e avaliação de conteúdo são etapas distintas; os experimentos de treino ainda não produziram um candidato aprovado.
+O fluxo abaixo usa integração interna autenticada entre C# e Python. O serviço de revisão é separado do treinador; as dicas públicas seguem as regras existentes. Validação estrutural e avaliação de conteúdo são etapas distintas, sem adaptador promovido ao produto.
 
 A observação determinística e o contrato de reflexão v2 permanecem preservados. A projeção qualitativa v3 (`PrepareBoundedCoaching`) distingue disponibilidade de distância na âncora e cobertura do episódio posterior; `PrepareAliasedCoaching` substitui IDs por aliases e restaura as referências no backend. A projeção temporal v4 (`PrepareTemporalCoaching`) compara a distância registrada ao mesmo aliado entre a âncora e dez segundos antes, informa a cobertura intermediária e mantém valores e tempos de proveniência no backend. Essas amostras não reconstroem trajeto, visão, intenção ou causa do resultado. Validação de formato e referências não aprova o conteúdo tático.
 
-![Coach experimental: episódios, fatos canônicos, reflexão e avaliação antes de qualquer promoção](docs/diagrams/images/coaching.png)
+![Coach experimental: evidências no C#, revisão Python, validação e limites do produto](docs/diagrams/images/coaching.png)
+
+### Curadoria, treinamento e avaliação do modelo
+
+O Python separa partidas, prepara os exemplos, audita dados e orçamento de tokens, confere o pior microbatch na GPU e congela o experimento. O treino salva checkpoints selados; a comparação base versus adaptado e o review vêm antes de qualquer decisão de promoção. O teste reservado permanece separado.
+
+![Pipeline Python: corpus, curadoria, auditoria, preparo GPU, LoRA, checkpoints, avaliação e review](docs/diagrams/images/coach-training.png)
+
+### Integração interna C# e Python
+
+Há dois caminhos: C# envia as evidências preparadas ao Python, ou Python recebe partida/herói e busca o contexto arquivado por callback autenticado. Nenhum deles oferece acesso direto do Python ao banco ou inicia treinamento.
+
+![Rotas autenticadas de revisão e callback entre C# e Python](docs/diagrams/images/coach-integration.png)
 
 ### Fluxo da análise
 

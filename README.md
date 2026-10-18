@@ -59,17 +59,7 @@ O treinamento é independente do serviço HTTP. A promoção exige decisão expl
 
 ## Como funciona
 
-```
-                    máquina do dono do projeto (docker compose)              nuvem
- ┌──────────────────────────────────────────────────────────┐
- │ replay-parser (Go) — lê os replays (.dem) da Valve        │◄── túnel ngrok ── API no Render
- │ collector — coleta partidas pro/alto nível,               │                    (só lê dado pronto)
- │             base bruta no PostgreSQL local,               │                        │
- │             publica de hora em hora só o resultado ───────┼──► Neon (PostgreSQL) ◄─┘
- │ api + PostgreSQL local — o mesmo site, para ver tudo      │    espelho: só dados refinados
- │                          funcionando de perto             │
- └──────────────────────────────────────────────────────────┘
-```
+O [diagrama de arquitetura](#arquitetura) mostra os processos locais, os serviços em produção e as integrações externas.
 
 - **O processamento pesado fica na máquina do dono do projeto:** ler replays (dezenas de MB cada), coletar partidas, calcular distribuições e guardar os documentos brutos. **O Neon guarda os dados refinados para consulta** — distribuições de comparação e análises, incluindo grades compactas de mapa de calor, sem trilhas de posições cruas. O site local e a produção consultam a base de comparação publicada.
 - **A base de comparação cresce onde faz falta:** o coletor olha os heróis das últimas 20 partidas da conta foco e, enquanto algum tiver menos de 10 partidas de alto nível na base, busca primeiro partidas com esses heróis (o de menos dados antes); depois volta às profissionais.
@@ -146,15 +136,46 @@ Regras de arquitetura, decisões e detalhes de cada parte: [`CLAUDE.md`](CLAUDE.
 
 ## Diagramas
 
-Os diagramas abaixo são exibidos diretamente no README. O arquivo-fonte editável, com nove páginas, está em [`docs/diagrams/dotaanalyst.drawio`](docs/diagrams/dotaanalyst.drawio) e pode ser aberto no draw.io. O [índice e as instruções de exportação](docs/diagrams/README.md) mantêm as imagens alinhadas à fonte.
+Todos os diagramas são blocos Mermaid editáveis neste README, no mesmo estilo da visão geral do coach. O tema e os controles de navegação dependem do visualizador Markdown. Veja também o [índice dos diagramas](docs/diagrams/README.md).
 
 ### Arquitetura
 
-![Arquitetura do DotaAnalyst: processamento local e serviços em produção](docs/diagrams/images/architecture.png)
+```mermaid
+flowchart TD
+    Browser["Jogador / navegador"] --> Render["Render<br/>API C# + React"]
+    subgraph Cloud["Produção na nuvem"]
+        Render --> Neon["Neon / PostgreSQL<br/>Dados refinados"]
+    end
+    Render --> Steam["Steam OpenID"]
+    Render --> OpenDota["OpenDota API"]
+    Render -. "Replay via túnel ngrok" .-> Parser
+    subgraph Local["Máquina local / Docker"]
+        API["API C# + React local"] --> Parser["Parser Go<br/>Replay .dem"]
+        API --> DB["PostgreSQL local<br/>Dados brutos e refinados"]
+        Collector["Coletor de baselines"] --> Parser
+        Collector --> DB
+        API <-->|"HTTP autenticado"| Python["Python coach-ml<br/>Serviço de revisão"]
+        Trainer["Python / treino GPU separado<br/>Pesos e checkpoints locais"]
+    end
+    Parser --> Valve["Valve / arquivos de replay"]
+    Collector --> OpenDota
+    Collector -->|"Publica distribuições"| Neon
+```
 
 ### Camadas DDD
 
-![Camadas DDD e dependências entre os projetos](docs/diagrams/images/ddd-layers.png)
+```mermaid
+flowchart TD
+    React["React client"] -->|HTTP| Server["DotaAnalyst.Server<br/>Controllers / Steam / DI"]
+    Server --> Application["DotaAnalyst.Application<br/>Casos de uso / DTOs / interfaces"]
+    Application --> Domain["DotaAnalyst.Domain<br/>Regras / métricas / fatos de replay"]
+    Server -. "Registra implementações" .-> Infrastructure["DotaAnalyst.Infrastructure<br/>Persistência / clientes externos"]
+    Infrastructure -->|"Depende das interfaces"| Application
+    Infrastructure -->|HTTP| Python["Python coach-ml<br/>Processo separado"]
+    Infrastructure -->|HTTP| Go["Parser Go<br/>Processo separado"]
+```
+
+As dependências .NET apontam para dentro. Domain não conhece HTTP, PostgreSQL, Python ou ML; as setas para os processos externos representam comunicação em execução.
 
 ### Coach experimental
 
@@ -162,35 +183,156 @@ O fluxo abaixo usa integração interna autenticada entre C# e Python. O serviç
 
 A observação determinística e o contrato de reflexão v2 permanecem preservados. A projeção qualitativa v3 (`PrepareBoundedCoaching`) distingue disponibilidade de distância na âncora e cobertura do episódio posterior; `PrepareAliasedCoaching` substitui IDs por aliases e restaura as referências no backend. A projeção temporal v4 (`PrepareTemporalCoaching`) compara a distância registrada ao mesmo aliado entre a âncora e dez segundos antes, informa a cobertura intermediária e mantém valores e tempos de proveniência no backend. Essas amostras não reconstroem trajeto, visão, intenção ou causa do resultado. Validação de formato e referências não aprova o conteúdo tático.
 
-![Coach experimental: evidências no C#, revisão Python, validação e limites do produto](docs/diagrams/images/coaching.png)
+```mermaid
+flowchart LR
+    Replay["Replay arquivado"] --> Facts["C# / episódios e fatos<br/>Âncora separada do resultado"]
+    Facts --> Context["C# / contexto limitado<br/>CoachMlClient"]
+    Context -->|"HTTP autenticado"| Python["Python / revisão provisória<br/>Prévia CPU ou Ollama"]
+    Python --> Validate["C# / valida contrato<br/>IDs e evidências"]
+    Validate --> Review["Review de conteúdo<br/>Utilidade e limitações"]
+    Review -. "Decisão explícita" .-> Product["Produto público<br/>Dicas atuais por regras"]
+```
 
 ### Curadoria, treinamento e avaliação do modelo
 
 O Python separa partidas, prepara os exemplos, audita dados e orçamento de tokens, confere o pior microbatch na GPU e congela o experimento. O treino salva checkpoints selados; a comparação base versus adaptado e o review vêm antes de qualquer decisão de promoção. O teste reservado permanece separado.
 
-![Pipeline Python: corpus, curadoria, auditoria, preparo GPU, LoRA, checkpoints, avaliação e review](docs/diagrams/images/coach-training.png)
+```mermaid
+flowchart LR
+    subgraph Data["Dados / CPU"]
+        direction TB
+        Corpus["Corpus / manifest<br/>Separação por partida"] --> Curation["Curadoria Python<br/>Seis competências / política v2"]
+        Curation --> Audit["Auditoria<br/>Hashes / duplicatas / cobertura / tokens"]
+    end
+    subgraph Training["Treino / container GPU"]
+        direction TB
+        Prepare["Prepare<br/>Pior microbatch / gradientes / memória"] --> Freeze["Congela experimento<br/>Dados / código / base / ambiente"]
+        Freeze --> Train["Run / uma época<br/>Base intacta / novo LoRA"]
+        Train --> Checkpoint["Checkpoint selado<br/>Adaptador / otimizador / RNG / SHA-256"]
+        Checkpoint -. "Verifica antes de retomar" .-> Train
+        Train --> Final["Adaptador final separado"]
+    end
+    subgraph Comparison["Comparação / review"]
+        direction TB
+        Predictions["Mesmos casos de validação<br/>Respostas base e adaptado"] --> Evaluation["Avaliação pareada<br/>Fatos / foco / ganhos / regressões"]
+        Evaluation --> Review["Review de conteúdo<br/>Decisão explícita sobre promoção"]
+    end
+    Data --> Training --> Comparison
+```
+
+Checkpoints permitem retomada; a avaliação usa o adaptador final. Testes reservados permanecem separados e não são abertos pela preparação. Loss baixa e reprodução de templates não comprovam domínio tático.
 
 ### Integração interna C# e Python
 
 Há dois caminhos: C# envia as evidências preparadas ao Python, ou Python recebe partida/herói e busca o contexto arquivado por callback autenticado. Nenhum deles oferece acesso direto do Python ao banco ou inicia treinamento.
 
-![Rotas autenticadas de revisão e callback entre C# e Python](docs/diagrams/images/coach-integration.png)
+```mermaid
+flowchart LR
+    subgraph Direct["C# envia as evidências"]
+        Request["POST /api/internal/coach/<br/>reviews/{matchId}/{heroId}"] --> Context["C# prepara contexto<br/>Replay arquivado / até três cenas"]
+        Context --> Python["Python<br/>POST /v1/reviews"]
+        Python --> Validate["C# valida resposta<br/>Engine / IDs / referências"]
+    end
+    subgraph Callback["Python busca as evidências"]
+        ByMatch["Python<br/>POST /v1/reviews/by-match"] --> Get["C# / GET /api/internal/coach/<br/>contexts/{matchId}/{heroId}"]
+        Get --> Bounded["Contexto limitado<br/>Sem acesso direto ao banco"]
+        Bounded --> Response["Python revisa e responde<br/>Engine e referências explícitas"]
+    end
+```
+
+As duas entradas exigem chave de máquina, independente da sessão Steam. O serviço HTTP não inicia treinamento nem publica adaptadores.
 
 ### Fluxo da análise
 
-![Fluxo de análise de uma partida, do React ao parser de replay](docs/diagrams/images/match-analysis.png)
+```mermaid
+sequenceDiagram
+    participant React
+    participant API as API C#
+    participant DB as PostgreSQL
+    participant OD as OpenDota
+    participant Worker as Fila / Worker
+    participant Parser as Parser Go
+    React->>API: Solicita análise da partida
+    API->>DB: Consulta partida e análise salvas
+    DB-->>API: Dados disponíveis
+    opt Partida ausente ou desatualizada
+        API->>OD: Consulta partida e catálogos
+        OD-->>API: Dados da partida
+        API->>DB: Salva dados atualizados
+    end
+    alt Análise pronta
+        API-->>React: Análise / ready
+    else Replay precisa ser processado
+        API->>Worker: Enfileira processamento
+        API-->>React: Dados existentes / processing
+        Worker->>Parser: POST /v1/match
+        Parser-->>Worker: Documento do replay
+        Worker->>DB: Salva métricas, heatmap e estado ready
+        React->>API: Consulta novamente
+        API->>DB: Busca análise concluída
+        DB-->>API: Análise salva
+        API-->>React: Análise / ready
+    end
+```
+
+O fluxo mostra o caminho de sucesso. Estados de replay indisponível e falhas continuam sendo tratados pelos contratos da API.
 
 ### Base de comparação
 
-![Coleta local e publicação da base de comparação](docs/diagrams/images/comparison-baseline.png)
+```mermaid
+flowchart LR
+    OD["OpenDota<br/>Partidas e heróis recentes da conta foco"] --> Priority["Prioriza heróis com menos dados<br/>Depois partidas profissionais / alto nível"]
+    Priority --> Collect["CollectBaselineHandler<br/>Uma partida por vez / limite configurado"]
+    Collect --> Parser["Parser Go<br/>Inferência de função quando necessária"]
+    Parser --> Raw["PostgreSQL local<br/>baseline_matches / baseline_metrics"]
+    Raw --> Publish["PublishBaselineHandler<br/>Percentis por herói / posição / métrica"]
+    Publish --> Local["baseline_distributions<br/>Banco local"]
+    Publish --> Neon["baseline_distributions<br/>Neon / dados refinados"]
+    Local --> Site["Site local"]
+    Neon --> Production["API em produção"]
+```
 
 ### Login com a Steam
 
-![Fluxo de autenticação com Steam OpenID](docs/diagrams/images/steam-login.png)
+```mermaid
+sequenceDiagram
+    participant Browser as Navegador
+    participant API as API C# / AuthController
+    participant Steam as Steam OpenID
+    Browser->>API: GET /api/v1/auth/login?returnUrl=...
+    API-->>Browser: Redireciona para Steam
+    Browser->>Steam: Autentica na página da Steam
+    Note over Browser,Steam: Senha ou QR code ficam na Steam
+    Steam-->>Browser: Retorna resposta OpenID
+    Browser->>API: /api/auth/steam/callback
+    API->>Steam: check_authentication
+    Steam-->>API: Confirma identidade / SteamID
+    API-->>Browser: Cookie HttpOnly / volta à página de origem
+    Browser->>API: GET /api/v1/me com cookie
+    API-->>Browser: Perfil autenticado
+```
 
 ### Banco de dados
 
-![Tabelas principais nos bancos local e Neon](docs/diagrams/images/database.png)
+```mermaid
+flowchart TD
+    subgraph Shared["Local e Neon / dados refinados"]
+        Matches["matches<br/>match_id / details / replay_url"]
+        Analyses["replay_analyses<br/>match_id / status / data"]
+        Catalogs["catalog_entries<br/>catalog + id / name / details"]
+        Distributions["baseline_distributions<br/>hero_id + role + source / distributions"]
+        Searches["player_searches<br/>account_id / contagem"]
+        Keys["data_protection_keys<br/>Proteção do cookie de sessão"]
+    end
+    subgraph Raw["Somente local / dados brutos"]
+        Documents["replay_documents<br/>match_id / documento arquivado"]
+        BaselineMatches["baseline_matches<br/>match_id / source / status"]
+        Metrics["baseline_metrics<br/>match_id + hero_id / role / metrics"]
+    end
+    Metrics -->|"Agrega e publica percentis"| Distributions
+```
+
+Os grupos mostram onde os dados ficam armazenados; as caixas não declaram relacionamentos de chave estrangeira. A seta representa a publicação dos agregados, sem enviar os documentos brutos ao Neon.
 
 ## Versões e publicação
 

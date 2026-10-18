@@ -1,27 +1,27 @@
 # Diagramas do DotaAnalyst
 
-Fonte editável: [dotaanalyst.drawio](dotaanalyst.drawio). As imagens PNG do README são exportadas dessa fonte, sem redesenho separado. Os diagramas descrevem responsabilidades e contratos; não são indicadores de disponibilidade ou progresso de serviços.
+A fonte atual dos diagramas são os blocos `mermaid` no [README principal](../../README.md#diagramas). Todos usam o mesmo estilo nativo da visão geral do coach, sem cores ou tema fixados. O visualizador Markdown determina a aparência clara/escura e os controles de zoom, cópia e navegação disponíveis.
 
-| Página | Índice CLI | Imagem | Escopo |
-|---|---:|---|---|
-| 1. Arquitetura | 1 | [architecture.png](images/architecture.png) | Processamento local, nuvem, Python HTTP e treino separado |
-| 2. Camadas DDD | 2 | [ddd-layers.png](images/ddd-layers.png) | Dependências .NET e limite com Python |
-| 3. Fluxo da análise | 3 | [match-analysis.png](images/match-analysis.png) | Análise pública e processamento de replay |
-| 4. Base de comparação | 4 | [comparison-baseline.png](images/comparison-baseline.png) | Coleta, agregação e publicação |
-| 5. Login Steam | 5 | [steam-login.png](images/steam-login.png) | Autenticação pública |
-| 6. Banco de dados | 6 | [database.png](images/database.png) | Dados locais e refinados |
-| 7. Coach experimental | 7 | [coaching.png](images/coaching.png) | Evidências C#, revisão Python e validação |
-| 8. Curadoria, treino e avaliação | 8 | [coach-training.png](images/coach-training.png) | Dados, congelamento, GPU, checkpoints e comparação |
-| 9. Integração interna | 9 | [coach-integration.png](images/coach-integration.png) | Rotas e callbacks autenticados |
+| Diagrama | Escopo |
+|---|---|
+| [Arquitetura](../../README.md#arquitetura) | Processamento local, nuvem, Python HTTP e treino separado |
+| [Camadas DDD](../../README.md#camadas-ddd) | Dependências .NET e processos externos |
+| [Coach experimental](../../README.md#coach-experimental) | Evidências C#, revisão Python e validação |
+| [Curadoria, treinamento e avaliação](../../README.md#curadoria-treinamento-e-avaliação-do-modelo) | Dados, congelamento, GPU, checkpoints e comparação |
+| [Integração interna](../../README.md#integração-interna-c-e-python) | Rotas e callbacks autenticados |
+| [Fluxo da análise](../../README.md#fluxo-da-análise) | Consulta pública e processamento de replay |
+| [Base de comparação](../../README.md#base-de-comparação) | Coleta, agregação e publicação |
+| [Login Steam](../../README.md#login-com-a-steam) | Autenticação pública |
+| [Banco de dados](../../README.md#banco-de-dados) | Dados locais e refinados |
 
-## Exportar
+## Editar e conferir
 
-No draw.io Desktop, exporte a página desejada como PNG com escala 150% e margem 20. Pela CLI, na raiz do repositório, o equivalente para a página 8 é:
+Edite diretamente o bloco Mermaid correspondente no README. Prefira rótulos curtos, aspas nos textos e quebras `<br/>` nos fluxogramas. Use `flowchart` para arquitetura/processos e `sequenceDiagram` para chamadas ordenadas. Não adicione uma imagem PNG ao README para substituir o diagrama nativo.
 
-```powershell
-& 'C:/Program Files/draw.io/draw.io.exe' --disable-gpu --export --format png --page-index 8 --scale 1.5 --border 20 --output docs/diagrams/images/coach-training.png docs/diagrams/dotaanalyst.drawio
-```
+Confira a renderização, a legibilidade e os contratos envolvidos. Uma mudança documental não exige rodar a suíte da aplicação. Cores e controles podem variar entre GitHub, IDE e outros visualizadores; fazem parte do renderizador, não da aplicação DotaAnalyst.
 
-A tabela usa a numeração a partir de 1, exigida pelo draw.io Desktop desde a versão 27.0.2; versões anteriores usavam índices a partir de 0. Ajuste o executável ao seu sistema. No Windows, automações podem iniciar esse comando com janela oculta. Depois de exportar, confira a imagem, os textos, os conectores e os links do README. Mudanças em login, banco ou análise pública só precisam alterar essas páginas se os respectivos contratos mudarem.
+## Arquivos anteriores
 
-As chamadas C# ↔ Python usam chave de máquina, independente da sessão Steam. O serviço HTTP não treina nem instala adaptadores automaticamente. O treinamento usa outra execução/container, com cache offline e pesos separados; formatos corretos e loss baixa não aprovam qualidade tática. Veja [a documentação do coach-ml](../../coach-ml/README.md) para os limites de cada etapa.
+[dotaanalyst.drawio](dotaanalyst.drawio) e a pasta `images/` preservam a versão anterior editável e suas exportações. Não são mais a fonte de verdade dos diagramas exibidos no README. Novas alterações devem ser feitas nos blocos Mermaid.
+
+O serviço HTTP Python e o treinamento são fluxos separados. Veja [a documentação do coach-ml](../../coach-ml/README.md) para configuração, execução e limites dos experimentos.

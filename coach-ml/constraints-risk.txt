@@ -1,0 +1,5 @@
+# Pinned transitive dependencies of the optional `risk` extra (CPU only, Python 3.11, Linux x86_64 and Windows).
+numpy==2.1.3
+scipy==1.14.1
+joblib==1.4.2
+threadpoolctl==3.5.0

@@ -53,6 +53,10 @@ def evaluate(experiment):
 
 def _evaluate(experiment):
     root = Path(experiment)
+    config = root / 'config.json'
+    if config.exists() and parse_json(config.read_text(encoding='utf-8-sig')).get('profile') == 'tactical-review-v1':
+        from .tactical.evaluation import evaluate_tactical
+        return evaluate_tactical(root)
     destination = root / 'evaluation-audit.json'
     if destination.exists():
         raise AuditError('Evaluation already exists; preserve it and use a separate report for a new comparison')

@@ -2,6 +2,16 @@
 
 Projeto Python para datasets, curadoria, auditoria, treino LoRA, avaliação e serviço interno de revisão. Python **3.11+**. C# mantém regras/cálculos/evidências e a API; Go mantém o parser de replay. O navegador continua falando somente com a API C#.
 
+Os comandos táticos `tactical-infer`, `tactical-refine`, `tactical-review` e `tactical-curate` aceitam `--actions <diretório>` para consumir, explicitamente, um recibo de `CoachingActionEvidenceBuilder`. A opção exige índice de desenvolvimento coberto pelo recibo, hashes do manifesto/índice/dados e vínculo por caso, partida, herói e âncora. Preserva tempos fracionários e fonte nula versus vazia; rejeita campos extras, atores incorretos e divergências entre roster e posições. Controles e validação diagnóstica exigiriam exportações próprias e são recusados nesse modo.
+
+O novo fato `recorded-actions` contém somente identidade técnica/time e usos registrados nos 30s anteriores. Não representa inventário atual, cooldown, mana, alvo ou sucesso. Funções inferidas retrospectivamente são ocultadas (`role.position=null`); as entradas anteriores permanecem iguais quando a opção é omitida. `tactical-refine --actions` permite apenas perguntas condicionais sem preferência e não combina com `--bounded-facts`, cuja política atual se refere a posicionamento. Isso amplia a evidência de entrada, sem modificar pesos ou conceder aprovação tática.
+
+Nomes técnicos são identificadores opacos: o refinamento pede recuperar modalidade/efeito quando faltam metadados. Alertas de referência de uso e condições idênticas auxiliam a curadoria; não validam mecânicas, alvo ou efeito. Definições do jogo instalado exigem procedência e compatibilidade com o patch da partida antes de serem usadas como evidência histórica.
+
+Os mesmos comandos aceitam `--patches <diretório>` para enriquecer uma seleção de desenvolvimento com recibo de metadados de patch. O leitor verifica hashes de manifesto/índice/dados, partida, fonte e conflitos com o contexto existente; não modifica os documentos originais. `matchPatch` recebe o identificador informado pela fonte, mantendo `mechanicsVerified=false` e a lacuna `patch-mechanics`. Um ID OpenDota, um campo de cabeçalho do replay e um número de build do cliente pertencem a fontes distintas; não autorizam associar automaticamente o catálogo instalado à partida.
+
+`tactical-reference-audit --history <diretório> --patch-map <patch.json> --patch-id <id> --output <arquivo-novo>` recompõe propriedades de itens nos snapshots de histórico publicados. Confere hashes, origem/ordem das revisões, baseline, intervalo do patch, campos e alegações de estabilidade. Propriedades que mudaram são explicitamente separadas das estáveis; metadado de alvo ausente permanece desconhecido. O pacote resultante é uma referência diagnóstica: `allowedForTraining=false` e `mechanicsVerifiedForReplay=false`. Histórico publicado completo não demonstra que todas as atualizações do jogo foram capturadas. Essa operação CPU não carrega modelos nem altera contextos ou pesos.
+
 ## Arquitetura interna
 
 Um pacote modular com portas e adaptadores, executado separadamente como serviço HTTP CPU ou processo de treino GPU:
@@ -209,6 +219,107 @@ coach-ml snapshot-evaluation --source work/coach-learning/grounded-training --ou
 ```
 
 O destino deve ser novo e ficar fora da origem. O comando exige `output/training-result.json` com contagem válida, confere a configuração quando presente, copia metadados e previsões e verifica hashes antes/depois. A avaliação ocorre na cópia, somente em CPU. `snapshot-audit.json` é publicado por último; sem ele, não considere o snapshot concluído. Resultado ausente, previsões incompletas ou contrato incompatível são recusados sem reescrever rótulos. Isso não detecta processo vivo nem prova qualidade do adaptador. Não execute no treino ainda em andamento; arquivos originais, pesos e código congelado permanecem separados.
+
+## Curadoria tática experimental
+
+Os comandos `tactical-infer`, `tactical-review` e `tactical-curate` são separados do contrato HTTP e dos perfis LoRA existentes. A projeção usa listas explícitas de campos, exclui outcomes/IDs de episódios do prompt, rejeita fontes futuras e preserva empates de eventos. Com `--include-support`, confere o hash da proveniência temporal arquivada e acrescenta a transição de separação calculada pelo C#, sem inferir trajeto, visão ou capacidade de intervenção.
+
+```powershell
+coach-ml tactical-infer --source work/coach-learning/all-database --index work/coach-learning/tactical-selection-v1/capacity-comparison.jsonl --output work/coach-learning/tactical-policy-example --engine policy --include-support
+```
+
+`--engine policy` produz somente uma referência genérica de formato. `--engine ollama` usa um modelo já instalado e registra seu digest, prompt, parâmetros, tokens e tempo; não baixa modelos. `--engine huggingface --snapshot <snapshot-local>` usa o extra `train`/CUDA; `--adapter <diretorio-local>` permite comparar um adaptador existente, sem atualizá-lo. Esse backend agrupa até quatro entradas e registra tempo por batch e pico de alocação PyTorch; a primeira chamada pode preencher um cache de batch, portanto seu tempo por linha não deve ser apresentado como latência individual de serviço. Execute backends GPU sequencialmente.
+
+Por padrão, os índices aceitos são de desenvolvimento (`train`/`train-known`), com verificação contra o manifesto, hashes dos documentos e isolamento de caminhos. O modo explícito `--partition validation-diagnostic` aceita validações já inspecionadas, sem tratá-las como avaliação cega. Reservas de teste não entram nesses modos. `--bundle` aceita controles auditados em âncoras independentes, como alternativa a `--index`. Previsões têm trava exclusiva, identidade de entrada/runtime e retomada por prefixo; arquivo interrompido é recusado. Após uma interrupção abrupta, confira processos antes de tratar uma trava residual. Uma resposta truncada não recebe crédito estrutural mesmo se o JSON estiver fechado.
+
+```powershell
+coach-ml tactical-review --source work/coach-learning/all-database --index work/coach-learning/tactical-selection-v1/capacity-comparison.jsonl --predictions work/coach-learning/tactical-candidate/predictions.jsonl --output work/coach-learning/tactical-critique --include-support
+coach-ml tactical-curate --source work/coach-learning/all-database --index work/coach-learning/tactical-selection-v1/capacity-comparison.jsonl --generation work/coach-learning/tactical-candidate --review work/coach-learning/tactical-critique --output work/coach-learning/tactical-curated --minimum-accepted 96 --include-support
+```
+
+A crítica verifica contrato, citações e consistência entre notas/veredito; registra a possibilidade de gerador e crítico compartilharem o modelo. A curadoria exige alinhamento completo, vincula a crítica às previsões avaliadas e revalida os candidatos. Verificações lexicais adicionais sinalizam referências explícitas a aliados tratados como inimigos e contagens contraditórias na prosa; não certificam qualquer frase livre. Casos sinalizados aguardam revisão em vez de serem corrigidos automaticamente.
+
+A saída `provisional-sft.jsonl` contém somente candidatos aceitos provisoriamente, com rejeições e proveniência preservadas. `experimentalDataReady` indica apenas o mínimo solicitado de exemplos; `humanReviewed`, `trainingApproved` e `tacticalQualityApproved` continuam falsos. Críticas inválidas ou rejeições não viram alvos aprovados.
+
+`tactical-curate --content-review <recibo.json>` permite aplicar vetos por caso de uma revisão provisória do assistente. O recibo exige todos os casos, hashes das previsões e de cada input, origem explícita e motivo. Pode somente remover candidatos; `keep-provisional` não promove uma rejeição do crítico. O hash do recibo acompanha metadados e auditoria. Exporte para um diretório novo para preservar a curadoria anterior.
+
+`tactical-refine` permite calibrar o professor com exemplos provisórios conferidos contra o índice de desenvolvimento. Registra separadamente o prompt do professor e o contrato do aluno; explicita a relação aliado/inimigo e o significado dos objetivos registrados. `tactical-review --calibrated` usa a rubrica correspondente. Essas chamadas usam saída estruturada e ainda passam por validação semântica local; gerar JSON válido não aprova a tática.
+
+Ambos aceitam `--think --max-tokens 4096` para um ensaio separado com raciocínio habilitado no modelo local. O padrão continua sem raciocínio e com 1024 tokens. A opção e o orçamento fazem parte da identidade de retomada; a resposta final é preservada, mas o campo de raciocínio interno não é exportado para treino. Truncamentos continuam inválidos; compare qualidade, tempo e orçamento separadamente antes de escalar.
+
+O modo opcional `tactical-refine --bounded-facts` restringe a oportunidade factual a um texto canônico e as limitações a valores derivados da projeção. Ações, condições e exercício continuam gerados pelo modelo e precisam de revisão. O esquema e a pós-validação local exigem essas restrições, inclusive na retomada e curadoria. A identidade declara `conditional-replay-review-only`: preferência indeterminada e revisão condicional/insuficiência. Reduzir fatos inventados por construção não comprova aprendizado tático ou capacidade de escolher a melhor jogada; mantenha esse ensaio separado da geração livre.
+
+A política `canonical-position-review-v2` também fixa o exercício quando é preciso recuperar uma posição ausente: identifica a lacuna atual ou anterior pelo contrato de suporte e exige a janela temporal correta. Demais exercícios continuam livres. A política v1 arquivada permanece reavaliável sem impor essa regra retroativamente; a versão é registrada em cada previsão.
+
+`tactical-assemble` monta um experimento novo do perfil `tactical-review-v1`, com treino e validação diagnóstica separados por partida, mínimos explícitos e hashes dos arquivos preparados. Recusa veto de conteúdo e diretório incompleto ou alterado. O perfil está integrado à auditoria, preparação e avaliação; a integração foi validada em CPU. O treino exige corpus e orçamento próprios. Sua avaliação mede contrato e alertas lexicais, sem apresentar esses números como precisão tática. Esses comandos não iniciam treino, não tornam o adaptador compatível com `assessments` e não promovem modelo.
+
+Testes direcionados, sem pesos ou GPU:
+
+```powershell
+python -B -m unittest discover -s coach-ml/tests -p 'test_tactical*.py' -v
+```
+
+## Modelos de previsão (risco de morte e próxima região)
+
+O primeiro modelo estima a chance de morrer nos próximos **15 s**; o segundo prevê a região **30 s depois** (ou `dead`, morto naquele instante). Os rótulos são acontecimentos registrados no próprio replay, sem precisar de revisão humana para treinar. Isso não aprova automaticamente as dicas: imitar um destino frequente não prova que ele era a melhor jogada.
+
+As colunas visíveis representam o que o jogador podia saber naquele momento; as `hidden*` incluem informação oculta pela névoa. O risco compara uma versão visível com uma onisciente para diagnóstico. Explicações e dicas usam somente o modelo visível, para não cobrar do jogador algo que ele não podia ver.
+
+As amostras são calculadas pelo C# a partir do documento guardado, nas rotas internas `/api/internal/death-risk/samples/{id}` e `/api/internal/next-region/samples/{id}`. O exportador usa a chave de máquina já configurada em `$env:COACH_ML_API_KEY`, enviada como Bearer; Python não consulta o banco. `featureVersion` identifica o contrato: listas por versão (`SITUATION_BY_VERSION`, `VISIBLE_BY_VERSION`, `HIDDEN_BY_VERSION`) definem as colunas. Cada modelo guarda suas próprias colunas em `training.json`, permitindo ler exportações antigas com seus modelos correspondentes.
+
+Os exemplos abaixo partem da raiz do repositório e usam pastas novas, ilustrativas, em `work/death-risk/`. Prepare um manifesto com `matchId` e `split`; para próxima região, mantenha as partidas do dono em `owner-application`, fora de `train`/`train-known`. O raciocínio e as decisões estão no [plano local](../work/death-risk/plan.md), ignorado pelo Git e disponível apenas no checkout local.
+
+Para treinar e analisar em CPU, instale o extra `[risk]` (scikit-learn), com as dependências transitivas fixadas pelas constraints. Como alternativa, construa a imagem CPU `risk`; os comandos seguintes pressupõem o pacote instalado no ambiente local.
+
+```powershell
+python -m pip install -c coach-ml/constraints-risk.txt -e "./coach-ml[risk]"
+docker build --target risk -t dotaanalyst-coach-ml-risk:local coach-ml
+```
+
+Primeiro, exporte um CSV gzip por partição, com manifesto e hashes. Repita com `--kind next-region` para obter os rótulos do segundo modelo.
+
+```powershell
+coach-ml risk-export --manifest work/coach-learning/prediction-run/manifest.json --api-url http://localhost:8080/ --output work/death-risk/export-example
+coach-ml risk-export --manifest work/coach-learning/prediction-run/manifest.json --api-url http://localhost:8080/ --kind next-region --output work/death-risk/export-region-example
+```
+
+Depois, treine o risco: taxa constante, regressão simples e boosting visível/onisciente. `--iterations` oferece tamanhos para escolher dentro do desenvolvimento; partidas inteiras ficam separadas entre ajuste, escolha e calibração, sem usar validação ou teste para treinar.
+
+```powershell
+coach-ml risk-train --export work/death-risk/export-example --output work/death-risk/models-example --iterations 400 800 1600 3200
+```
+
+Compare os modelos em `validation-new`, conferindo PR-AUC e calibração (se o risco previsto combina com a frequência real). Só depois de congelar modelo e protocolo, acrescente `--final` **uma única vez** para avaliar exclusivamente `test-new`, em outra pasta. O código exige a opção, mas não impede repetições em pastas novas.
+
+```powershell
+coach-ml risk-evaluate --models work/death-risk/models-example --export work/death-risk/export-example --output work/death-risk/evaluation-example
+```
+
+Explique o modelo visível: importância geral e destaques antes das mortes selecionadas. `advice` indica uma mudança na direção permitida como conselho; `context` apenas descreve o momento, sem recomendar mudar aquele número. O arquivo de foco contém pares como `[{"matchId":"123","heroId":1}]`, substituídos por identidades reais.
+
+```powershell
+coach-ml risk-explain --models work/death-risk/models-example --export work/death-risk/export-example --partition train --focus work/death-risk/focus.json --output work/death-risk/explain-example
+```
+
+Treine a próxima região com as colunas visíveis, comparando boosting com frequências por região atual e por papel/faixa de cinco minutos.
+
+```powershell
+coach-ml region-train --export work/death-risk/export-region-example --output work/death-risk/models-region-example --iterations 100 200 400
+```
+
+Avalie em `validation-new`: acerto entre os primeiros um/três destinos, log loss e calibração por classe. A mesma regra de `--final`, somente em `test-new` e uma vez após congelar, vale aqui.
+
+```powershell
+coach-ml region-evaluate --models work/death-risk/models-region-example --export work/death-risk/export-region-example --output work/death-risk/evaluation-region-example
+```
+
+Por fim, gere candidatas para revisão: as três condições precisam ocorrer juntas — destino observado com probabilidade **< 15%**, outro destino com **> 50%**, e consequência ruim: morto em t+30 s ou ganho de patrimônio nos próximos 60 s menor que metade da mediana positiva do mesmo papel/faixa de cinco minutos. Isso ainda não publica dicas no site.
+
+```powershell
+coach-ml region-hints --models work/death-risk/models-region-example --export work/death-risk/export-region-example --partition owner-application --focus work/death-risk/focus.json --output work/death-risk/hints-example
+```
+
+As partições `reserved-*` nunca são exportadas nem avaliadas; explicações/dicas também recusam `test-new`. Cada saída exige pasta nova: `export-manifest.json`, `training.json`, `report.json`, `explanations.json` ou `hints.json` é escrito por último como registro de conclusão. Preserve pastas parciais. A leitura confere hashes dos CSVs; avaliação, explicação e dicas conferem também os pesos e a identidade da exportação usada no treino.
 
 ## Testar e empacotar
 

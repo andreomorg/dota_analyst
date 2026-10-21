@@ -13,6 +13,7 @@ classifiers = ["Private :: Do Not Upload"]
 
 [project.optional-dependencies]
 tokenizer = ["transformers==4.56.2"]
+risk = ["scikit-learn==1.5.2"]
 train = ["torch==2.8.0", "transformers==4.56.2", "peft==0.17.1", "safetensors==0.8.0", "accelerate==1.10.1"]
 
 [project.scripts]
@@ -20,3 +21,16 @@ coach-ml = "coach_ml.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+# Lint only the prediction-model code and its tests for now; the other modules keep their style until they are
+# touched (reformatting them all at once would hide real changes in one huge diff).
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+# coach_ml is first-party (src layout): imports are grouped as standard library, then the project.
+src = ["src", "tests"]
+include = ["src/coach_ml/risk/**/*.py", "tests/test_risk_*.py", "tests/test_next_region.py", "tests/test_position_measure.py"]
+
+[tool.ruff.lint]
+# pyflakes (unused/undefined names), import order, bugbear (likely bugs).
+select = ["F", "I", "B"]

@@ -11,6 +11,16 @@ ENV COACH_ML_RUN_STORE=/run-state/runs.sqlite3
 ENTRYPOINT ["coach-ml"]
 CMD ["--help"]
 
+# CPU prediction models (death risk): scikit-learn only, no GPU, no network needed at run time.
+FROM python:3.11-slim@sha256:e88e9763f943ec1834f992a4b51e0f24500486803e8bc534e5767af9ea65f6ce AS risk
+WORKDIR /opt/coach-ml
+COPY . .
+RUN python -m pip install --no-cache-dir -c constraints-risk.txt ".[risk]" && useradd --system --uid 10001 coach
+USER coach
+ENV PYTHONUNBUFFERED=1
+ENTRYPOINT ["coach-ml"]
+CMD ["--help"]
+
 # Lightweight HTTP service: standard library only, no GPU dependencies.
 FROM python:3.11-slim@sha256:e88e9763f943ec1834f992a4b51e0f24500486803e8bc534e5767af9ea65f6ce AS service
 WORKDIR /opt/coach-ml

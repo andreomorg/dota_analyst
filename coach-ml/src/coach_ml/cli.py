@@ -19,6 +19,20 @@ def main(argv=None):
                             ("serve", "Run the authenticated internal review service"),
                             ("run-control", "Inspect or request cooperative pause for a managed run"),
                             ("promotion-check", "Validate and record explicit promotion without installing a model"),
+                            ("tactical-infer", "Run separate development-only tactical inference without approving labels"),
+                            ("tactical-review", "Critique tactical outputs with explicit provisional provenance"),
+                            ("tactical-curate", "Export aligned provisional tactical labels without starting training"),
+                            ("tactical-assemble", "Assemble a separate tactical experiment from curated train and diagnostic validation"),
+                            ("tactical-refine", "Run a separate calibrated teacher recipe without updating weights"),
+                            ("tactical-reference-audit", "Recompute published item-property history without approving training"),
+                            ("risk-export", "Export death-risk samples from the local API into gzip CSV"),
+                            ("risk-train", "Train the death-risk models on the development partitions (CPU)"),
+                            ("risk-evaluate", "Evaluate saved death-risk models on validation or, once, the final test"),
+                            ("risk-explain", "Explain the visible death-risk model overall and per death"),
+                            ("region-train", "Train the next-region models (where a hero goes in 30 s, CPU)"),
+                            ("region-evaluate", "Evaluate saved next-region models on validation or, once, the final test"),
+                            ("region-hints", "List candidate tips from the next-region model for review by hand"),
+                            ("position-measure", "Measure the C# position estimator against role-queue positions"),
                             ("train", "Inspect, prepare or run a separate LoRA experiment")]:
         commands.add_parser(name, help=help_text, add_help=False)
     args, remaining = parser.parse_known_args(argv)
@@ -55,5 +69,47 @@ def main(argv=None):
     if args.command == "snapshot-evaluation":
         from .snapshot import main as snapshot_main
         return snapshot_main(remaining)
+    if args.command == "tactical-infer":
+        from .tactical.pipeline import main as tactical_main
+        return tactical_main(remaining)
+    if args.command == "tactical-review":
+        from .tactical.review import main as tactical_review_main
+        return tactical_review_main(remaining)
+    if args.command == "tactical-curate":
+        from .tactical.dataset import main as tactical_dataset_main
+        return tactical_dataset_main(remaining)
+    if args.command == "tactical-assemble":
+        from .tactical.assembly import main as tactical_assembly_main
+        return tactical_assembly_main(remaining)
+    if args.command == "tactical-refine":
+        from .tactical.refinement import main as refinement_main
+        return refinement_main(remaining)
+    if args.command == "tactical-reference-audit":
+        from .tactical.source_history import main as reference_main
+        return reference_main(remaining)
+    if args.command == "risk-export":
+        from .risk.export import main as risk_export_main
+        return risk_export_main(remaining)
+    if args.command == "risk-train":
+        from .risk.train import main as risk_train_main
+        return risk_train_main(remaining)
+    if args.command == "risk-evaluate":
+        from .risk.evaluate import main as risk_evaluate_main
+        return risk_evaluate_main(remaining)
+    if args.command == "region-train":
+        from .risk.next_region import train_main as region_train_main
+        return region_train_main(remaining)
+    if args.command == "region-evaluate":
+        from .risk.next_region import evaluate_main as region_evaluate_main
+        return region_evaluate_main(remaining)
+    if args.command == "region-hints":
+        from .risk.hints import main as region_hints_main
+        return region_hints_main(remaining)
+    if args.command == "position-measure":
+        from .risk.positions import main as position_measure_main
+        return position_measure_main(remaining)
+    if args.command == "risk-explain":
+        from .risk.explain import main as risk_explain_main
+        return risk_explain_main(remaining)
     from .training import main as training_main
     return training_main(remaining)

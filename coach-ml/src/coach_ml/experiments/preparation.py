@@ -25,13 +25,24 @@ def load_config(experiment):
     modules = cfg.get('targetModules')
     require(isinstance(modules, list) and bool(modules) and all(isinstance(m, str) and m for m in modules)
             and len(set(modules)) == len(modules), 'Invalid LoRA target modules')
-    require(cfg.get('profile', 'factual-review') in ['factual-review', 'competency-review-v1'], 'Unknown training profile')
+    require(cfg.get('profile', 'factual-review') in ['factual-review', 'competency-review-v1', 'tactical-review-v1'], 'Unknown training profile')
     return cfg
 
 
 def inspect_experiment(experiment, model_cache, manifest):
     root, cache = Path(experiment).resolve(), Path(model_cache).resolve()
     cfg = load_config(root)
+    if cfg.get('profile') == 'tactical-review-v1':
+        from ..hashing import file_hash
+        receipt = parse_json((root/'assembly-audit.json').read_text(encoding='utf-8'))
+        names = {'config.json','instructions.txt','experimental-authorization.json','development.jsonl',
+                 'development-metadata.json','validation.jsonl','validation-metadata.json'}
+        require(receipt.get('profile') == 'tactical-review-v1' and receipt.get('inputIsolationPassed') is True
+                and receipt.get('samples') == cfg['samples'] and receipt.get('validationSamples') == cfg['validationSamples'],
+                'Missing or invalid tactical assembly audit')
+        require(set(receipt.get('preparedFiles',{})) == names
+                and all(file_hash(root/name) == receipt['preparedFiles'][name] for name in names),
+                'Tactical assembled files changed')
     require((root / 'instructions.txt').is_file() and (root / 'experimental-authorization.json').is_file(),
             'Missing instructions or experimental authorization record')
     authorization = parse_json((root / 'experimental-authorization.json').read_text(encoding='utf-8-sig'))

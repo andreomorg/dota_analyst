@@ -40,7 +40,8 @@ def experiment_capability(root, cfg):
     return {'schemaVersion': 1, 'task': profile, 'inputSchema': profile + ':request-v1',
             'outputSchema': profile + ':response-v1', 'policyVersions': sorted(policies),
             'baseModel': cfg['model'], 'baseRevision': cfg['revision'], 'tokenizerRevision': cfg['revision'],
-            'chatTemplate': 'no-thinking-assistant-eos-v1', 'evaluator': 'coach-ml-paired-evaluation-v2',
+            'chatTemplate': 'no-thinking-assistant-eos-v1',
+            'evaluator': 'tactical-contract-and-lexical-v1' if profile == 'tactical-review-v1' else 'coach-ml-paired-evaluation-v2',
             'datasetHashes': {f'{stem}.jsonl': file_hash(root / (stem + '.jsonl'))
                               for stem in ('development', 'validation')}}
 

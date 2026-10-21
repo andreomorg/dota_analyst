@@ -116,10 +116,11 @@ services:
       REPLAY_PARSER_API_KEY: "${REPLAY_PARSER_API_KEY:?Set REPLAY_PARSER_API_KEY in the .env file (see .env.example)}"
       # The local API and, through the tunnel, the production API share this parser: one parse (~80 MB, ~2 s)
       # each, so neither gets "busy" because of the other.
-      MAX_CONCURRENT_PARSES: "2"
+      # Raise both for a batch re-parse (e.g. REPLAY_PARSER_MAX_PARSES=4 and REPLAY_PARSER_MEMORY=2g in the shell or .env).
+      MAX_CONCURRENT_PARSES: "${REPLAY_PARSER_MAX_PARSES:-2}"
     # A corrupt replay can make the parser allocate a lot (manta trusts sizes written in the file) and Go's
     # out-of-memory is fatal: the limits make it kill only this container, which restarts.
-    mem_limit: 1g
+    mem_limit: ${REPLAY_PARSER_MEMORY:-1g}
     pids_limit: 100
     healthcheck:
       # The image has no shell or curl; the binary checks its own /health.

@@ -4,10 +4,12 @@ Analisador de partidas de Dota 2: o usuário vê suas partidas e análises de re
 
 O dono do projeto está começando em C# — explique as decisões e os conceitos novos em português, de forma didática, em vez de só entregar código.
 
+**Dois agentes ao mesmo tempo:** o Claude Code e o Codex trabalham nesta mesma cópia. Antes de mudar qualquer arquivo, siga o plano compartilhado `work/agents/plan.md` (pegar a tarefa, escopo de arquivos, travas `[colunas]`/`[docker]`/`[dotnet]`, sem commit sem pedido). O Codex lê o `AGENTS.md`, que aponta para o mesmo plano.
+
 ## Convenções
 
 - **Código sempre em inglês:** classes, interfaces, métodos, propriedades, variáveis, rotas e pastas (ex.: `PlayersController`, `GET /api/players/{accountId}/matches`). Explicações e conversas continuam em português.
-- **Diagramas do README:** usar blocos Mermaid nativos, no estilo simples da visão geral do coach, sem imagens PNG ou tema/cores fixos. A fonte de verdade é o próprio README; o visualizador controla tema e navegação. O índice e as convenções ficam em `docs/diagrams/README.md`.
+- **README principal (o que aparece no GitHub):** explica **como funciona**, para quem chega ao repositório — o que é, as abas, uma visão geral e uma seção curta por serviço (site, API, leitor de replays, banco, base de comparação, modelos/coach, login), cada uma com o próprio diagrama Mermaid nativo e simples, sem imagens PNG nem tema/cores fixos. Sem histórico de decisões, números de experimentos ou contratos internos: isso fica neste `CLAUDE.md`, no `replay-parser/CLAUDE.md` e no `coach-ml/README.md`. Índice dos diagramas em `docs/diagrams/README.md`.
 
 ## Git
 
@@ -84,6 +86,14 @@ Back-end em **.NET 10** organizado em **DDD**, um projeto por camada:
 - **Disjuntor (`ReplayParserCircuitBreaker`, singleton, `TimeProvider`):** só abre quando o parser **não respondeu** (conexão, timeout, resposta que não é dele como a do ngrok, 401 por configuração ou 500): recurso tratado como fora por 5 min — a análise responde `unavailable` sem enfileirar e o worker descarta o que esperava. Volta sozinho. Ocupado (503) e falha de download (502) não abrem: o parser está no ar.
 - **Banco:** `replay_analyses` (`match_id`, `status` `ready`/`failed`/`expired`, `data` em `jsonb` só para `ready` no formato `StoredReplayAnalysis`, `saved_at`), upsert que sempre substitui (uma falha pode virar `ready`). Linha ilegível conta como "nunca parseado" (log e parse de novo), não como banco fora. Partidas salvas guardam o `replayUrl` do OpenDota (`replay_url`); linhas antigas sem o campo continuam legíveis.
 - **Testes:** cliente com `HttpMessageHandler` falso (`ReplayParserClientTests`), fila/worker com falsos, repositório com Testcontainers; `new ApiFactory(replayParsing: true)` liga a fila e o worker reais com um parser falso (`ReplayParsingApiTests`: `processing` → `ready`); esperas do cliente com um `TimeProvider` falso que dispara na hora (`InstantClock`). Por padrão o `ApiFactory` deixa `ReplayParser:BaseUrl` vazio.
+
+## Modelos de previsão (risco de morte, próxima região)
+
+- **Situação** (`Domain/Situations/HeroSituation`): um herói vivo num segundo, montada pelo `HeroSituationBuilder` (classe `partial`, um arquivo por assunto: atividade, prontidão, mapa, ondas, combate, visão, intenção, construções, ameaça, rota, posições) **só com o que aconteceu até aquele segundo** (posições em t ou t−1, buckets que já terminaram, fim de debuff só como "ainda ativo"). Campos `Hidden*`/colunas `hidden*` = o que só o replay sabe (névoa): servem para medir, nunca para dica. Exemplos: `DeathRiskSampleBuilder` (morreu em 15 s) e `NextRegionSampleBuilder` (região 30 s depois).
+- **Posição 1–5:** a do role queue; sem ele (profissionais, Turbo), o `Analysis/PositionEstimator` estima **no próprio segundo** (itens iniciais, tempo em cada rota, parte dos últimos golpes de rota, wards, papéis do catálogo; `RoleConfidence`). O papel "mais rico aos 10:00" (`RoleInference`, das métricas salvas) não entra nos modelos: é o futuro antes de 10:00. Perfis do catálogo de heróis em `Hero.Details` (`HeroDetails`: atributo, corpo a corpo/à distância, papéis do OpenDota).
+- **Linhas:** `Application/Models/SituationRow` (`FeatureVersion`; só existem exports v1 gravados) via `GetModelSamplesHandler`. A lista de colunas do `coach-ml/src/coach_ml/risk/export.py` tem de ser igual e na mesma ordem (`SituationRowColumnsTests`). Coluna nova = campo no Domain + `SituationRow` + `export.py` + grupo em `risk/data.py`.
+- **Rotas internas** (chave de máquina, fora da v1): `GET /api/internal/death-risk/samples/{id}`, `GET /api/internal/next-region/samples/{id}`, `POST /api/internal/replays/{id}/refresh` (re-parse que só grava em sucesso).
+- **Fonte:** só documentos guardados (`replay_documents`, máquina local); 1.147 dos 1.167 são da base de comparação (pro/alto nível). Documento sem alguma seção que os modelos leem (`ReplayParserMappings.HasModelSections`) precisa de novo parse; os campos e a confiabilidade de cada um estão no `replay-parser/CLAUDE.md` ("Campos para os modelos de previsão"). Fatos do replay que já enganaram: a névoa real é `m_bNPCVisibleState` (bit `índice % 64` da palavra `índice / 64` no `CDOTA_DataRadiant/Dire` do time inimigo); `m_fCooldown` é o **tempo restante**.
 
 ## Estatísticas (catálogo único, tempo relativo)
 

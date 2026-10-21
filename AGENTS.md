@@ -1,5 +1,9 @@
 # DotaAnalyst
 
+## Working together with Claude Code
+
+Two agents (Codex and Claude Code) work in this same checkout at the same time. Before any change, read and follow the shared plan `work/agents/plan.md`: claim a task there first (`Dono: codex`), edit only the files in the task's scope, take the shared locks it lists (`[colunas]`, `[docker]`, `[dotnet]`), never commit/push/checkout/reset/stash without the owner's explicit request, and record the result in the task when done. Explanations to the owner are in Portuguese.
+
 Read `CLAUDE.md` for architecture and domain contracts before changing application code. Preserve the existing React API, Steam authentication, replay states, minute-based statistics, baselines and minimap geometry.
 
 ## UI source of truth

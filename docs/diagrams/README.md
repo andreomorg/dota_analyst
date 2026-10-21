@@ -1,24 +1,18 @@
 # Diagramas do DotaAnalyst
 
-A fonte atual dos diagramas são os blocos `mermaid` no [README principal](../../README.md#diagramas). Todos usam o mesmo estilo nativo da visão geral do coach, sem cores ou tema fixados. O visualizador Markdown determina a aparência clara/escura e os controles de zoom, cópia e navegação disponíveis.
+A fonte dos diagramas são os blocos `mermaid` do [README principal](../../README.md#como-funciona): uma visão geral e um diagrama por serviço, num estilo simples, sem cores ou tema fixados. O visualizador Markdown decide a aparência clara/escura e os controles de zoom.
 
-| Diagrama | Escopo |
+| Diagrama | O que mostra |
 |---|---|
-| [Módulos Go e Python](../../README.md#módulos-internos-do-go-e-python) | Casos de uso, portas, adaptadores e ciclo de pausa/retomada gerenciada |
-| [Arquitetura](../../README.md#arquitetura) | Processamento local, nuvem, Python HTTP e treino separado |
-| [Camadas DDD](../../README.md#camadas-ddd) | Dependências .NET e processos externos |
-| [Coach experimental](../../README.md#coach-experimental) | Evidências C#, revisão Python e validação |
-| [Curadoria, treinamento e avaliação](../../README.md#curadoria-treinamento-e-avaliação-do-modelo) | Dados, congelamento, GPU, checkpoints e comparação |
-| [Integração interna](../../README.md#integração-interna-c-e-python) | Rotas e callbacks autenticados |
-| [Fluxo da análise](../../README.md#fluxo-da-análise) | Consulta pública e processamento de replay |
-| [Base de comparação](../../README.md#base-de-comparação) | Coleta, agregação e publicação |
-| [Login Steam](../../README.md#login-com-a-steam) | Autenticação pública |
-| [Banco de dados](../../README.md#banco-de-dados) | Dados locais e refinados |
+| [Visão geral](../../README.md#como-funciona) | Nuvem, máquina local e serviços externos |
+| [Site](../../README.md#site-react) | Páginas e a conversa com a API |
+| [API](../../README.md#api-c) | Camadas e o fluxo de uma análise com replay em processamento |
+| [Leitor de replays](../../README.md#leitor-de-replays-go) | Do link do replay ao documento da partida |
+| [Banco de dados](../../README.md#banco-de-dados-postgresql) | O que fica no banco local e o que vai à nuvem |
+| [Base de comparação](../../README.md#base-de-comparação-coletor) | Coleta, percentis e publicação |
+| [Modelos de previsão e coach](../../README.md#modelos-de-previsão-e-coach-python) | Momentos do replay, exemplos e avaliação |
+| [Login com a Steam](../../README.md#login-com-a-steam) | Autenticação pela página oficial |
 
 ## Editar e conferir
 
-Edite diretamente o bloco Mermaid correspondente no README. Prefira rótulos curtos, aspas nos textos e quebras `<br/>` nos fluxogramas. Use `flowchart` para arquitetura/processos e `sequenceDiagram` para chamadas ordenadas. Não adicione uma imagem PNG ao README para substituir o diagrama nativo.
-
-Confira a renderização, a legibilidade e os contratos envolvidos. Uma mudança documental não exige rodar a suíte da aplicação. Cores e controles podem variar entre GitHub, IDE e outros visualizadores; fazem parte do renderizador, não da aplicação DotaAnalyst.
-
-O serviço HTTP Python e o treinamento são fluxos separados. Veja [a documentação do coach-ml](../../coach-ml/README.md) para configuração, execução e limites dos experimentos.
+Edite o bloco Mermaid no README. Prefira rótulos curtos, aspas nos textos e quebras `<br/>`; `flowchart` para estrutura e processos, `sequenceDiagram` para chamadas em ordem. O README explica **como funciona**, para quem chega ao repositório; decisões e detalhes técnicos ficam no `CLAUDE.md`, no `replay-parser/CLAUDE.md` e no [README do coach-ml](../../coach-ml/README.md). Não use imagens PNG no lugar dos diagramas.

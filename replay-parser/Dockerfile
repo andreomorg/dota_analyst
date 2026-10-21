@@ -4,7 +4,7 @@
 #   docker run --rm -p 8081:8081 -e REPLAY_PARSER_API_KEY=<key> dotaanalyst-replay-parser
 
 # 1) Build: a static binary (CGO_ENABLED=0), so the final image needs no C library.
-FROM golang:1.27.2-alpine3.24 AS build
+FROM golang:1.27.3-alpine3.24 AS build
 WORKDIR /src
 # Modules first, so this layer is cached until go.mod/go.sum change. The cache mounts keep downloaded modules and
 # compiled packages between builds (BuildKit, the default in Docker Desktop and compose).

@@ -298,12 +298,40 @@ type GoldSpent struct {
 
 // Timelines is each player's numbers over time.
 type Timelines struct {
+	// Couriers preserves separate entity identities within each team; movement is sparse (>200 world units).
+	Couriers List[CourierTimeline] `json:"couriers,omitempty"`
+	// CreepHeroDamage counts logged hits, not current targets or distinct attacking creeps.
+	CreepHeroDamage List[CreepHeroDamage] `json:"creepHeroDamage,omitempty"`
+	// DayNight records the first known state and subsequent changes at whole game-clock seconds.
+	// Added later: older documents have no "dayNight"; an empty list means unknown.
+	DayNight List[DayNight] `json:"dayNight"`
 	// PerMinute is one entry per player with the numbers at each minute of the game clock.
 	PerMinute List[PlayerMinutes] `json:"perMinute"`
 	// PositionIntervalSeconds is the time between two position samples (PositionIntervalSeconds).
 	PositionIntervalSeconds int `json:"positionIntervalSeconds"`
 	// Positions is one entry per player with the hero's positions.
 	Positions List[PlayerPositions] `json:"positions"`
+	// Waves is one entry per lane (top, middle, bottom) with how far each team's lane creeps reach, every
+	// PositionIntervalSeconds. Added later: older documents have no "waves".
+	// OffLaneCreeps is sparse; older documents may omit it. Means are world coordinates.
+	OffLaneCreeps List[OffLaneCreeps] `json:"offLaneCreeps"`
+	Waves         List[LaneWaves]     `json:"waves"`
+}
+
+// LaneWaves is one lane's creep fronts over time.
+type LaneWaves struct {
+	// Composition shares Fronts' timestamps; categories are disjoint, not strength estimates.
+	Composition List[WaveComposition] `json:"composition,omitempty"`
+	// Lane is top, middle or bottom.
+	Lane string `json:"lane"`
+	// Fronts is [t, radiant, dire] every PositionIntervalSeconds with lane creeps in the lane (sparse). A front is the progress x + y
+	// (rounded) of the team's creep furthest towards the enemy base: the largest for Radiant, the smallest for Dire
+	// (x + y grows from the Radiant base to the Dire base along every lane); null when the team has no creep there.
+	Fronts List[WaveFront] `json:"fronts"`
+	// Strength shares the exact Fronts/Sizes sampling pass and timestamps.
+	Strength List[WaveStrength] `json:"strength,omitempty"`
+	// Sizes is optional for older documents; entries share Fronts' timestamps and order.
+	Sizes List[WaveSize] `json:"sizes,omitempty"`
 }
 
 // PlayerMinutes is one player's numbers per minute, one list per number (columns: about 3x smaller than one object
@@ -336,10 +364,20 @@ type PlayerMinutes struct {
 
 // PlayerPositions is where one player's hero was over time.
 type PlayerPositions struct {
+	// Facing is yaw in integer degrees [0,359], parallel to Samples; null means unavailable.
+	Facing List[*int] `json:"facing,omitempty"`
 	// Player is the player index 0-9.
 	Player int `json:"player"`
 	// Samples is [t, x, y] every PositionIntervalSeconds while the hero is alive (a dead hero has no sample).
 	Samples List[Sample] `json:"samples"`
+	// Vitals is [health, maxHealth, mana, maxMana, visibleToEnemies, unitState, gold] for the sample with the same index
+	// (always the same length as Samples). Added later: older documents have no "vitals" and readers must
+	// treat it as unknown.
+	Vitals List[Vitals] `json:"vitals"`
+	// Stats is parallel to Samples, with nullable combat attributes. Older documents have no "stats".
+	Stats List[CombatStats] `json:"stats"`
+	// Orders is parallel to Samples; omitted when order messages are absent (unknown).
+	Orders List[Orders] `json:"orders,omitempty"`
 }
 
 // ----- kills, buybacks and combat (card 04) -----
@@ -407,12 +445,48 @@ const (
 // Combat is damage and healing, aggregated over the whole match. Rows without any player's hero (creeps vs creeps,
 // towers vs creeps) are left out.
 type Combat struct {
+	// Economy is [bucketStart, player, resource, rawReason, amount], resource 0=gold, 1=XP.
+	// Buckets cover [t,t+2); null reason means the field was absent, not reason zero.
+	Economy List[EconomyBucket] `json:"economy,omitempty"`
+	// Debuffs is enemy-applied modifiers on real heroes, sorted by start; [] means none, older documents omit it.
+	Debuffs List[Debuff] `json:"debuffs"`
+	// Buffs reuses the modifier tuple for self/ally applications on real heroes, sorted by start.
+	// Always written ([] when none); older documents omit it. Unknown owners are omitted, never assumed to mean self.
+	Buffs List[Debuff] `json:"buffs"`
 	// Damage is the damage dealt, one row per source, target and inflictor.
 	Damage List[CombatRow] `json:"damage"`
 	// Healing is the healing done, one row per source, target and inflictor.
 	Healing List[CombatRow] `json:"healing"`
 	// PerMinute is one entry per player with the damage dealt to and taken from heroes in each minute.
 	PerMinute List[PlayerCombatMinutes] `json:"perMinute"`
+	// Buckets is one entry per player with the same hero damage as PerMinute, every BucketSeconds instead of every
+	// minute. Added later: older documents have no "buckets".
+	Buckets List[PlayerCombatBuckets] `json:"buckets"`
+	// HeroHits is who hit whom: the damage of each attacker player to each enemy player's hero, per BucketSeconds, only
+	// the buckets with damage, in time order. Added later (with CreepKills): older documents have neither.
+	HeroHits List[HeroHit] `json:"heroHits"`
+	// LaneCreepDeaths includes every logged lane/siege death; null position means unlinked or unsampled.
+	LaneCreepDeaths List[LaneCreepDeath] `json:"laneCreepDeaths"`
+	// CreepKills is every lane creep and neutral a player's unit got the last hit on (denies included), in time order.
+	CreepKills List[CreepKill] `json:"creepKills"`
+}
+
+// BucketSeconds is the length of a combat bucket.
+const BucketSeconds = 2
+
+// PlayerCombatBuckets is one player's hero damage per bucket, only the buckets with damage (sparse), in time order.
+type PlayerCombatBuckets struct {
+	// Player is the player index 0-9.
+	Player int `json:"player"`
+	// ToHeroes is what PlayerCombatMinutes.DamageToHeroes counts, per bucket.
+	ToHeroes List[Bucket] `json:"toHeroes"`
+	// FromHeroes is what PlayerCombatMinutes.DamageFromHeroes counts, per bucket.
+	FromHeroes List[Bucket] `json:"fromHeroes"`
+	// ByType is sparse [t,physicalTo,magicalTo,pureTo,physicalFrom,magicalFrom,pureFrom].
+	// Same attribution as ToHeroes/FromHeroes; untyped damage is absent from this breakdown.
+	ByType List[DamageTypeBucket] `json:"byType,omitempty"`
+	// Healing is sparse [t,received,done] on real hero targets, including self-healing.
+	Healing List[HealingBucket] `json:"healing,omitempty"`
 }
 
 // CombatRow is the total of damage (or healing) from one source to one target with one inflictor. Heroes are kept
@@ -476,6 +550,30 @@ type Items struct {
 	Uses List[PlayerItems] `json:"uses"`
 	// Final is one entry per player with the items at the end of the match.
 	Final List[FinalItems] `json:"final"`
+	// Slots is one entry per player with every change of inventory (0-5), stash (9-14), teleport (15) and neutral (16), read
+	// every PositionIntervalSeconds. Added later (with Cooldowns): older documents have neither.
+	Slots List[PlayerSlotChanges] `json:"slots"`
+	// Cooldowns is one entry per player with every item cooldown that started.
+	Cooldowns List[PlayerCooldowns] `json:"cooldowns"`
+}
+
+// PlayerSlotChanges is one player's inventory changes, in time order.
+type PlayerSlotChanges struct {
+	// Player is the player index 0-9.
+	Player int `json:"player"`
+	// Changes is [t, slot, "item_name" or null when the slot became empty]; the first reading of a slot with an item
+	// is a change too.
+	Changes List[SlotChange] `json:"changes"`
+}
+
+// PlayerCooldowns is one player's cooldowns that started, in time order.
+type PlayerCooldowns struct {
+	// Player is the player index 0-9.
+	Player int `json:"player"`
+	// Cooldowns is [t, "name", readyAt]: when remaining m_fCooldown rose by more than 0.5 seconds.
+	// ReadyAt is the estimate made then, not a guaranteed future ready state (resets/reductions may follow).
+	// Initial nonzero readings and backpack movement can also trigger rows, so a row does not prove a cast.
+	Cooldowns List[Cooldown] `json:"cooldowns"`
 }
 
 // PlayerItems is one player's items with times, as [t, "item_name"] tuples in time order.
@@ -508,6 +606,9 @@ type Abilities struct {
 	Upgrades List[PlayerAbilityLevels] `json:"upgrades"`
 	// Uses is one entry per player with every ability cast, in time order.
 	Uses List[PlayerAbilities] `json:"uses"`
+	// Cooldowns is one entry per player with every ability cooldown that started (talents have none). Added later:
+	// older documents have no "cooldowns".
+	Cooldowns List[PlayerCooldowns] `json:"cooldowns"`
 }
 
 // PlayerAbilityLevels is one player's ability upgrades as [t, "ability", level] tuples.
@@ -520,6 +621,9 @@ type PlayerAbilityLevels struct {
 
 // PlayerAbilities is one player's ability casts as [t, "ability"] tuples.
 type PlayerAbilities struct {
+	// Targets is optional and parallel to Abilities: [targetPlayer, x, y, pointSource]. Unknowns are null.
+	// Source 0 is combat log location (not necessarily a destination); 1 is a cast-position order.
+	Targets List[AbilityTarget] `json:"targets,omitempty"`
 	// Player is the player index 0-9.
 	Player int `json:"player"`
 	// Abilities is [t, "ability_name"].
@@ -530,6 +634,10 @@ type PlayerAbilities struct {
 
 // Vision is wards and the other vision tools.
 type Vision struct {
+	// Pings preserves raw map ping types; network latency messages are unrelated.
+	Pings List[MapPing] `json:"pings,omitempty"`
+	// ChatWheel contains phrase IDs only, never chat text or account IDs.
+	ChatWheel List[ChatWheel] `json:"chatWheel,omitempty"`
 	// Wards is every observer and sentry ward placed, in the order they were placed.
 	Wards List[Ward] `json:"wards"`
 	// Smokes is every Smoke of Deceit used.
@@ -594,6 +702,17 @@ type TeamEvent struct {
 
 // Objectives is the map objectives taken.
 type Objectives struct {
+	// OutpostCaptures adds the message's entity index without changing legacy Outposts.
+	OutpostCaptures List[OutpostCaptureEvent] `json:"outpostCaptures,omitempty"`
+	// TormentorStates keeps actual sites; side is unknown without a uniquely associated spawner.
+	TormentorStates List[TormentorState] `json:"tormentorStates,omitempty"`
+	// RunesOnMap records observed changes every 2 s; disappearance does not prove pickup.
+	RunesOnMap List[RuneOnMap] `json:"runesOnMap,omitempty"`
+	// NeutralCamps keeps fixed spawner identities so empty camps survive between respawns.
+	NeutralCamps List[NeutralCamp] `json:"neutralCamps,omitempty"`
+	// BuildingHealth is optional in older documents; sparse readings end at zero health.
+	BuildingHealth List[BuildingHealth] `json:"buildingHealth,omitempty"`
+
 	// Buildings is every tower, barracks, filler and Ancient destroyed or denied, in time order.
 	Buildings List[BuildingKill] `json:"buildings"`
 	// Roshan is every Roshan kill.
@@ -606,6 +725,17 @@ type Objectives struct {
 	Runes List[RunePickup] `json:"runes"`
 	// Outposts is every outpost capture.
 	Outposts List[OutpostCapture] `json:"outposts"`
+}
+
+// NeutralCamp is a map spawner; coordinates form an identity independent of entity allocation.
+type NeutralCamp struct {
+	ID   string  `json:"id"`
+	X    int     `json:"x"`
+	Y    int     `json:"y"`
+	Type *string `json:"type"`
+	// SpawnerType preserves the replay enum even when its meaning cannot be verified.
+	SpawnerType *int            `json:"spawnerType"`
+	Alive       List[CampCount] `json:"alive"`
 }
 
 // BuildingKill is a building destroyed or denied.
@@ -674,4 +804,19 @@ type OutpostCapture struct {
 	Team Team `json:"team"`
 	// Player is who captured it; null when the replay does not say.
 	Player *int `json:"player"`
+}
+
+// BuildingHealth identifies one tower, barracks or Ancient, using the combat log name.
+type BuildingHealth struct {
+	Building string `json:"building"`
+	Team     Team   `json:"team"`
+	Kind     string `json:"kind"`
+	// Lane is null for Ancients and tier-four towers; Tier is null outside towers.
+	Lane *string `json:"lane"`
+	Tier *int    `json:"tier"`
+	// X and Y are the first known world coordinates, rounded like hero positions.
+	X int `json:"x"`
+	Y int `json:"y"`
+	// Health includes the first known reading and subsequent changes at two-second samples.
+	Health List[BuildingHealthSample] `json:"health"`
 }

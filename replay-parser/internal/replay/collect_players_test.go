@@ -85,6 +85,9 @@ func checkPlayersSections(t *testing.T, match matchdata.Match) {
 
 		positions := match.Timelines.Positions[i]
 		samples := positions.Samples
+		if len(positions.Stats) != len(samples) {
+			t.Errorf("player %d: %d stats for %d samples", i, len(positions.Stats), len(samples))
+		}
 		// Dead time leaves gaps; nobody is dead for more than 40% of a match.
 		if positions.Player != i || len(samples) > int(duration)/2+1 || len(samples) < int(0.6*duration/2) {
 			t.Errorf("player %d: %d positions in %.0f s", i, len(samples), duration)
@@ -94,6 +97,16 @@ func checkPlayersSections(t *testing.T, match matchdata.Match) {
 				sample.T < 0 || float64(sample.T) > duration || math.Abs(float64(sample.X)) > 9000 ||
 				math.Abs(float64(sample.Y)) > 9000 {
 				t.Errorf("player %d: bad sample %v", i, sample)
+				break
+			}
+		}
+		// One vitals entry per sample; a living hero has health above 0 and at most its maximum.
+		if len(positions.Vitals) != len(samples) {
+			t.Errorf("player %d: %d vitals for %d samples", i, len(positions.Vitals), len(samples))
+		}
+		for _, vitals := range positions.Vitals {
+			if vitals.Health == nil || vitals.MaxHealth == nil || *vitals.Health <= 0 || *vitals.Health > *vitals.MaxHealth {
+				t.Errorf("player %d: bad vitals %+v", i, vitals)
 				break
 			}
 		}

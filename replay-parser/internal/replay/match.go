@@ -18,7 +18,7 @@ type Collector interface {
 	// it (Clock to convert times, Players, Name). Nothing in the replay has been read yet.
 	Register(s *Session)
 	// Fill writes the collector's sections after the whole replay was read; the clock and the players are known.
-	// Collectors run in a fixed order and never read another collector's section. An error makes the replay
+	// Collectors run in a fixed order; orders reads the sample seconds filled by players. An error makes the replay
 	// unreadable (422): return one only for data that is wrong, not for data that is missing (leave that empty).
 	Fill(m *matchdata.Match) error
 }
@@ -26,13 +26,27 @@ type Collector interface {
 // newCollectors makes a fresh set of collectors for one replay, in the order they fill the document. Each card adds
 // its collector's work in its own file; this list only changes when a new collector file appears.
 func newCollectors() []Collector {
+	waves := &wavesCollector{}
 	return []Collector{
-		&matchCollector{},   // match, draft (collect_match.go)
-		&playersCollector{}, // players, timelines (collect_players.go, card 03)
-		&laningCollector{},  // laning (collect_laning.go, sprint 11)
-		&combatCollector{},  // kills, buybacks, combat (collect_combat.go, card 04)
-		&itemsCollector{},   // items, abilities (collect_items.go, card 05)
-		&visionCollector{},  // vision, objectives (collect_vision.go, card 06)
+		&matchCollector{},              // match, draft (collect_match.go)
+		&playersCollector{},            // players, timelines (collect_players.go, card 03)
+		&laningCollector{},             // laning (collect_laning.go, sprint 11)
+		&combatCollector{waves: waves}, // kills, buybacks, combat (collect_combat.go, card 04)
+		&itemsCollector{},              // items, abilities (collect_items.go, card 05)
+		&visionCollector{},             // vision, objectives (collect_vision.go, card 06)
+		waves,                          // timelines.waves (collect_waves.go, death-risk R12-B7)
+		&ordersCollector{},             // timelines.positions[].orders (after players)
+		&debuffsCollector{},
+		&buildingsCollector{},   // objectives.buildingHealth (after vision)
+		&neutralsCollector{},    // objectives.neutralCamps (fixed map spawners)
+		&creepDamageCollector{}, // observed creep hits, not unreplicated attack targets
+		&worldCollector{},       // timelines.dayNight (collect_world.go)
+		&communicationCollector{},
+		&economyCollector{},
+		&runesCollector{},
+		&abilityTargetsCollector{},
+		&couriersCollector{},
+		&mapObjectivesCollector{},
 	}
 }
 

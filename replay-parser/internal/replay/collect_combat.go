@@ -26,7 +26,9 @@ import (
 //
 // Entries after the match ended (the Ancient fell) are left out. Times stay as ServerTime until Fill.
 type combatCollector struct {
-	session *Session
+	waves      *wavesCollector
+	laneDeaths []laneCreepDeathEvent
+	session    *Session
 
 	kills    []pendingCombatKill
 	buybacks []pendingCombatBuyback
@@ -38,6 +40,10 @@ type combatCollector struct {
 	damage  map[combatKey]*combatTotal
 	healing map[combatKey]*combatTotal
 	minutes []combatMinuteEvent
+	typed   []typedCombatEvent
+	// Damage between enemy players' heroes, by attacker and target (bucketed in Fill), and creep last hits.
+	hits       []heroHitEvent
+	creepKills []creepKillEvent
 
 	spentOnBuybacks [playerCount]int  // m_iGoldSpentOnBuybacks on the last second read
 	spentKnown      [playerCount]bool // spentOnBuybacks was read at least once
@@ -86,6 +92,19 @@ const (
 	minuteTaken
 	minuteHealed
 )
+
+type heroHitEvent struct {
+	at               ServerTime
+	attacker, target int
+	amount           int
+}
+
+type creepKillEvent struct {
+	at     ServerTime
+	player int
+	kind   matchdata.CreepKind
+	x, y   *int
+}
 
 type combatMinuteEvent struct {
 	at     ServerTime
@@ -157,7 +176,11 @@ func (c *combatCollector) pendingAnnouncement(entry CombatEntry) killAnnouncemen
 
 func (c *combatCollector) onDeath(entry CombatEntry) {
 	raw := entry.Raw
-	if !raw.GetIsTargetHero() || raw.GetIsTargetIllusion() || entry.TargetPlayer < 0 {
+	if !raw.GetIsTargetHero() {
+		c.onCreepDeath(entry)
+		return
+	}
+	if raw.GetIsTargetIllusion() || entry.TargetPlayer < 0 {
 		return // creeps, buildings, illusions (and a hero the replay cannot tell)
 	}
 	victim := entry.TargetPlayer
@@ -196,6 +219,35 @@ func (c *combatCollector) onDeath(entry CombatEntry) {
 	c.kills = append(c.kills, pendingCombatKill{kill: kill, at: entry.At})
 }
 
+// onCreepDeath records a lane creep or neutral whose last hit was a player's (hero, illusion or summon), at the
+// position of that player's hero (the combat log has none).
+func (c *combatCollector) onCreepDeath(entry CombatEntry) {
+	target, killer := c.target(entry), c.attacker(entry)
+	if combatUnitKind(entry.Target, false) == matchdata.KindLaneCreeps {
+		c.onLaneCreepDeath(entry, killer)
+	}
+	if killer.player < 0 || (target.kind != matchdata.KindLaneCreeps && target.kind != matchdata.KindNeutrals) {
+		return
+	}
+	kind := matchdata.CreepNeutral
+	if target.kind == matchdata.KindLaneCreeps {
+		kind = matchdata.CreepLane
+		// Lane creep names say their side (npc_dota_creep_goodguys_melee): the killer's own side is a deny.
+		if player, ok := c.session.Players.Get(killer.player); ok &&
+			strings.Contains(entry.Target, "goodguys") == (player.Team == matchdata.Radiant) {
+			kind = matchdata.CreepDeny
+		}
+	}
+	event := creepKillEvent{at: entry.At, player: killer.player, kind: kind}
+	if hero := c.session.Players.Hero(killer.player); hero != nil {
+		if x, y, ok := position(hero); ok {
+			px, py := int(math.Round(x)), int(math.Round(y))
+			event.x, event.y = &px, &py
+		}
+	}
+	c.creepKills = append(c.creepKills, event)
+}
+
 func (c *combatCollector) onDamage(entry CombatEntry) {
 	source, target := c.attacker(entry), c.target(entry)
 	if source.player < 0 && target.player < 0 {
@@ -210,6 +262,8 @@ func (c *combatCollector) onDamage(entry CombatEntry) {
 		if source.player >= 0 && c.enemies(source.player, target.player) {
 			c.minute(entry.At, source.player, minuteToHeroes, amount)
 			c.minute(entry.At, target.player, minuteFromHeroes, amount)
+			c.typed = append(c.typed, typedCombatEvent{at: entry.At, source: source.player, target: target.player, amount: amount, damageType: entry.Raw.GetDamageType()})
+			c.hits = append(c.hits, heroHitEvent{at: entry.At, attacker: source.player, target: target.player, amount: amount})
 		}
 	}
 }
@@ -221,6 +275,9 @@ func (c *combatCollector) onHeal(entry CombatEntry) {
 	}
 	amount := int(entry.Raw.GetValue())
 	addCombatTotal(c.healing, combatKey{source: source, target: target, inflictor: entry.Inflictor}, amount)
+	if target.kind == matchdata.KindHero {
+		c.typed = append(c.typed, typedCombatEvent{at: entry.At, source: source.player, target: target.player, amount: amount, heal: true})
+	}
 	// Like the scoreboard's healing (m_fHealing): other heroes only, the player's own hero left out.
 	if source.player >= 0 && target.kind == matchdata.KindHero && target.player != source.player {
 		c.minute(entry.At, source.player, minuteHealed, amount)
@@ -362,11 +419,84 @@ func (c *combatCollector) Fill(m *matchdata.Match) error {
 	m.Buybacks = buybacks
 
 	m.Combat = matchdata.Combat{
-		Damage:    combatRows(c.damage),
-		Healing:   combatRows(c.healing),
-		PerMinute: c.perMinute(),
+		Damage:          combatRows(c.damage),
+		Healing:         combatRows(c.healing),
+		PerMinute:       c.perMinute(),
+		Buckets:         c.buckets(),
+		HeroHits:        c.heroHits(),
+		CreepKills:      c.creepKillList(),
+		LaneCreepDeaths: c.laneCreepDeathList(),
 	}
 	return nil
+}
+
+// heroHits adds the hero-vs-hero damage up per bucket, attacker and target, in time order (then attacker, target).
+func (c *combatCollector) heroHits() matchdata.List[matchdata.HeroHit] {
+	clock := c.session.Clock
+	type key struct{ start, attacker, target int }
+	totals := map[key]int{}
+	for _, hit := range c.hits {
+		if hit.attacker < 0 || hit.attacker >= playerCount || hit.target < 0 || hit.target >= playerCount {
+			continue
+		}
+		start := int(math.Floor(clock.Game(hit.at)/matchdata.BucketSeconds)) * matchdata.BucketSeconds
+		totals[key{start, hit.attacker, hit.target}] += hit.amount
+	}
+	hits := make(matchdata.List[matchdata.HeroHit], 0, len(totals))
+	for k, amount := range totals {
+		if amount != 0 {
+			hits = append(hits, matchdata.HeroHit{T: k.start, Attacker: k.attacker, Target: k.target, Amount: amount})
+		}
+	}
+	slices.SortFunc(hits, func(a, b matchdata.HeroHit) int {
+		return cmp.Or(cmp.Compare(a.T, b.T), cmp.Compare(a.Attacker, b.Attacker), cmp.Compare(a.Target, b.Target))
+	})
+	return hits
+}
+
+// creepKillList is the creep last hits with game-clock times, already in time order (combat log order).
+func (c *combatCollector) creepKillList() matchdata.List[matchdata.CreepKill] {
+	kills := make(matchdata.List[matchdata.CreepKill], 0, len(c.creepKills))
+	for _, kill := range c.creepKills {
+		kills = append(kills, matchdata.CreepKill{
+			T: c.session.Clock.Seconds(kill.at), Player: kill.player, Kind: kill.kind, X: kill.x, Y: kill.y})
+	}
+	return kills
+}
+
+// buckets is the hero damage of perMinute every matchdata.BucketSeconds, only the buckets with damage.
+func (c *combatCollector) buckets() matchdata.List[matchdata.PlayerCombatBuckets] {
+	clock := c.session.Clock
+	type key struct{ player, start int }
+	to, from := map[key]int{}, map[key]int{}
+	for _, e := range c.minutes {
+		if e.player < 0 || e.player >= playerCount {
+			continue
+		}
+		start := int(math.Floor(clock.Game(e.at)/matchdata.BucketSeconds)) * matchdata.BucketSeconds
+		switch e.field {
+		case minuteToHeroes:
+			to[key{e.player, start}] += e.amount
+		case minuteFromHeroes:
+			from[key{e.player, start}] += e.amount
+		}
+	}
+	sorted := func(amounts map[key]int, player int) matchdata.List[matchdata.Bucket] {
+		var list matchdata.List[matchdata.Bucket]
+		for k, amount := range amounts {
+			if k.player == player && amount != 0 {
+				list = append(list, matchdata.Bucket{T: k.start, Amount: amount})
+			}
+		}
+		slices.SortFunc(list, func(a, b matchdata.Bucket) int { return cmp.Compare(a.T, b.T) })
+		return list
+	}
+	result := make(matchdata.List[matchdata.PlayerCombatBuckets], playerCount)
+	for player := range result {
+		result[player] = matchdata.PlayerCombatBuckets{Player: player, ToHeroes: sorted(to, player), FromHeroes: sorted(from, player)}
+	}
+	c.fillTypedBuckets(result)
+	return result
 }
 
 // perMinute spreads the minute events over the minutes of the game clock (before the horn = minute 0).
@@ -468,4 +598,88 @@ func combatPlayer(player int) *int {
 		return nil
 	}
 	return &player
+}
+
+type laneCreepDeathEvent struct {
+	at   ServerTime
+	name string
+	row  matchdata.LaneCreepDeath
+}
+
+// onLaneCreepDeath retains all lane deaths, including blows from units without a player owner.
+func (c *combatCollector) onLaneCreepDeath(e CombatEntry, killer combatUnit) {
+	team := teamOf(int(e.Raw.GetTargetTeam()))
+	if strings.Contains(e.Target, "goodguys") {
+		team = matchdata.Radiant
+	} else if strings.Contains(e.Target, "badguys") {
+		team = matchdata.Dire
+	}
+	row := matchdata.LaneCreepDeath{CreepTeam: team, KillerKind: laneCreepKillerKind(killer, e.Attacker), KillerPlayer: combatPlayer(killer.player)}
+	// A log location can identify a lane, but cannot substitute for a sampled entity position.
+	if e.Raw.LocationX != nil && e.Raw.LocationY != nil {
+		lane := waveLane(float64(e.Raw.GetLocationX()), float64(e.Raw.GetLocationY()))
+		if lane != "" {
+			row.Lane = &lane
+		}
+	}
+	c.laneDeaths = append(c.laneDeaths, laneCreepDeathEvent{at: e.At, name: e.Target, row: row})
+}
+
+// laneCreepKillerKind gives ownership priority, so controlled creeps and denies remain hero blows.
+func laneCreepKillerKind(killer combatUnit, name string) string {
+	if killer.player >= 0 {
+		return "hero"
+	}
+	switch killer.kind {
+	case matchdata.KindLaneCreeps:
+		return "creep"
+	case matchdata.KindBuildings:
+		if (strings.HasPrefix(name, "npc_dota_goodguys_") || strings.HasPrefix(name, "npc_dota_badguys_")) && (strings.Contains(name, "_tower") || strings.Contains(name, "_fort") || strings.Contains(name, "_rax_")) {
+			return "tower"
+		}
+		return "other"
+	case matchdata.KindNeutrals:
+		return "neutral"
+	default:
+		return "other"
+	}
+}
+
+// A small window covers float32 log timestamps and several ticks of entity replication delay.
+// Wider or many-to-one matches cannot establish identity and retain null coordinates.
+const creepDeathLinkWindow = 0.15
+
+// laneCreepDeathList links only unambiguous same-name/team death transitions within a net-log delay.
+// CombatLogNames are unit types, not entity IDs: never choose an arbitrary creep of that type.
+func (c *combatCollector) laneCreepDeathList() matchdata.List[matchdata.LaneCreepDeath] {
+	result := make(matchdata.List[matchdata.LaneCreepDeath], 0, len(c.laneDeaths))
+	matches := make([][]int, len(c.laneDeaths))
+	uses := map[int]int{}
+	if c.waves != nil {
+		for i, event := range c.laneDeaths {
+			for j, death := range c.waves.deaths {
+				if event.name == death.name && event.row.CreepTeam == death.team && math.Abs(event.at.Seconds-death.at.Seconds) <= creepDeathLinkWindow {
+					matches[i] = append(matches[i], j)
+					uses[j]++
+				}
+			}
+		}
+	}
+	for i, event := range c.laneDeaths {
+		row := event.row
+		row.T = c.session.Clock.Seconds(event.at)
+		if len(matches[i]) == 1 && uses[matches[i][0]] == 1 {
+			p := c.waves.deaths[matches[i][0]].position
+			if p.known {
+				row.X, row.Y = &p.x, &p.y
+				row.Lane = nil
+				if lane := waveLane(float64(p.x), float64(p.y)); lane != "" {
+					row.Lane = &lane
+				}
+			}
+		}
+		result = append(result, row)
+	}
+	slices.SortStableFunc(result, func(a, b matchdata.LaneCreepDeath) int { return cmp.Compare(a.T, b.T) })
+	return result
 }

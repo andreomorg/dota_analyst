@@ -23,6 +23,41 @@ func analyzeItems(t *testing.T, replay realReplay) (matchdata.Match, *itemsColle
 	return match, collector
 }
 
+// checkSlotsAndCooldowns checks the inventory changes and the cooldowns of one player: tracked slots only, in time order,
+// cooldowns that end after they start; every hero used abilities, so it has ability cooldowns.
+func checkSlotsAndCooldowns(t *testing.T, i int, items matchdata.Items, abilities matchdata.Abilities) {
+	t.Helper()
+	if len(items.Slots) != playerCount || len(items.Cooldowns) != playerCount || len(abilities.Cooldowns) != playerCount {
+		t.Fatalf("want %d slot/cooldown entries: %d, %d, %d", playerCount, len(items.Slots), len(items.Cooldowns),
+			len(abilities.Cooldowns))
+	}
+	tracked := map[int]bool{}
+	for _, slot := range trackedSlots {
+		tracked[slot] = true
+	}
+	changes := items.Slots[i].Changes
+	for j, change := range changes {
+		if !tracked[change.Slot] || j > 0 && change.T < changes[j-1].T || change.Name != nil && !strings.HasPrefix(*change.Name, "item_") {
+			t.Errorf("player %d: bad slot change %+v", i, change)
+			break
+		}
+	}
+	if len(changes) == 0 {
+		t.Errorf("player %d: no inventory changes", i)
+	}
+	for _, list := range []matchdata.List[matchdata.Cooldown]{items.Cooldowns[i].Cooldowns, abilities.Cooldowns[i].Cooldowns} {
+		for j, cooldown := range list {
+			if cooldown.ReadyAt <= cooldown.T || j > 0 && cooldown.T < list[j-1].T || cooldown.Name == "" {
+				t.Errorf("player %d: bad cooldown %+v", i, cooldown)
+				break
+			}
+		}
+	}
+	if len(abilities.Cooldowns[i].Cooldowns) == 0 {
+		t.Errorf("player %d: no ability cooldowns", i)
+	}
+}
+
 // checkItemsShape checks what must hold for any replay: one entry per player in order, lists in time order, final
 // slots of the right size, ability levels that grow one at a time.
 func checkItemsShape(t *testing.T, match matchdata.Match) {
@@ -58,6 +93,7 @@ func checkItemsShape(t *testing.T, match matchdata.Match) {
 				t.Errorf("player %d bought %q", i, purchase.Name)
 			}
 		}
+		checkSlotsAndCooldowns(t, i, items, abilities)
 		final := items.Final[i]
 		inventory := 0
 		for _, slot := range final.Inventory {

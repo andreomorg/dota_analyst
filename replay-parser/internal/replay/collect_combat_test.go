@@ -129,6 +129,7 @@ func TestCombatCollectorRealReplays(t *testing.T) {
 				}
 			}
 			checkPerMinute(t, match, heroDamage, healing)
+			checkHitsAndCreepKills(t, match)
 
 			sections, err := json.Marshal(struct {
 				Kills    any `json:"kills"`
@@ -145,7 +146,31 @@ func TestCombatCollectorRealReplays(t *testing.T) {
 			t.Logf("kills %d, buybacks %d, damage rows %d, healing rows %d; kills+buybacks+combat JSON %d bytes (%d gzip)",
 				len(match.Kills), len(match.Buybacks), len(match.Combat.Damage), len(match.Combat.Healing), len(sections),
 				zipped.Len())
-			if len(sections) > 150_000 {
+			var fields map[string]json.RawMessage
+			combatJSON, err := json.Marshal(match.Combat)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := json.Unmarshal(combatJSON, &fields); err != nil {
+				t.Fatal(err)
+			}
+			for _, name := range []string{"economy", "debuffs", "buffs", "damage", "healing", "perMinute", "buckets", "heroHits", "laneCreepDeaths", "creepKills"} {
+				t.Logf("combat.%s JSON: %d bytes", name, len(fields[name]))
+			}
+			typedBytes, healingBytes := 0, 0
+			for _, bucket := range match.Combat.Buckets {
+				typed, _ := json.Marshal(bucket.ByType)
+				healing, _ := json.Marshal(bucket.Healing)
+				typedBytes += len(typed)
+				healingBytes += len(healing)
+			}
+			t.Logf("nested buckets byType: %d bytes; healing: %d bytes (array values)", typedBytes, healingBytes)
+			// Covers kills/buybacks, aggregate damage/healing, per-minute counters,
+			// lane creep deaths (65455 B), hero hits (16423 B), creep kills (30224 B),
+			// and 2 s buckets (67247 B, including typed damage 30228 B/healing 17450 B).
+			// Economy and modifier collectors are not registered here: economy is absent,
+			// debuffs/buffs are []. All Pick: 280500 B; 350 KB leaves ~25% headroom.
+			if len(sections) > 350_000 {
 				t.Errorf("combat sections take %d bytes", len(sections))
 			}
 		})
@@ -213,6 +238,47 @@ func combatTotals(combat matchdata.Combat, teams [playerCount]matchdata.Team) (d
 	return damage, healing
 }
 
+// checkHitsAndCreepKills checks the hero-vs-hero hits (the same events as the per-minute damage to heroes, per
+// attacker, between enemies, sorted) and the creep last hits (time order, known kinds, positions on the map).
+func checkHitsAndCreepKills(t *testing.T, match matchdata.Match) {
+	t.Helper()
+	team := func(player int) bool { return player < 5 } // the test replays have Radiant in slots 0-4
+	var dealt [playerCount]int
+	for i, hit := range match.Combat.HeroHits {
+		if hit.T%matchdata.BucketSeconds != 0 || hit.Amount <= 0 || team(hit.Attacker) == team(hit.Target) ||
+			i > 0 && (hit.T < match.Combat.HeroHits[i-1].T) {
+			t.Errorf("bad hero hit %+v", hit)
+			break
+		}
+		dealt[hit.Attacker] += hit.Amount
+	}
+	for i, p := range match.Combat.PerMinute {
+		total := 0
+		for _, v := range p.DamageToHeroes {
+			total += v
+		}
+		if dealt[i] != total {
+			t.Errorf("player %d: hero hits %d, per-minute damage to heroes %d", i, dealt[i], total)
+		}
+	}
+	kills := match.Combat.CreepKills
+	if len(kills) < 500 {
+		t.Errorf("only %d creep kills", len(kills))
+	}
+	kinds := map[matchdata.CreepKind]int{}
+	for i, kill := range kills {
+		kinds[kill.Kind]++
+		if i > 0 && kill.T < kills[i-1].T || kill.Player < 0 || kill.Player >= playerCount ||
+			kill.X != nil && (*kill.X < -9000 || *kill.X > 9000) {
+			t.Errorf("bad creep kill %+v", kill)
+			break
+		}
+	}
+	if kinds[matchdata.CreepLane] == 0 || kinds[matchdata.CreepNeutral] == 0 || kinds[matchdata.CreepDeny] == 0 {
+		t.Errorf("creep kinds %v: want lane, neutral and deny", kinds)
+	}
+}
+
 // checkPerMinute checks that the per-minute lists add up to the rows and cover the whole match.
 func checkPerMinute(t *testing.T, match matchdata.Match, heroDamage, healing [playerCount][3]int) {
 	t.Helper()
@@ -240,6 +306,21 @@ func checkPerMinute(t *testing.T, match matchdata.Match, heroDamage, healing [pl
 		}
 		if sum(p.DamageTaken) < sum(p.DamageFromHeroes) {
 			t.Errorf("player %d: took less damage than from heroes", i)
+		}
+		// The 2 s buckets are the same events: their sums match the minutes, in time order, on bucket boundaries.
+		buckets := match.Combat.Buckets[i]
+		bucketSum := func(l matchdata.List[matchdata.Bucket]) (total int) {
+			for b, bucket := range l {
+				if bucket.T%matchdata.BucketSeconds != 0 || b > 0 && bucket.T <= l[b-1].T || bucket.Amount == 0 {
+					t.Errorf("player %d: bad bucket %v", i, bucket)
+				}
+				total += bucket.Amount
+			}
+			return total
+		}
+		if buckets.Player != i || bucketSum(buckets.ToHeroes) != sum(p.DamageToHeroes) ||
+			bucketSum(buckets.FromHeroes) != sum(p.DamageFromHeroes) {
+			t.Errorf("player %d: buckets do not add up to the minutes", i)
 		}
 	}
 }
@@ -275,6 +356,104 @@ func TestCombatDamageType(t *testing.T) {
 		4: matchdata.Pure, 8: ""} {
 		if got := combatDamageType(value); got != want {
 			t.Errorf("%d: %q, want %q", value, got, want)
+		}
+	}
+}
+
+// Count by time AND player so a duplicate cannot conceal a missing last hit or deny.
+func TestLaneCreepDeathsRealReplays(t *testing.T) {
+	for _, replay := range []realReplay{allPickReplay, turboReplay} {
+		t.Run(replay.path, func(t *testing.T) {
+			waves := &wavesCollector{}
+			m, err := analyzeMatch(context.Background(), replay.open(t), []Collector{&matchCollector{}, &combatCollector{waves: waves}, waves})
+			if err != nil {
+				t.Fatal(err)
+			}
+			type key struct {
+				t      matchdata.Seconds
+				player int
+			}
+			observed := map[key]int{}
+			positioned := 0
+			for i, d := range m.Combat.LaneCreepDeaths {
+				if i > 0 && d.T < m.Combat.LaneCreepDeaths[i-1].T {
+					t.Fatal("deaths not sorted")
+				}
+				if d.CreepTeam != matchdata.Radiant && d.CreepTeam != matchdata.Dire {
+					t.Errorf("unknown creep team %+v", d)
+				}
+				if d.KillerKind == "hero" {
+					if d.KillerPlayer == nil || *d.KillerPlayer < 0 || *d.KillerPlayer >= playerCount {
+						t.Fatalf("bad hero owner %+v", d)
+					}
+					observed[key{d.T, *d.KillerPlayer}]++
+				} else if d.KillerPlayer != nil {
+					t.Errorf("nonhero owner %+v", d)
+				}
+				switch d.KillerKind {
+				case "hero", "creep", "tower", "neutral", "other":
+				default:
+					t.Errorf("unknown killer kind %q", d.KillerKind)
+				}
+				if (d.X == nil) != (d.Y == nil) {
+					t.Fatal("partial position")
+				}
+				if d.X != nil {
+					positioned++
+					lane := waveLane(float64(*d.X), float64(*d.Y))
+					if lane == "" && d.Lane != nil || lane != "" && (d.Lane == nil || *d.Lane != lane) {
+						t.Errorf("wrong lane %+v", d)
+					}
+				}
+			}
+			if positioned == 0 {
+				t.Error("no linked sampled positions")
+			}
+			for _, kill := range m.Combat.CreepKills {
+				if kill.Kind != matchdata.CreepLane && kill.Kind != matchdata.CreepDeny {
+					continue
+				}
+				k := key{kill.T, kill.Player}
+				if observed[k] == 0 {
+					t.Errorf("missing hero lane death for %+v", kill)
+				} else {
+					observed[k]--
+				}
+			}
+		})
+	}
+}
+
+func TestLaneCreepKillerKind(t *testing.T) {
+	for _, test := range []struct {
+		unit combatUnit
+		want string
+	}{
+		{combatUnit{0, matchdata.KindHero}, "hero"}, {combatUnit{1, matchdata.KindIllusion}, "hero"}, {combatUnit{2, matchdata.KindSummon}, "hero"},
+		{combatUnit{-1, matchdata.KindLaneCreeps}, "creep"}, {combatUnit{-1, matchdata.KindBuildings}, "tower"}, {combatUnit{-1, matchdata.KindNeutrals}, "neutral"}, {combatUnit{-1, matchdata.KindOtherUnits}, "other"},
+	} {
+		if got := laneCreepKillerKind(test.unit, "npc_dota_goodguys_tower1_mid"); got != test.want {
+			t.Errorf("%+v: %s want %s", test.unit, got, test.want)
+		}
+	}
+}
+
+func TestLaneCreepDeathLinkAmbiguity(t *testing.T) {
+	for _, count := range []int{0, 1, 2} {
+		waves := &wavesCollector{}
+		for range count {
+			waves.deaths = append(waves.deaths, trackedCreepDeath{at: ServerTime{Seconds: 10}, name: "creep", team: matchdata.Radiant, position: creepPosition{x: 100, y: -100, known: true}})
+		}
+		c := combatCollector{session: &Session{Clock: &Clock{}}, waves: waves, laneDeaths: []laneCreepDeathEvent{{at: ServerTime{Seconds: 10}, name: "creep", row: matchdata.LaneCreepDeath{CreepTeam: matchdata.Radiant}}}}
+		rows := c.laneCreepDeathList()
+		if (rows[0].X != nil) != (count == 1) {
+			t.Errorf("%d candidates: %+v", count, rows[0])
+		}
+		// Two combat rows must not claim the same entity death, even if there is only one candidate.
+		c.laneDeaths = append(c.laneDeaths, c.laneDeaths[0])
+		rows = c.laneCreepDeathList()
+		if rows[0].X != nil || rows[1].X != nil {
+			t.Error("reused ambiguous entity death")
 		}
 	}
 }

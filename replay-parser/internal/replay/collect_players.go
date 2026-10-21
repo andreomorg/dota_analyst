@@ -125,7 +125,117 @@ func (c *playersCollector) samplePositions(second int) {
 		}
 		c.positions[i].Samples = append(c.positions[i].Samples,
 			matchdata.Sample{T: second, X: int(math.Round(x)), Y: int(math.Round(y))})
+		c.positions[i].Facing = append(c.positions[i].Facing, heroFacing(hero))
+		// Always appended with the sample, so both lists keep the same length; a missing property is null.
+		c.positions[i].Vitals = append(c.positions[i].Vitals, matchdata.Vitals{
+			Health:           optionalInt(hero, "m_iHealth"),
+			MaxHealth:        optionalInt(hero, "m_iMaxHealth"),
+			Mana:             optionalInt(hero, "m_flMana"),
+			MaxMana:          optionalInt(hero, "m_flMaxMana"),
+			VisibleToEnemies: c.visibleToEnemies(hero),
+			UnitState:        lowMask(hero, "m_nUnitState64"),
+			Gold:             c.gold(player.Index),
+		})
+		// Inspected 9034320024 at ticks 18000 and 36000: Total attributes include bonuses, while armor,
+		// resistance and speed remain base values. No effective-total properties matched the inspection filter.
+		attribute := func(name string) *float64 {
+			value, ok := number(hero, name)
+			if !ok {
+				return nil
+			}
+			rounded := math.Round(value*10) / 10
+			return &rounded
+		}
+		c.positions[i].Stats = append(c.positions[i].Stats, matchdata.CombatStats{
+			Armor: attribute("m_flPhysicalArmorValue"), MagicResist: attribute("m_flMagicalResistanceValue"),
+			MoveSpeed: attribute("m_iMoveSpeed"), DamageMin: attribute("m_iDamageMin"), DamageMax: attribute("m_iDamageMax"),
+			Strength: attribute("m_flStrengthTotal"), Agility: attribute("m_flAgilityTotal"), Intellect: attribute("m_flIntellectTotal"),
+		})
 	}
+}
+
+// gold is a player's gold in hand (reliable + unreliable, as Final.Gold), or nil.
+func (c *playersCollector) gold(index int) *int {
+	data, prefix := c.session.Players.TeamData(index)
+	if data == nil {
+		return nil
+	}
+	reliable, okReliable := number(data, prefix+"m_iReliableGold")
+	unreliable, okUnreliable := number(data, prefix+"m_iUnreliableGold")
+	if !okReliable || !okUnreliable {
+		return nil
+	}
+	total := int(reliable + unreliable)
+	return &total
+}
+
+// visibleToEnemies is 1 when the enemy team sees the hero, 0 when not, nil when unknown. Each team's CDOTA_DataRadiant/
+// Dire has m_bNPCVisibleState, 64 entity indexes per word: the bit index%64 of word index/64 is set when that team sees
+// the entity (checked on the replays: a team always sees its own heroes, enemies only at times). Read as uint64: a
+// float64 would lose bits.
+func (c *playersCollector) visibleToEnemies(hero *manta.Entity) *int {
+	team, ok := number(hero, "m_iTeamNum")
+	if !ok || (team != teamRadiant && team != teamDire) {
+		return nil
+	}
+	enemyData := "CDOTA_DataDire"
+	if team == teamDire {
+		enemyData = "CDOTA_DataRadiant"
+	}
+	data := c.session.Entity(enemyData)
+	if data == nil {
+		return nil
+	}
+	index := int(hero.GetIndex())
+	return visibleBit(func(word int) (uint64, bool) {
+		value, ok := data.Get(fmt.Sprintf("m_bNPCVisibleState.%04d", word)).(uint64)
+		return value, ok
+	}, index)
+}
+
+// visibleBit is 1 when the bit of entity `index` is set in its 64-bit word of a visibility array, 0 when not, nil when
+// the word is missing (words reads one word of the array).
+func visibleBit(words func(word int) (uint64, bool), index int) *int {
+	word, ok := words(index / 64)
+	if !ok {
+		return nil
+	}
+	seen := int(word >> (index % 64) & 1)
+	return &seen
+}
+
+// lowMask is the low 32 bits of an integer property (a float64 would lose bits of a 64-bit mask), or nil.
+func lowMask(e *manta.Entity, name string) *int {
+	return lowMaskValue(e.Get(name))
+}
+
+// lowMaskValue is the low 32 bits of an integer property value as manta returns it, or nil for any other type.
+func lowMaskValue(value any) *int {
+	var bits uint64
+	switch v := value.(type) {
+	case uint64:
+		bits = v
+	case int64:
+		bits = uint64(v)
+	case uint32:
+		bits = uint64(v)
+	case int32:
+		bits = uint64(uint32(v))
+	default:
+		return nil
+	}
+	low := int(bits & 0xFFFFFFFF)
+	return &low
+}
+
+// optionalInt is a numeric property rounded to a whole number, or nil when the entity does not have it.
+func optionalInt(e *manta.Entity, name string) *int {
+	value, ok := number(e, name)
+	if !ok {
+		return nil
+	}
+	rounded := int(math.Round(value))
+	return &rounded
 }
 
 // read takes one player's snapshot. ok is false while (or once) CDOTA_PlayerResource or the team data entity does not

@@ -48,8 +48,35 @@ type itemsCollector struct {
 	abilityOwners   map[entityKey]abilitySlot  // where each ability entity sits (hero "" = not a player's hero)
 	upgrades        []upgradeEvent
 
+	// m_fCooldown last seen of every item/ability entity, and the cooldowns that started (it rose past now).
+	itemCooldownAt    map[entityKey]float64
+	abilityCooldownAt map[entityKey]float64
+	itemCooldowns     []cooldownEvent
+	abilityCooldowns  []cooldownEvent
+	// The inventory, teleport and neutral slots last read of every hero, and their changes.
+	slotsNow    map[string][itemSlots]string // hero name -> item name per slot ("" = empty)
+	slotChanges []slotEvent
+
 	final map[string]matchdata.FinalItems // hero name -> items when the match ended
 }
+
+// cooldownEvent is a cooldown of a hero's item or ability that started at `at` and is ready at readyAt.
+type cooldownEvent struct {
+	namedEvent
+	readyAt ServerTime
+}
+
+// slotEvent is a slot of a hero's inventory that changed at a second of the game clock (name "" = empty).
+type slotEvent struct {
+	second int
+	hero   string
+	slot   int
+	name   string
+}
+
+// Stash slots 9-14 are replicated too, so pending deliveries remain distinguishable from usable items.
+// Backpack and enhancement slots retain their existing behavior.
+var trackedSlots = []int{0, 1, 2, 3, 4, 5, 9, 10, 11, 12, 13, 14, teleportSlot, neutralSlot}
 
 // namedEvent is something a hero did with a named item or ability. The hero is kept by name and resolved to a player
 // in Fill: entries from the start of the pre-game come before the players are known.
@@ -117,6 +144,9 @@ func (c *itemsCollector) Register(s *Session) {
 	c.earlyItems = map[entityKey]bool{}
 	c.abilities = map[entityKey]abilityState{}
 	c.abilityOwners = map[entityKey]abilitySlot{}
+	c.itemCooldownAt = map[entityKey]float64{}
+	c.abilityCooldownAt = map[entityKey]float64{}
+	c.slotsNow = map[string][itemSlots]string{}
 
 	s.OnCombatLog(func(entry CombatEntry) {
 		switch entry.Type {
@@ -148,9 +178,96 @@ func (c *itemsCollector) Register(s *Session) {
 		if c.firstLogged == nil || s.Clock.Now().Seconds <= c.firstLogged.Seconds+1 {
 			c.onEarlyItem(e, op)
 		}
+		c.onItemCooldown(e, op)
 	})
 	s.OnEntity("CDOTA_Ability", c.onAbility)
+	s.OnSecond(func(second int) {
+		if second%matchdata.PositionIntervalSeconds == 0 {
+			c.readSlots(second)
+		}
+	})
 	s.OnEnd(func(int) { c.readFinalItems() })
+}
+
+// cooldownStarted remembers m_fCooldown and reports the server time the item or ability is ready when a new cooldown
+// started. m_fCooldown is the time remaining, in seconds (checked on a replay: a teleport's 24.0 is 23.0 a second later
+// and 14.0 ten seconds later), so it only goes down while a cooldown runs: a rise means a new one. An entity seen for the
+// first time counts as having had no cooldown.
+func (c *itemsCollector) cooldownStarted(e *manta.Entity, last map[entityKey]float64) (float64, bool) {
+	key := keyOf(e)
+	remaining, ok := number(e, "m_fCooldown")
+	if !ok {
+		return 0, false
+	}
+	before := last[key]
+	last[key] = remaining
+	return float64(c.session.Clock.Now().Seconds) + remaining, cooldownRose(before, remaining)
+}
+
+// cooldownRose says whether the time remaining went up (a new cooldown), given the last value seen. Half a second of
+// margin: float noise in the updates is not a new cooldown.
+func cooldownRose(before, remaining float64) bool {
+	return remaining > before+0.5
+}
+
+// onItemCooldown records the cooldowns of the players' items (owner by m_iPlayerOwnerID).
+func (c *itemsCollector) onItemCooldown(e *manta.Entity, op manta.EntityOp) {
+	if op.Flag(manta.EntityOpDeleted) {
+		delete(c.itemCooldownAt, keyOf(e))
+		return
+	}
+	readyAt, started := c.cooldownStarted(e, c.itemCooldownAt)
+	if !started {
+		return
+	}
+	owner, ok := number(e, "m_iPlayerOwnerID")
+	if !ok {
+		return
+	}
+	if hero := c.heroOfPlayerID(int32(owner)); hero != "" {
+		c.itemCooldowns = append(c.itemCooldowns, cooldownEvent{
+			namedEvent: namedEvent{at: c.session.Clock.Now(), hero: hero, name: c.session.EntityName(e)},
+			readyAt:    c.session.Clock.At(readyAt),
+		})
+	}
+}
+
+// onAbilityCooldown records the cooldowns of the players' heroes' abilities (not stolen ones).
+func (c *itemsCollector) onAbilityCooldown(e *manta.Entity, key entityKey) {
+	readyAt, started := c.cooldownStarted(e, c.abilityCooldownAt)
+	if !started {
+		return
+	}
+	if stolen, _ := e.GetBool("m_bStolen"); stolen {
+		return
+	}
+	if owner, ok := c.abilityOwner(e, key); ok {
+		c.abilityCooldowns = append(c.abilityCooldowns, cooldownEvent{
+			namedEvent: namedEvent{at: c.session.Clock.Now(), hero: owner.hero, name: c.session.EntityName(e)},
+			readyAt:    c.session.Clock.At(readyAt),
+		})
+	}
+}
+
+// readSlots compares every hero's tracked slots with the last reading and records what changed.
+func (c *itemsCollector) readSlots(second int) {
+	for _, hero := range c.heroesNow() {
+		heroName := c.session.EntityName(hero)
+		before, seen := c.slotsNow[heroName]
+		var now [itemSlots]string
+		for _, slot := range trackedSlots {
+			if handle, ok := hero.GetUint32(itemSlotNames[slot]); ok {
+				if item := c.session.Parser.FindEntityByHandle(uint64(handle)); item != nil {
+					now[slot] = c.session.EntityName(item)
+				}
+			}
+			// The first reading records only the slots with an item; later ones every change.
+			if now[slot] != before[slot] && (seen || now[slot] != "") {
+				c.slotChanges = append(c.slotChanges, slotEvent{second: second, hero: heroName, slot: slot, name: now[slot]})
+			}
+		}
+		c.slotsNow[heroName] = now
+	}
 }
 
 // onEarlyItem remembers, once per entity, an item entity that was bought: it has a price, a purchase time and a
@@ -221,8 +338,10 @@ func (c *itemsCollector) onAbility(e *manta.Entity, op manta.EntityOp) {
 	if op.Flag(manta.EntityOpDeleted) {
 		delete(c.abilities, key)
 		delete(c.abilityOwners, key)
+		delete(c.abilityCooldownAt, key)
 		return
 	}
+	c.onAbilityCooldown(e, key)
 	level, ok := e.GetInt32("m_iLevel")
 	if !ok {
 		return
@@ -351,6 +470,36 @@ func (c *itemsCollector) Fill(m *matchdata.Match) error {
 		}
 	}
 
+	cooldownsByPlayer := func(events []cooldownEvent) [playerCount]matchdata.List[matchdata.Cooldown] {
+		var lists [playerCount]matchdata.List[matchdata.Cooldown]
+		for _, event := range events {
+			if player, t, ok := playerAt(event.namedEvent); ok {
+				lists[player] = append(lists[player], matchdata.Cooldown{
+					T: matchdata.Seconds(t), Name: event.name, ReadyAt: matchdata.Seconds(clock.Game(event.readyAt))})
+			}
+		}
+		for _, list := range lists {
+			sort.SliceStable(list, func(i, j int) bool { return list[i].T < list[j].T })
+		}
+		return lists
+	}
+	itemCooldowns := cooldownsByPlayer(c.itemCooldowns)
+	abilityCooldowns := cooldownsByPlayer(c.abilityCooldowns)
+
+	var slots [playerCount]matchdata.List[matchdata.SlotChange]
+	for _, change := range c.slotChanges { // already in time order
+		player, ok := players.ByHeroName(change.hero)
+		if !ok || player < 0 || player >= playerCount || float64(change.second) > end {
+			continue
+		}
+		var name *string
+		if change.name != "" {
+			itemName := change.name
+			name = &itemName
+		}
+		slots[player] = append(slots[player], matchdata.SlotChange{T: change.second, Slot: change.slot, Name: name})
+	}
+
 	items, abilities := matchdata.Items{}, matchdata.Abilities{}
 	for _, player := range players.All() {
 		i := player.Index
@@ -359,6 +508,9 @@ func (c *itemsCollector) Fill(m *matchdata.Match) error {
 		}
 		items.Purchases = append(items.Purchases, matchdata.PlayerItems{Player: i, Items: purchases[i]})
 		items.Uses = append(items.Uses, matchdata.PlayerItems{Player: i, Items: itemUses[i]})
+		items.Slots = append(items.Slots, matchdata.PlayerSlotChanges{Player: i, Changes: slots[i]})
+		items.Cooldowns = append(items.Cooldowns, matchdata.PlayerCooldowns{Player: i, Cooldowns: itemCooldowns[i]})
+		abilities.Cooldowns = append(abilities.Cooldowns, matchdata.PlayerCooldowns{Player: i, Cooldowns: abilityCooldowns[i]})
 		final, ok := c.final[player.HeroName]
 		if !ok { // the replay stopped before the end and the hero was gone
 			final = matchdata.FinalItems{

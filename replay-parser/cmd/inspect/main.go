@@ -40,6 +40,8 @@ func main() {
 	out := flag.String("out", "", "with -match: file to write the JSON to")
 	manifest := flag.String("manifest", "", "with -match and -out: publish a new local provenance sidecar")
 	metrics := flag.String("metrics", "", "with -match: record Go memory samples in a new local JSON file")
+	extraction := flag.Bool("extraction", false, "print privacy-safe extraction diagnostics (no chat text)")
+	worldExtraction := flag.Bool("world-extraction", false, "inspect courier/stash/rotation/outpost/lotus/miniboss evidence without chat text")
 	flag.Parse()
 	if *metrics != "" && !*match {
 		log.Fatal("-metrics requires -match")
@@ -77,6 +79,14 @@ func main() {
 	parser, err := manta.NewStreamParser(replay)
 	if err != nil {
 		log.Fatal(err)
+	}
+	if *worldExtraction {
+		runWorldExtraction(parser)
+		return
+	}
+	if *extraction {
+		runExtraction(parser)
+		return
 	}
 
 	switch {

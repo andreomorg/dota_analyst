@@ -90,9 +90,15 @@ sequenceDiagram
 
 Baixa o arquivo do replay dos servidores da Valve e o lê do começo ao fim, como se assistisse à partida: a posição de cada herói a cada 2 segundos, vida e mana, itens, habilidades, abates, dano, wards, ondas de creeps, torres, runas e acampamentos. O resultado é um documento único da partida, que a API usa para montar a análise.
 
+Quando muitos replays são processados de uma vez (por exemplo, para atualizar todos os documentos guardados), o download pode ser feito **antes**, num cache em disco: enquanto uns replays são lidos, os próximos já estão baixando, e a leitura não fica esperando a internet.
+
 ```mermaid
 flowchart LR
-    Request["Pedido da API<br/>partida + link do replay"] --> Download["Baixa o replay<br/>da Valve"]
+    Request["Pedido da API<br/>partida + link do replay"] --> Cached{"Já baixado<br/>no cache?"}
+    Prefetch["Download antecipado<br/>(opcional)"] --> Cache["Cache em disco<br/>apagado depois da leitura"]
+    Cache --> Cached
+    Cached -->|"não"| Download["Baixa o replay<br/>da Valve"]
+    Cached -->|"sim"| Read
     Download --> Read["Lê a partida<br/>segundo a segundo"]
     Read --> Document["Documento da partida<br/>posições, combate, itens,<br/>visão, ondas, objetivos"]
     Document --> Back["Devolve à API"]

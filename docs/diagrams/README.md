@@ -7,7 +7,7 @@ A fonte dos diagramas são os blocos `mermaid` do [README principal](../../READM
 | [Visão geral](../../README.md#como-funciona) | Nuvem, máquina local e serviços externos |
 | [Site](../../README.md#site-react) | Páginas e a conversa com a API |
 | [API](../../README.md#api-c) | Camadas e o fluxo de uma análise com replay em processamento |
-| [Leitor de replays](../../README.md#leitor-de-replays-go) | Do link do replay ao documento da partida |
+| [Leitor de replays](../../README.md#leitor-de-replays-go) | Do link do replay ao documento da partida, com o download antecipado em cache |
 | [Banco de dados](../../README.md#banco-de-dados-postgresql) | O que fica no banco local e o que vai à nuvem |
 | [Base de comparação](../../README.md#base-de-comparação-coletor) | Coleta, percentis e publicação |
 | [Modelos de previsão e coach](../../README.md#modelos-de-previsão-e-coach-python) | Momentos do replay, exemplos e avaliação |

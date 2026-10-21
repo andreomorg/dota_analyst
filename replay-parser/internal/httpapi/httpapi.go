@@ -84,7 +84,7 @@ func NewHandler(source ReplaySource, analyzer Analyzer, config Config, logger *s
 		config.RequestTimeout = DefaultRequestTimeout
 	}
 	s := &server{
-		parser:      parsing.New(source, config.MaxConcurrentParses, config.RequestTimeout, parsing.WithObserver(func(m parsing.Measurement) {
+		parser: parsing.New(source, config.MaxConcurrentParses, config.RequestTimeout, parsing.WithObserver(func(m parsing.Measurement) {
 			logger.Info("parse resources", "openMs", m.Open.Milliseconds(), "analyzeMs", m.Analyze.Milliseconds(),
 				"elapsedMs", m.Elapsed.Milliseconds(), "readBytes", m.ReadBytes, "activeAtStart", m.ActiveAtStart)
 		})),

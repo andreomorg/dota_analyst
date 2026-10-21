@@ -20,4 +20,9 @@ public interface IReplayParser
     /// <exception cref="ReplayParserBusyException">The parser answered, but stayed busy with other replays.</exception>
     /// <exception cref="ReplayParserUnavailableException">The parser could not be reached, or something else answered.</exception>
     Task<ReplayAnalysis> ParseAsync(MatchId matchId, Uri replayUrl, CancellationToken cancellationToken);
+
+    // Like ParseAsync, but a kept document without the newest sections (what the prediction models read) does not count:
+    // the replay is parsed again. Same exceptions. By default, ParseAsync (parsers that keep no documents).
+    Task<ReplayAnalysis> ParseFreshAsync(MatchId matchId, Uri replayUrl, CancellationToken cancellationToken) =>
+        ParseAsync(matchId, replayUrl, cancellationToken);
 }

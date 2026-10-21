@@ -46,13 +46,18 @@ public class ReplayParserClient(
 
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
-    public async Task<ReplayAnalysis> ParseAsync(MatchId matchId, Uri replayUrl, CancellationToken cancellationToken)
-    {
-        if (await FromKeptDocumentAsync(matchId, cancellationToken) is { } kept)
-        {
-            return kept;
-        }
+    public async Task<ReplayAnalysis> ParseAsync(MatchId matchId, Uri replayUrl, CancellationToken cancellationToken) =>
+        await FromKeptDocumentAsync(matchId, requireModelSections: false, cancellationToken)
+        ?? await ParseWithTheParserAsync(matchId, replayUrl, cancellationToken);
 
+    // A kept document from before the prediction models' sections (vitals, waves...) is parsed again, so its document is
+    // replaced by one that has them; one that already has them is used as it is (running again downloads nothing).
+    public async Task<ReplayAnalysis> ParseFreshAsync(MatchId matchId, Uri replayUrl, CancellationToken cancellationToken) =>
+        await FromKeptDocumentAsync(matchId, requireModelSections: true, cancellationToken)
+        ?? await ParseWithTheParserAsync(matchId, replayUrl, cancellationToken);
+
+    private async Task<ReplayAnalysis> ParseWithTheParserAsync(MatchId matchId, Uri replayUrl, CancellationToken cancellationToken)
+    {
         for (var attempt = 1; ; attempt++)
         {
             TimeSpan wait;
@@ -87,7 +92,8 @@ public class ReplayParserClient(
     // A match whose whole document is already kept (the owner's machine) is read again from it, without downloading
     // and parsing the replay: what the API reads from a document grows (new statistics) while the document stays the
     // same. Only an up-to-date analysis is used; otherwise (an older document, unreadable) the parser is asked.
-    private async Task<ReplayAnalysis?> FromKeptDocumentAsync(MatchId matchId, CancellationToken cancellationToken)
+    private async Task<ReplayAnalysis?> FromKeptDocumentAsync(
+        MatchId matchId, bool requireModelSections, CancellationToken cancellationToken)
     {
         if (await archive.FindAsync(matchId, cancellationToken) is not { } document)
         {
@@ -96,7 +102,13 @@ public class ReplayParserClient(
 
         try
         {
-            var analysis = JsonSerializer.Deserialize<ReplayParserMatchResponse>(document, JsonOptions)?.ToReplayAnalysis(matchId);
+            var response = JsonSerializer.Deserialize<ReplayParserMatchResponse>(document, JsonOptions);
+            if (requireModelSections && (response is null || !ReplayParserMappings.HasModelSections(response)))
+            {
+                return null;
+            }
+
+            var analysis = response?.ToReplayAnalysis(matchId);
             if (analysis is { IsOutdated: false })
             {
                 logger.LogInformation("Match {MatchId} was read again from its kept replay document", matchId);

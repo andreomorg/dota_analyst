@@ -44,6 +44,8 @@ internal sealed class ApiFactory(IReadOnlyDictionary<string, string?>? settings 
         // Same for the Steam Web API key: profiles come from the fake below.
         builder.UseSetting("ConnectionStrings:Database", "");
         builder.UseSetting("Steam:ApiKey", "");
+        // Tests run without permission to write to the Windows Event Log.
+        builder.UseSetting("Logging:EventLog:LogLevel:Default", "None");
         // Same for the replay parser: never the developer's real one.
         builder.UseSetting("ReplayParser:BaseUrl", "");
 
@@ -59,6 +61,7 @@ internal sealed class ApiFactory(IReadOnlyDictionary<string, string?>? settings 
             services.AddSingleton<IMatchProvider>(Matches);
             services.AddSingleton<IReplayAnalyzer>(Analyzer);
             services.AddSingleton<IHeroCatalog>(new FakeHeroCatalog());
+            services.AddSingleton<IAbilityCatalog>(Abilities);
             services.AddSingleton<IItemCatalog>(new FakeItemCatalog());
             services.AddSingleton<IMatchRepository>(SavedMatches);
             services.AddSingleton<IPlayerSearchRepository>(PlayerSearches);
@@ -77,6 +80,8 @@ internal sealed class ApiFactory(IReadOnlyDictionary<string, string?>? settings 
                 options => options.BackchannelHttpHandler = Steam);
         });
     }
+
+    public KitApiCatalog Abilities { get; } = new();
 
     public FakeSteamOpenId Steam { get; } = new();
 
@@ -221,6 +226,16 @@ internal sealed class ApiFactory(IReadOnlyDictionary<string, string?>? settings 
     private sealed class FakeItemCatalog : IItemCatalog
     {
         public Task<IReadOnlyDictionary<int, Item>> GetItemsAsync(CancellationToken cancellationToken) =>
-            Task.FromResult<IReadOnlyDictionary<int, Item>>(new Dictionary<int, Item> { [1] = new(1, "Blink Dagger") });
+            Task.FromResult<IReadOnlyDictionary<int, Item>>(new Dictionary<int, Item>
+            {
+                [1] = new(1, "Blink Dagger")
+                {
+                    Details = new ItemDetails("blink", 2250, [], false)
+                    {
+                        Behavior = ["Point Target"], Cooldown = 15,
+                        Abilities = [new(ItemAbilityKind.Active, "Blink", "Teleport to a target point up to 1200 units away.")],
+                    },
+                },
+            });
     }
 }

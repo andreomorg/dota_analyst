@@ -61,6 +61,14 @@ public class OpenDotaClient(HttpClient httpClient)
             "constants/items", notFoundAsNull: false, cancellationToken) ?? [];
     }
 
+    public async Task<IReadOnlyDictionary<string, OpenDotaAbility>> GetAbilitiesAsync(CancellationToken cancellationToken) =>
+        await GetJsonAsync<Dictionary<string, OpenDotaAbility>>("constants/abilities", false, cancellationToken) ?? [];
+
+    public async Task<IReadOnlyDictionary<string, OpenDotaHeroKit>> GetHeroAbilitiesAsync(CancellationToken cancellationToken) =>
+        await GetJsonAsync<Dictionary<string, OpenDotaHeroKit>>("constants/hero_abilities", false, cancellationToken) ?? [];
+
+    public async Task<IReadOnlyList<OpenDotaPatch>> GetPatchesAsync(CancellationToken cancellationToken) =>
+        await GetJsonAsync<List<OpenDotaPatch>>("constants/patch", false, cancellationToken) ?? [];
     // Single place that turns every transport/format problem into DataSourceUnavailableException,
     // so the Application never sees HttpClient or JSON exceptions.
     private async Task<T?> GetJsonAsync<T>(string path, bool notFoundAsNull, CancellationToken cancellationToken)

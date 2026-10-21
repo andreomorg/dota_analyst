@@ -38,6 +38,8 @@ public static class DependencyInjection
         var parsesReplays = AddReplayParsing(services, configuration, hasDatabase);
         AddBaselineCollector(services, configuration, hasDatabase && parsesReplays);
         services.AddCoachMl(configuration);
+        // Kept replays for the prediction models' samples (empty without kept documents: AddCoachMl registers the fallback).
+        services.AddScoped<IArchivedReplaySource, ArchivedReplaySource>();
 
         return services;
     }
@@ -105,7 +107,7 @@ public static class DependencyInjection
                 client.MaxResponseContentBufferSize = 4 * 1024 * 1024;
             })
             // A redirect is not something our parser does: it is answered as "unavailable" instead of followed.
-            // gzip: the parser compresses when asked (~330 KB → ~80 KB), which matters through the ngrok tunnel.
+            // gzip: the parser compresses when asked (~330 KB â†’ ~80 KB), which matters through the ngrok tunnel.
             .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
             {
                 AllowAutoRedirect = false,
@@ -118,7 +120,7 @@ public static class DependencyInjection
         return true;
     }
 
-    // The collector of the comparison base (pro and high-rank matches). Off unless Collector:Enabled — it runs on the
+    // The collector of the comparison base (pro and high-rank matches). Off unless Collector:Enabled â€” it runs on the
     // project owner's machine, next to the replay parser, writing to the production database; never on Render. It
     // also needs a database and replay parsing.
     private static void AddBaselineCollector(IServiceCollection services, IConfiguration configuration, bool canCollect)
@@ -239,6 +241,7 @@ public static class DependencyInjection
         services.AddScoped<IReplayAnalyzer, OpenDotaReplayAnalyzer>();
         services.AddScoped<IHeroCatalog, OpenDotaHeroCatalog>();
         services.AddScoped<IItemCatalog, OpenDotaItemCatalog>();
+        services.AddScoped<IAbilityCatalog, OpenDotaAbilityCatalog>();
         services.AddScoped<IBaselineMatchSource, OpenDotaBaselineMatchSource>();
         services.AddSingleton<CatalogLoadLocks>();
     }

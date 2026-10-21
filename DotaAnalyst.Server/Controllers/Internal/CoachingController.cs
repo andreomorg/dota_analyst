@@ -1,5 +1,3 @@
-using System.Security.Cryptography;
-using System.Text;
 using DotaAnalyst.Application.Coaching;
 using DotaAnalyst.Domain.Matches;
 using DotaAnalyst.Infrastructure.Coaching;
@@ -28,9 +26,7 @@ public sealed class CoachingController(ReviewCoachingHandler handler, IOptions<C
     {
         var options = settings.Value;
         if (!options.Enabled) return NotFound();
-        var received = Encoding.UTF8.GetBytes(Request.Headers.Authorization.ToString());
-        var expected = Encoding.UTF8.GetBytes("Bearer " + options.ApiKey);
-        if (!CryptographicOperations.FixedTimeEquals(received, expected)) return Unauthorized();
+        if (!MachineKey.IsValid(Request, options)) return Unauthorized();
         if (!MatchId.TryCreate(matchId, out var id) || heroId <= 0)
             return Problem(statusCode: 400, title: "Invalid match or hero ID.");
         try

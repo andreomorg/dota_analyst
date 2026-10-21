@@ -1,0 +1,368 @@
+using DotaAnalyst.Domain.Matches;
+using DotaAnalyst.Domain.Situations;
+
+namespace DotaAnalyst.Application.Models;
+
+/// <summary>A hero's situation (HeroSituation), flat: the columns every prediction model's examples share. Columns
+/// starting with "hidden" are what the fog of war hid from the player: for measurement only, never for tips.</summary>
+public sealed record SituationRow(
+    int HeroId,
+    Team Team,
+    int Seconds,
+    int? Role,
+    bool RoleInferred,
+    int X,
+    int Y,
+    MapRegion Region,
+    bool OnEnemySide,
+    int? NearestAllyDistance,
+    int AlliesNear,
+    int AlliesWithinFightRange,
+    int AlliesAlive,
+    int EnemiesAlive,
+    int Level,
+    int NetWorth,
+    double LevelLeadOverEnemies,
+    int TeamNetWorthLead,
+    int TeamExperienceLead,
+    int DamageFromHeroesLastMinute,
+    int TeamObserversActive,
+    int OwnTowersLost,
+    int EnemyTowersLost,
+    int? SecondsSinceLastDeath,
+    // False when the kept document has no activity: the activity columns are then empty/zero, not "nothing used".
+    bool ActivityKnown,
+    int? OwnSmokeSecondsAgo,
+    int? TeleportSecondsAgo,
+    int? EscapeItemSecondsAgo,
+    int ItemUsesLast30Seconds,
+    int AbilityUsesLast30Seconds,
+    // Hero damage taken and dealt in the last 6 s (finished 2 s buckets); null for documents without buckets.
+    int? DamageFromHeroesLast6Seconds,
+    int? DamageToHeroesLast6Seconds,
+    // The hero's own tools at that second (Readiness); null for documents without inventories and cooldowns.
+    bool? TeleportReady,
+    bool? HasEscapeItem,
+    bool? EscapeItemReady,
+    bool? UltimateReady,
+    int? AbilitiesOnCooldown,
+    // The hero's buyback (none for 480 s after one), the team's glyph and scan, a power rune the hero took; null when
+    // unknown or long ago.
+    int? OwnBuybackSecondsAgo,
+    int? OwnGlyphSecondsAgo,
+    int? OwnScanSecondsAgo,
+    int? OwnPowerRuneSecondsAgo,
+    // Roshan and the Aegis (announced to everyone), and the towers each team lost per lane.
+    int? SecondsSinceRoshanKill,
+    bool HasAegis,
+    bool AllyHasAegis,
+    bool EnemyHasAegis,
+    int OwnTowersLostTop,
+    int OwnTowersLostMiddle,
+    int OwnTowersLostBottom,
+    int EnemyTowersLostTop,
+    int EnemyTowersLostMiddle,
+    int EnemyTowersLostBottom,
+    // Health and mana (0..1 of the maximum) and the lowest health share among allies within fight range; null for
+    // documents without vitals.
+    int? Health,
+    double? HealthShare,
+    double? ManaShare,
+    double? LowestAllyHealthShare,
+    // Gold in hand, stunned/silenced/invisible, and the enemies the team saw (the game's fog of war): anywhere, near,
+    // within fight range, the nearest one's distance; null for documents without vitals.
+    int? Gold,
+    bool? Stunned,
+    bool? Silenced,
+    bool? Invisible,
+    int? VisibleEnemies,
+    int? VisibleEnemiesNear,
+    int? VisibleEnemiesWithinFightRange,
+    int? NearestVisibleEnemyDistance,
+    // How far past its own creeps' front the hero stands in its lane (negative: behind them), and each lane's own front
+    // (map progress from the team's own side); null without waves or outside a lane.
+    int? AheadOfOwnWave,
+    int? OwnWaveFrontTop,
+    int? OwnWaveFrontMiddle,
+    int? OwnWaveFrontBottom,
+    int? OwnWaveCreepsInLane,
+    int? OwnWaveCreepsAtFront,
+    // Enemies the team sees in the hero's lane now; null outside a lane or without visibility.
+    int? SeenEnemiesInMyLane,
+    // Where the hero's lane is (the point between both fronts, and its distance past the own / short of the enemy's
+    // most advanced standing tower) and where it goes (own front change in 10 s and 30 s).
+    int? WaveClashPoint,
+    int? WaveClashPastOwnTower,
+    int? WaveClashShortOfEnemyTower,
+    int? OwnFrontChangeLast10,
+    int? OwnFrontChangeLast30,
+    // The own wave's strength in the hero's lane, own creeps off the lanes (pulled), and the lane's creep deaths in the
+    // last 30 s by who killed them.
+    int? OwnWaveHealthAtFront,
+    bool? OwnSiegeInLane,
+    int? OwnCreepsOffLane,
+    int? EnemyCreepsKilledByTeamLast30,
+    int? OwnCreepsKilledByEnemyHeroesLast30,
+    int? OwnCreepsKilledByEnemyTowerLast30,
+    int? EnemyCreepsKilledByOwnTowerLast30,
+    bool? OwnWaveStacked,
+    // Last hits / denies on offer at the front, own super/mega creeps, lane creep hits on the hero in 10 s (aggro).
+    int? LastHitsAvailable,
+    int? DeniesAvailable,
+    bool? OwnSuperCreeps,
+    int? CreepHitsOnMeLast10,
+    // The whole map: each lane's meeting point and own front change in 30 s, lanes with the enemy wave at the own
+    // tower / the own wave at the enemy's, and seconds until the next waves spawn.
+    int? WaveClashTop,
+    int? WaveClashMiddle,
+    int? WaveClashBottom,
+    int? FrontChangeTopLast30,
+    int? FrontChangeMiddleLast30,
+    int? FrontChangeBottomLast30,
+    int? EnemyWavesAtOwnTowers,
+    int? OwnWavesAtEnemyTowers,
+    int SecondsToNextWave,
+    // Night, the hero's combat attributes (armor estimated from base + agility), the fight around it (enemies hitting
+    // it / hit by it in the last 6 s, whether it struck first in the last 10 s) and its farm in the last minute; null
+    // for documents without them.
+    bool? IsNight,
+    double? EstimatedArmor,
+    double? MagicResistance,
+    int? MoveSpeed,
+    double? AverageDamage,
+    double? Strength,
+    double? Agility,
+    double? Intellect,
+    int? EnemiesHittingMe,
+    int? EnemiesIHit,
+    bool? IStruckFirst,
+    int? LaneLastHitsLastMinute,
+    int? NeutralsLastMinute,
+    int? DeniesLastMinute,
+    int? SecondsSinceLastCreepKill,
+    // Own jungle camps stacked / empty now.
+    int? OwnCampsStacked,
+    int? OwnCampsEmpty,
+    // The player's orders in the last 10 s and the last move destination (distance, advance towards the enemy base,
+    // enemy side); null for documents without orders. The decision itself: never a next-region model input.
+    int? IntentMoves,
+    int? IntentAttacks,
+    int? IntentCasts,
+    int? IntentDestinationDistance,
+    int? IntentDestinationAdvance,
+    bool? IntentDestinationOnEnemySide,
+    // Living enemies the team has not seen for 10 s, and the distance to / seconds since the nearest one's last
+    // sighting; null for documents without visibility.
+    int? MissingEnemies,
+    int? MissingEnemyLastSeenDistance,
+    int? MissingEnemyLastSeenSecondsAgo,
+    // Enemy debuffs on the hero now (disables, slows, others), seconds disabled in the last 10 s and enemies that put
+    // something on it then; null for documents without debuffs.
+    int? ActiveDisables,
+    int? ActiveSlows,
+    int? ActiveOtherDebuffs,
+    double? DisabledSecondsLast10,
+    int? EnemiesAfflictingLast10,
+    // Buffs on the hero now (teleport channel, magic immunity, a save, heals, speed) and allies that buffed it in the
+    // last 10 s; null for documents without buffs.
+    bool? Teleporting,
+    bool? MagicImmune,
+    bool? SavedNow,
+    int? ActiveHealBuffs,
+    int? ActiveSpeedBuffs,
+    int? AlliesBuffingLast10,
+    // The nearest standing towers (own and enemy: distance, health share) and the team's buildings that lost health in
+    // the last 10 s; null for documents without building health.
+    int? NearestOwnTowerDistance,
+    double? NearestOwnTowerHealthShare,
+    int? NearestEnemyTowerDistance,
+    double? NearestEnemyTowerHealthShare,
+    int? OwnBuildingsUnderAttack,
+    // The matchup: most kills one enemy got on the hero; the nearest enemy in sight — its kills on the hero and the team,
+    // its level lead and its disables on the team so far (null when no enemy is seen).
+    int MostKillsOnMeByOneEnemy,
+    int? NearestVisibleEnemyKillsOnMe,
+    int? NearestVisibleEnemyKillsOnTeam,
+    int? NearestVisibleEnemyLevelLead,
+    int? NearestVisibleEnemyDisablesOnTeam,
+    // The draft: living enemies by catalog role and melee; null without every enemy's profile.
+    int? EnemyDisablersAlive,
+    int? EnemyInitiatorsAlive,
+    int? EnemyNukersAlive,
+    int? EnemyEscapesAlive,
+    int? EnemyMeleeAlive,
+    // The direct lane opponent (opposing role): melee or not, level lead, kills each way, distance while seen, hero damage
+    // traded in the last minute; null without roles (or with an inferred role before 10:00).
+    bool? IAmMelee,
+    bool? LaneOpponentMelee,
+    int? LaneOpponentLevelLead,
+    int? LaneOpponentKillsOnMe,
+    int? MyKillsOnLaneOpponent,
+    int? LaneOpponentSeenDistance,
+    int? DamageToLaneOpponentLastMinute,
+    int? DamageFromLaneOpponentLastMinute,
+    // How sure the estimated position (role) is: the margin of PositionEstimator; null with a role-queue position.
+    double? RoleConfidence,
+    // Speed and advance towards the enemy base (units/s), buyback ready, under a smoke (and allies under one), inside
+    // an own observer's vision.
+    int? MoveSpeedNow,
+    int? AdvanceSpeed,
+    bool? BuybackReady,
+    bool? UnderSmoke,
+    int? AlliesUnderSmoke,
+    bool InOwnObserverVision,
+    int? AlliesWithTeleportReady,
+    // Facing (cosine) to the enemy base and to the nearest seen enemy, items in the stash, couriers alive per team,
+    // damage taken by type and healing received/done in the last 6 s.
+    double? FacingEnemyBase,
+    double? FacingNearestSeenEnemy,
+    int? StashItems,
+    int? OwnCouriersAlive,
+    int? EnemyCouriersAlive,
+    int? PhysicalTakenLast6,
+    int? MagicalTakenLast6,
+    int? PureTakenLast6,
+    int? HealingReceivedLast6,
+    int? HealingDoneLast6,
+    // Gold in the last minute by source, XP in the last minute, teammates' pings near the hero and its own in 10 s,
+    // spells cast on it by enemies / by it on enemies in 10 s, seconds to the next power rune.
+    int? GoldFromCreepsLastMinute,
+    int? GoldFromNeutralsLastMinute,
+    int? GoldFromHeroesLastMinute,
+    int? GoldFromObjectivesLastMinute,
+    int? ExperienceLastMinute,
+    int? AllyPingsNearLast10,
+    int? OwnPingsLast10,
+    int? EnemySpellsOnMeLast10,
+    int? MySpellsOnEnemiesLast10,
+    int SecondsToNextPowerRune,
+    // The momentum: kill streak, own deaths in 5 min, each team's kills in the last minute, enemies at level 6+.
+    int KillStreak,
+    int RecentDeaths,
+    int TeamKillsLastMinute,
+    int EnemyKillsLastMinute,
+    int EnemiesWithUltimateLevel,
+    int? SecondsSinceMyBigItem,
+    // The kits (current patch): living enemies whose kit has a stun / silence or hex / escape / invisibility; the hero's
+    // own disable and escape ready now (ability or item).
+    int? EnemiesWithStunInKit,
+    int? EnemiesWithSilenceOrHexInKit,
+    int? EnemiesWithEscapeInKit,
+    int? EnemiesWithInvisibilityInKit,
+    bool? MyDisableReady,
+    bool? MyEscapeReady,
+    // The share of the own jungle, the enemy jungle and the river the team's standing observers see.
+    double ObserverCoverageOwnJungle,
+    double ObserverCoverageEnemyJungle,
+    double ObserverCoverageRiver,
+    int? HiddenNearestEnemyDistance,
+    int HiddenEnemiesNear,
+    int HiddenEnemiesWithinFightRange,
+    int? HiddenEnemySmokeSecondsAgo,
+    double? HiddenEnemiesHealthShare,
+    int? HiddenEnemyScanSecondsAgo,
+    int? HiddenEnemyPowerRuneSecondsAgo,
+    int? HiddenEnemyWaveAhead,
+    int? HiddenEnemyWaveCreepsAtFront,
+    int? HiddenWaveHealthBalanceAtFront,
+    bool? HiddenEnemyWaveStacked,
+    int? HiddenEnemyCampsStacked,
+    int? HiddenEnemyBuildingsUnderAttack,
+    int? HiddenEnemiesInMyLane,
+    bool? HiddenInEnemyObserverVision,
+    double HiddenEnemyObserverCoverageOwnJungle,
+    int? HiddenEnemiesUnderSmoke,
+    int? HiddenEnemiesWithBuyback,
+    int? HiddenEnemiesWithTeleportReady,
+    bool? HiddenPowerRuneOnMap,
+    int? HiddenEnemyBigItemsLast2Minutes,
+    int? HiddenEnemiesWithDisableReadyNear,
+    int? HiddenEnemiesUltimateReadyNear,
+    int? HiddenEnemiesBlackKingBarReadyNear,
+    int? HiddenLaneOpponentDistance,
+    int? HiddenLaneOpponentNetWorthLead,
+    bool? HiddenSeenByEnemies)
+{
+    // Bumped whenever a column is added, removed or changes meaning: the trainer refuses mixed versions.
+    // 1: the situation (death risk only, flat rows). 2: recent activity, readiness, Roshan/Aegis and towers per lane,
+    // health/mana, the enemies' smoke/scan/runes/health (hidden); rows as { situation, label... }.
+    public const int FeatureVersion = 2;
+
+    public static SituationRow From(HeroSituation s, bool activityKnown)
+    {
+        var recent = s.Recent;
+        return new SituationRow(
+            s.HeroId, s.Team, s.Seconds, s.Role, s.RoleInferred, s.X, s.Y, s.Region, s.OnEnemySide,
+            s.NearestAllyDistance, s.AlliesNear, s.AlliesWithinFightRange, s.AlliesAlive, s.EnemiesAlive, s.Level,
+            s.NetWorth, Math.Round(s.LevelLeadOverEnemies, 2), s.TeamNetWorthLead, s.TeamExperienceLead,
+            s.DamageFromHeroesLastMinute, s.TeamObserversActive, s.OwnTowersLost, s.EnemyTowersLost,
+            s.SecondsSinceLastDeath, activityKnown, recent.OwnSmokeSecondsAgo, recent.TeleportSecondsAgo,
+            recent.EscapeItemSecondsAgo, recent.ItemUsesLast30Seconds, recent.AbilityUsesLast30Seconds,
+            recent.DamageFromHeroesRecently, recent.DamageToHeroesRecently,
+            s.Readiness.TeleportReady, s.Readiness.HasEscapeItem, s.Readiness.EscapeItemReady, s.Readiness.UltimateReady,
+            s.Readiness.AbilitiesOnCooldown, recent.OwnBuybackSecondsAgo, recent.OwnGlyphSecondsAgo, recent.OwnScanSecondsAgo,
+            recent.OwnPowerRuneSecondsAgo, s.Map.SecondsSinceRoshanKill, s.Map.HasAegis, s.Map.AllyHasAegis, s.Map.EnemyHasAegis,
+            s.Map.OwnTowersLost.Top, s.Map.OwnTowersLost.Middle, s.Map.OwnTowersLost.Bottom,
+            s.Map.EnemyTowersLost.Top, s.Map.EnemyTowersLost.Middle, s.Map.EnemyTowersLost.Bottom,
+            s.Condition.Health, Share(s.Condition.HealthShare), Share(s.Condition.ManaShare),
+            Share(s.Condition.LowestAllyHealthShare), s.Condition.Gold, s.Condition.Stunned, s.Condition.Silenced,
+            s.Condition.Invisible, s.Condition.VisibleEnemies, s.Condition.VisibleEnemiesNear,
+            s.Condition.VisibleEnemiesWithinFightRange, s.Condition.NearestVisibleEnemyDistance,
+            s.Waves.AheadOfOwnWave, s.Waves.OwnFrontTop, s.Waves.OwnFrontMiddle, s.Waves.OwnFrontBottom,
+            s.Waves.OwnCreepsInLane, s.Waves.OwnCreepsAtFront, s.Waves.SeenEnemiesInMyLane,
+            s.Waves.ClashPoint, s.Waves.ClashPastOwnTower, s.Waves.ClashShortOfEnemyTower, s.Waves.OwnFrontChangeLast10,
+            s.Waves.OwnFrontChangeLast30,
+            s.Waves.OwnHealthAtFront, s.Waves.OwnSiegeInLane, s.Waves.OwnCreepsOffLane, s.Waves.EnemyCreepsKilledByTeam,
+            s.Waves.OwnCreepsKilledByEnemyHeroes, s.Waves.OwnCreepsKilledByEnemyTower, s.Waves.EnemyCreepsKilledByOwnTower,
+            s.Waves.OwnWaveStacked, s.Waves.LastHitsAvailable, s.Waves.DeniesAvailable, s.Waves.OwnSuperCreeps,
+            s.Waves.CreepHitsOnMeLast10,
+            s.MapWaves.ClashTop, s.MapWaves.ClashMiddle, s.MapWaves.ClashBottom, s.MapWaves.FrontChangeTop,
+            s.MapWaves.FrontChangeMiddle, s.MapWaves.FrontChangeBottom, s.MapWaves.EnemyWavesAtOwnTowers,
+            s.MapWaves.OwnWavesAtEnemyTowers, s.MapWaves.SecondsToNextWave,
+            s.Map.IsNight, Round(s.Body.EstimatedArmor), Round(s.Body.MagicResistance), s.Body.MoveSpeed,
+            Round(s.Body.AverageDamage), Round(s.Body.Strength), Round(s.Body.Agility), Round(s.Body.Intellect),
+            s.Fight.EnemiesHittingMe, s.Fight.EnemiesIHit, s.Fight.IStruckFirst,
+            s.Farm.LaneLastHits, s.Farm.Neutrals, s.Farm.Denies, s.Farm.SecondsSinceLastCreepKill, s.Farm.OwnCampsStacked,
+            s.Farm.OwnCampsEmpty,
+            s.Intent.Moves, s.Intent.Attacks, s.Intent.Casts, s.Intent.DestinationDistance, s.Intent.DestinationAdvance,
+            s.Intent.DestinationOnEnemySide, s.Missing.Count, s.Missing.NearestLastSeenDistance,
+            s.Missing.NearestLastSeenSecondsAgo, s.Afflictions.Disables, s.Afflictions.Slows, s.Afflictions.Others,
+            s.Afflictions.DisabledSeconds, s.Afflictions.EnemiesAfflicting,
+            s.Boons.Teleporting, s.Boons.MagicImmune, s.Boons.Saved, s.Boons.Heals, s.Boons.SpeedBuffs, s.Boons.AlliesBuffing,
+            s.Buildings.NearestOwnTowerDistance, s.Buildings.NearestOwnTowerHealthShare, s.Buildings.NearestEnemyTowerDistance,
+            s.Buildings.NearestEnemyTowerHealthShare, s.Buildings.OwnBuildingsUnderAttack,
+            s.Threat.MostKillsOnMeByOneEnemy, s.Threat.NearestVisibleEnemyKillsOnMe, s.Threat.NearestVisibleEnemyKillsOnTeam,
+            s.Threat.NearestVisibleEnemyLevelLead, s.Threat.NearestVisibleEnemyDisablesOnTeam,
+            s.Threat.EnemyDisablersAlive, s.Threat.EnemyInitiatorsAlive, s.Threat.EnemyNukersAlive, s.Threat.EnemyEscapesAlive,
+            s.Threat.EnemyMeleeAlive,
+            s.Lane.IAmMelee, s.Lane.OpponentMelee, s.Lane.LevelLead, s.Lane.KillsOnMe, s.Lane.MyKillsOnThem, s.Lane.SeenDistance,
+            s.Lane.DamageToThem, s.Lane.DamageFromThem, s.RoleConfidence,
+            s.Surroundings.MoveSpeed, s.Surroundings.AdvanceSpeed, s.Surroundings.BuybackReady, s.Surroundings.UnderSmoke,
+            s.Surroundings.AlliesUnderSmoke, s.Surroundings.InOwnObserverVision, s.Surroundings.AlliesWithTeleportReady,
+            s.Surroundings.FacingEnemyBase, s.Surroundings.FacingNearestSeenEnemy, s.Surroundings.StashItems,
+            s.Surroundings.OwnCouriersAlive, s.Surroundings.EnemyCouriersAlive, s.Surroundings.PhysicalTakenLast6,
+            s.Surroundings.MagicalTakenLast6, s.Surroundings.PureTakenLast6, s.Surroundings.HealingReceivedLast6,
+            s.Surroundings.HealingDoneLast6,
+            s.Signals.GoldFromCreeps, s.Signals.GoldFromNeutrals, s.Signals.GoldFromHeroes, s.Signals.GoldFromObjectives,
+            s.Signals.ExperienceGained, s.Signals.AllyPingsNear, s.Signals.OwnPings, s.Signals.EnemySpellsOnMe,
+            s.Signals.MySpellsOnEnemies, s.Signals.SecondsToNextPowerRune,
+            s.Momentum.KillStreak, s.Momentum.RecentDeaths, s.Momentum.TeamKillsLastMinute, s.Momentum.EnemyKillsLastMinute,
+            s.Momentum.EnemiesWithUltimateLevel, s.Momentum.SecondsSinceMyBigItem,
+            s.Kit.EnemiesWithStun, s.Kit.EnemiesWithSilenceOrHex, s.Kit.EnemiesWithEscape, s.Kit.EnemiesWithInvisibility,
+            s.Kit.MyDisableReady, s.Kit.MyEscapeReady,
+            s.Vision.OwnJungle, s.Vision.EnemyJungle, s.Vision.River,
+            s.Hidden.NearestEnemyDistance, s.Hidden.EnemiesNear, s.Hidden.EnemiesWithinFightRange,
+            s.Hidden.EnemySmokeSecondsAgo, Share(s.Hidden.EnemiesHealthShare), s.Hidden.EnemyScanSecondsAgo,
+            s.Hidden.EnemyPowerRuneSecondsAgo, s.Hidden.EnemyWaveAhead, s.Hidden.EnemyCreepsAtFront, s.Hidden.WaveHealthBalanceAtFront, s.Hidden.EnemyWaveStacked, s.Hidden.EnemyCampsStacked, s.Hidden.EnemyBuildingsUnderAttack,
+            s.Hidden.EnemiesInMyLane, s.Hidden.InEnemyObserverVision, s.Vision.HiddenEnemyInOwnJungle, s.Hidden.EnemiesUnderSmoke, s.Hidden.EnemiesWithBuyback, s.Hidden.EnemiesWithTeleportReady,
+            s.Hidden.PowerRuneOnMap, s.Hidden.EnemyBigItemsLast2Minutes,
+            s.Hidden.EnemiesWithDisableReadyNear, s.Hidden.EnemiesUltimateReadyNear, s.Hidden.EnemiesBlackKingBarReadyNear, s.Lane.HiddenDistance,
+            s.Lane.HiddenNetWorthLead, s.Hidden.SeenByEnemies);
+    }
+
+    // Three decimals are finer than anything the model can use, and keep the export small.
+    private static double? Share(double? value) => value is { } share ? Math.Round(share, 3) : null;
+
+    // One decimal for attributes and armor, as the game shows them.
+    private static double? Round(double? value) => value is { } number ? Math.Round(number, 1) : null;
+}

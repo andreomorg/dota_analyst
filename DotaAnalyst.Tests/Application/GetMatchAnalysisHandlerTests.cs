@@ -17,6 +17,103 @@ public class GetMatchAnalysisHandlerTests
     private static readonly AccountId Me = MatchPlayerBuilder.Account(99517715);
     private static readonly DateTimeOffset Now = new(2026, 10, 11, 12, 0, 0, TimeSpan.Zero);
 
+    private static FakeHeroCatalog DraftCatalog() => new(new Hero(31, "Lich")
+    {
+        Details = new HeroDetails(HeroAttribute.Intelligence, HeroAttackType.Ranged,
+            new HashSet<HeroRole> { HeroRole.Support, HeroRole.Nuker }),
+    });
+
+    [Fact]
+    public async Task Draft_ProfilesWithoutReplay_CountsKnownHeroesAndPreservesUnknownProfiles()
+    {
+        var match = CreateMatch(Team.Dire,
+            MatchPlayerBuilder.Create(accountId: Me, heroId: 31, team: Team.Dire),
+            MatchPlayerBuilder.Create(heroId: 28, team: Team.Radiant));
+        var handler = CreateHandler(new FakeReplayAnalyzer(match), heroes: DraftCatalog());
+
+        var draft = (await handler.HandleAsync(MatchIdOf(10), Me, CancellationToken.None))!.Draft!;
+
+        Assert.Equal(Team.Dire, draft.Teams[0].Team);
+        Assert.True(draft.Teams[0].IsPlayersTeam);
+        Assert.False(draft.Teams[1].IsPlayersTeam);
+        var hero = Assert.Single(draft.Teams[0].Heroes);
+        Assert.Equal(HeroAttribute.Intelligence, hero.Attribute);
+        Assert.Equal(HeroAttackType.Ranged, hero.AttackType);
+        Assert.Equal([HeroRole.Support, HeroRole.Nuker], hero.Roles);
+        Assert.Equal(1, draft.Teams[0].Summary.Roles.Single(row => row.Role == HeroRole.Support).Count);
+        Assert.Equal(1, draft.Teams[0].Summary.Attributes.Single(row => row.Attribute == HeroAttribute.Intelligence).Count);
+        Assert.Equal(1, draft.Teams[0].Summary.AttackTypes.Single(row => row.AttackType == HeroAttackType.Ranged).Count);
+        Assert.Null(Assert.Single(draft.Teams[1].Heroes).Roles);
+        Assert.All(draft.Teams[1].Summary.Roles, row => Assert.Equal(0, row.Count));
+        Assert.Empty(draft.Enemies);
+    }
+
+    [Fact]
+    public async Task Draft_NullWithoutAnyDraftedProfile()
+    {
+        var handler = CreateHandler(UnparsedMatchWithMe());
+        Assert.Null((await handler.HandleAsync(MatchIdOf(10), Me, CancellationToken.None))!.Draft);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Draft_Ready_UsesFinalBlowsAndExistingDamageTotals(bool extraKill)
+    {
+        var replay = TeamfightReplay(deaths:
+        [
+            new HeroDeath(31, 100, 0, 0, KillerKind.Hero, 28, false),
+            new HeroDeath(31, 200, 0, 0, KillerKind.Hero, 2, false),
+            new HeroDeath(31, 300, 0, 0, KillerKind.Hero, 28, true),
+            new HeroDeath(extraKill ? 31 : 5, 350, 0, 0, KillerKind.Hero, 28, false),
+            new HeroDeath(28, 400, 0, 0, KillerKind.Hero, 31, false),
+            new HeroDeath(2, 450, 0, 0, KillerKind.Hero, 5, false, assistHeroIds: [31]),
+        ], damage:
+        [
+            new DamageRow(28, "hero", 31, "hero", null, 100),
+            new DamageRow(2, "hero", 31, "hero", null, 200),
+            new DamageRow(2, "summons", 31, "hero", null, 50),
+            new DamageRow(2, "hero", 31, "illusion", null, 999),
+            new DamageRow(31, "hero", 28, "hero", null, 300),
+        ]);
+        var handler = CreateHandler(new FakeReplayAnalyzer(TeamfightMatch()), heroes: DraftCatalog(),
+            replays: new FakeReplayAnalysisRepository(SavedReplayAnalysis.Ready(replay, Now)));
+
+        var analysis = (await handler.HandleAsync(MatchIdOf(10), Me, CancellationToken.None))!;
+
+        Assert.Equal(extraKill ? new[] { 28, 2 } : [2, 28], analysis.Draft!.Enemies.Select(hero => hero.HeroId));
+        Assert.Equal(new DraftEnemy(2, GetMatchAnalysisHandler.UnknownHeroName, 1, 0, 250, 0), analysis.Draft.Enemies.Single(hero => hero.HeroId == 2));
+        Assert.Equal(new DraftEnemy(28, GetMatchAnalysisHandler.UnknownHeroName, extraKill ? 2 : 1, 1, 100, 300), analysis.Draft.Enemies.Single(hero => hero.HeroId == 28));
+        Assert.Equal(analysis.Damage!.FromHeroes.Sum(row => row.Amount), analysis.Draft.Enemies.Sum(row => row.DamageToPlayer));
+    }
+
+    [Fact]
+    public async Task Draft_ReadyWithoutDamage_PreservesUnknownDamage()
+    {
+        var replay = TeamfightReplay(deaths: [], damage: null);
+        var handler = CreateHandler(new FakeReplayAnalyzer(TeamfightMatch()), heroes: DraftCatalog(),
+            queue: new FakeReplayParseQueue { Result = ReplayEnqueueResult.Unavailable },
+            replays: new FakeReplayAnalysisRepository(SavedReplayAnalysis.Ready(replay, Now)));
+        var enemies = (await handler.HandleAsync(MatchIdOf(10), Me, CancellationToken.None))!.Draft!.Enemies;
+        Assert.NotEmpty(enemies);
+        Assert.All(enemies, hero => { Assert.Null(hero.DamageToPlayer); Assert.Null(hero.DamageFromPlayer); });
+    }
+
+    [Fact]
+    public async Task Draft_ProcessingReplay_DoesNotExposeSavedInteractions()
+    {
+        var queue = new FakeReplayParseQueue();
+        queue.Queued.Add(10);
+        var replay = TeamfightReplay(deaths: [], damage: []);
+        var handler = CreateHandler(new FakeReplayAnalyzer(TeamfightMatch()), heroes: DraftCatalog(), queue: queue,
+            replays: new FakeReplayAnalysisRepository(SavedReplayAnalysis.Ready(replay, Now)));
+
+        var analysis = (await handler.HandleAsync(MatchIdOf(10), Me, CancellationToken.None))!;
+        Assert.Equal(ReplayStatus.Processing, analysis.ReplayStatus);
+        Assert.NotNull(analysis.Draft);
+        Assert.Empty(analysis.Draft.Enemies);
+    }
+
     [Fact]
     public async Task CachedUnparsedMatch_StillInvokesOpenDotaCoordination()
     {
@@ -337,7 +434,7 @@ public class GetMatchAnalysisHandlerTests
             MatchPlayerBuilder.Create(accountId: null, heroId: 2, team: Team.Dire))
         with { ReplayUrl = ReplayUrl };
 
-    private static ReplayAnalysis TeamfightReplay(IReadOnlyList<HeroDeath> deaths, IReadOnlyList<DamageRow> damage)
+    private static ReplayAnalysis TeamfightReplay(IReadOnlyList<HeroDeath> deaths, IReadOnlyList<DamageRow>? damage)
     {
         var players = new[]
         {
@@ -1006,13 +1103,14 @@ public class GetMatchAnalysisHandlerTests
         TimeProvider? clock = null,
         FakeItemCatalog? items = null,
         FakeDistributions? baseline = null,
-        IOpenDotaParseCoordinator? parsing = null) =>
+        IOpenDotaParseCoordinator? parsing = null,
+        FakeHeroCatalog? heroes = null) =>
         new(
             analyzer,
             repository ?? new FakeMatchRepository(),
             replays ?? new FakeReplayAnalysisRepository(),
             queue ?? new FakeReplayParseQueue(),
-            new FakeHeroCatalog(new Hero(31, "Lich")),
+            heroes ?? new FakeHeroCatalog(new Hero(31, "Lich")),
             // Names only by default (no details: no item build).
             items ?? new FakeItemCatalog(new Item(1, "Blink Dagger"), new Item(2, "Trusty Shovel")),
             new DistributionBaselineProvider(baseline ?? new FakeDistributions(), NullLogger<DistributionBaselineProvider>.Instance),

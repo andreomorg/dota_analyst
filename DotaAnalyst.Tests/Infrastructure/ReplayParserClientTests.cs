@@ -340,6 +340,105 @@ public class ReplayParserClientTests
         Assert.Single(archive.Kept);
     }
 
+    // MatchJson plus the sections the prediction models read (20/10/2026): vitals next to the positions, waves, combat
+    // buckets, inventory changes and cooldowns; 21/10/2026 also buffs, building health, off-lane creeps, lane creep
+    // deaths, creep hits on heroes, neutral camps, economy, runes on the map, couriers and typed damage.
+    internal static string ModelJson() => MatchJson()
+        .Replace("\"positions\": [] }", """
+            "positions": [ { "player": 0, "samples": [[0, 0, 0]], "vitals": [[600, 600, 300, 300, 0, 0, 600]],
+              "stats": [[1, 25, 300, 50, 54, 20, 18, 15]] } ], "waves": [], "dayNight": [[0, true]], "offLaneCreeps": [],
+              "creepHeroDamage": [[26, "middle", "radiant", 0, 1]],
+              "couriers": [{ "id": "radiant:1", "team": "radiant", "samples": [[0, 1, -6841, -6841, false]] }] }
+            """)
+        .Replace("\"combat\": { \"damage\": [],", """
+            "combat": { "buckets": [{ "player": 0, "toHeroes": [], "fromHeroes": [], "byType": [], "healing": [] }],
+              "heroHits": [], "creepKills": [], "debuffs": [], "buffs": [],
+              "laneCreepDeaths": [[32.9, "middle", "radiant", "hero", 0, -847, -733]], "economy": [[-90, 0, 0, 0, 600]], "damage": [],
+            """)
+        .Replace("\"items\": { \"purchases\": [], \"uses\": [], \"final\": [] }",
+            "\"items\": { \"purchases\": [], \"uses\": [], \"final\": [], \"slots\": [], \"cooldowns\": [] }")
+        .Replace("\"abilities\": { \"upgrades\": [", "\"abilities\": { \"cooldowns\": [], \"upgrades\": [")
+        .Replace("\"objectives\": { \"buildings\": [],", """
+            "objectives": {
+              "buildingHealth": [{ "building": "npc_dota_goodguys_tower1_mid", "team": "radiant", "kind": "tower", "lane": "middle",
+                "tier": 1, "x": -1544, "y": -1408, "health": [[0, 1800, 1800]] }],
+              "neutralCamps": [{ "id": "camp:-1454:-3356", "x": -1454, "y": -3356, "type": "large", "alive": [[0, 0]] }],
+              "runesOnMap": [[122, 7, -1640, 1112, 1]], "buildings": [],
+            """);
+
+    [Fact]
+    public async Task ParseFresh_WithAKeptDocumentThatHasTheModelSections_ReadsItWithoutCallingTheParser()
+    {
+        var parser = new FakeParser(Problem(HttpStatusCode.InternalServerError));
+        var archive = new FakeArchive { Stored = ModelJson() };
+
+        var analysis = await CreateClient(parser, archive: archive).ParseFreshAsync(Match, ReplayUrl, CancellationToken.None);
+
+        Assert.Empty(parser.Requests);
+        Assert.Empty(archive.Kept);
+        Assert.False(analysis.IsOutdated);
+    }
+
+    [Fact]
+    public async Task ParseFresh_WithAnOlderKeptDocument_AsksTheParser_AndKeepsTheNewDocument()
+    {
+        // Up to date for the analysis page (ParseAsync would use it), but without the models' sections.
+        var archive = new FakeArchive { Stored = MatchJson() };
+        var parser = new FakeParser(Json(HttpStatusCode.OK, ModelJson(), "application/json"));
+
+        await CreateClient(parser, archive: archive).ParseFreshAsync(Match, ReplayUrl, CancellationToken.None);
+
+        Assert.Single(parser.Requests);
+        Assert.Contains("\"vitals\"", Assert.Single(archive.Kept).Document);
+    }
+
+    [Fact]
+    public async Task Parse_StillUsesAnOlderKeptDocument()
+    {
+        // The plain parse is unchanged: an up-to-date analysis from an older document needs no download.
+        var parser = new FakeParser(Problem(HttpStatusCode.InternalServerError));
+
+        await CreateClient(parser, archive: new FakeArchive { Stored = MatchJson() }).ParseAsync(Match, ReplayUrl, CancellationToken.None);
+
+        Assert.Empty(parser.Requests);
+    }
+
+    public static TheoryData<string, string> WithoutAModelSection => new()
+    {
+        { "no vitals", ModelJson().Replace(", \"vitals\": [[600, 600, 300, 300, 0, 0, 600]]", "") },
+        { "no stats", System.Text.RegularExpressions.Regex.Replace(ModelJson(), ",\\s*\"stats\": \\[\\[[^\\]]*\\]\\]", "") },
+        { "no waves", ModelJson().Replace(", \"waves\": []", "") },
+        { "no day/night", ModelJson().Replace(", \"dayNight\": [[0, true]]", "") },
+        { "no buckets", ModelJson().Replace(
+            "\"buckets\": [{ \"player\": 0, \"toHeroes\": [], \"fromHeroes\": [], \"byType\": [], \"healing\": [] }],", "") },
+        { "no hero hits", ModelJson().Replace("\"heroHits\": [], ", "") },
+        { "no creep kills", ModelJson().Replace("\"creepKills\": [], ", "") },
+        { "no debuffs", ModelJson().Replace("\"debuffs\": [], ", "") },
+        { "no slots", ModelJson().Replace(", \"slots\": []", "") },
+        { "no item cooldowns", ModelJson().Replace(", \"slots\": [], \"cooldowns\": []", ", \"slots\": []") },
+        { "no ability cooldowns", ModelJson().Replace("\"cooldowns\": [], \"upgrades\"", "\"upgrades\"") },
+        { "no positions at all", System.Text.RegularExpressions.Regex.Replace(ModelJson(), "\"positions\": \\[.*?\\] \\} \\]", "\"positions\": []",
+            System.Text.RegularExpressions.RegexOptions.Singleline) },
+        { "no buffs", ModelJson().Replace("\"buffs\": [],", "") },
+        { "no building health", System.Text.RegularExpressions.Regex.Replace(ModelJson(), "\"buildingHealth\": \\[.*?\\]\\]\\s*\\}\\],", "",
+            System.Text.RegularExpressions.RegexOptions.Singleline) },
+        { "no off-lane creeps", ModelJson().Replace(", \"offLaneCreeps\": []", "") },
+        { "no lane creep deaths", ModelJson().Replace("\"laneCreepDeaths\": [[32.9, \"middle\", \"radiant\", \"hero\", 0, -847, -733]],", "") },
+        { "no economy", ModelJson().Replace("\"economy\": [[-90, 0, 0, 0, 600]],", "") },
+        { "no runes on the map", ModelJson().Replace("\"runesOnMap\": [[122, 7, -1640, 1112, 1]],", "") },
+        { "no typed damage", ModelJson().Replace("\"byType\": [], ", "") },
+    };
+
+    [Theory]
+    [MemberData(nameof(WithoutAModelSection))]
+    public void HasModelSections_NeedsEveryOne(string _, string document)
+    {
+        var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+
+        Assert.True(ReplayParserMappings.HasModelSections(JsonSerializer.Deserialize<ReplayParserMatchResponse>(ModelJson(), options)!));
+        Assert.False(ReplayParserMappings.HasModelSections(JsonSerializer.Deserialize<ReplayParserMatchResponse>(document, options)!));
+    }
+
     [Fact]
     public async Task Parse_WithoutCombat_IsAnUnreadableReplay()
     {

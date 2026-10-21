@@ -41,11 +41,14 @@ public class OpenDotaItemCatalog(
 
     protected override string? DetailsOf(Item item) => item.Details is { } details
         ? JsonSerializer.Serialize(
-            new StoredItemDetails(details.Key, details.Cost, details.Components, details.IsConsumable), JsonOptions)
+            new StoredItemDetails(details.Key, details.Cost, details.Components, details.IsConsumable, 2,
+                details.Abilities, details.Behavior, details.Cooldown, details.ManaCost, details.Values, details.HasCharges), JsonOptions)
         : null;
 
-    // Copies saved before the item build (sprint 15) have names only.
-    protected override bool IsComplete(SavedCatalog saved) => saved.Details.Count > 0;
+    // Names-only copies and readable details saved before the current ability fields must be refreshed. An item without
+    // details or with unreadable ones does not force a reload (it would reload on every cache miss): its details just go.
+    protected override bool IsComplete(SavedCatalog saved) =>
+        saved.Details.Count > 0 && saved.Details.Values.All(json => ReadDetails(json) is null || IsCurrent(json));
 
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -61,6 +64,10 @@ public class OpenDotaItemCatalog(
         {
             return JsonSerializer.Deserialize<StoredItemDetails>(json, JsonOptions) is { Key: not null } stored
                 ? new ItemDetails(stored.Key, stored.Cost, stored.Components, stored.IsConsumable)
+                {
+                    Abilities = stored.Abilities ?? [], Behavior = stored.Behavior ?? [], Cooldown = stored.Cooldown,
+                    ManaCost = stored.ManaCost, Values = stored.Values ?? [], HasCharges = stored.HasCharges,
+                }
                 : null;
         }
         catch (Exception ex) when (ex is JsonException or ArgumentException)
@@ -70,5 +77,19 @@ public class OpenDotaItemCatalog(
     }
 
     // The format of catalog_entries.details for items.
-    private sealed record StoredItemDetails(string? Key, int Cost, IReadOnlyList<string>? Components, bool IsConsumable);
+    private static bool IsCurrent(string? json)
+    {
+        try
+        {
+            return json is not null && ReadDetails(json) is not null
+                && JsonSerializer.Deserialize<StoredItemDetails>(json, JsonOptions) is
+                    { Version: 2, Abilities: not null, Behavior: not null, Values: not null };
+        }
+        catch (JsonException) { return false; }
+    }
+
+    private sealed record StoredItemDetails(string? Key, int Cost, IReadOnlyList<string>? Components, bool IsConsumable,
+        int Version = 0, IReadOnlyList<ItemAbility>? Abilities = null, IReadOnlyList<string>? Behavior = null,
+        double? Cooldown = null, double? ManaCost = null,
+        IReadOnlyList<DotaAnalyst.Domain.Abilities.AbilityValue>? Values = null, bool HasCharges = false);
 }

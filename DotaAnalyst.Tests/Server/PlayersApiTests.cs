@@ -1,9 +1,12 @@
 using System.Net;
 using System.Text.Json;
 using DotaAnalyst.Application.Abstractions;
+using DotaAnalyst.Domain.Heroes;
 using DotaAnalyst.Domain.Matches;
 using DotaAnalyst.Domain.Replays;
 using DotaAnalyst.Tests.Domain;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace DotaAnalyst.Tests.Server;
 
@@ -75,6 +78,46 @@ public class PlayersApiTests
         // Unparsed, but replay parsing is off.
         Assert.Equal("unavailable", json.GetProperty("replayStatus").GetString());
         Assert.Equal(JsonValueKind.Null, json.GetProperty("laning").ValueKind);
+        Assert.Equal(JsonValueKind.Null, json.GetProperty("draft").ValueKind);
+    }
+
+    [Fact]
+    public async Task MatchAnalysis_DraftHasAdditiveCamelCaseProfileAndSummary()
+    {
+        using var factory = new ApiFactory();
+        factory.Analyzer.Matches[MatchIdValue] = CreateMatch();
+        using var app = factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+            services.AddSingleton<IHeroCatalog>(new DraftHeroCatalog())));
+
+        var response = await app.CreateClient().GetAsync($"/api/v1/players/{MyAccountId}/matches/{MatchIdValue}");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var draft = (await ReadJsonAsync(response)).GetProperty("draft");
+        Assert.Equal(["teams", "enemies"], draft.EnumerateObject().Select(property => property.Name));
+        Assert.Equal(0, draft.GetProperty("enemies").GetArrayLength());
+        var team = draft.GetProperty("teams")[0];
+        Assert.True(team.GetProperty("isPlayersTeam").GetBoolean());
+        Assert.Equal("radiant", team.GetProperty("team").GetString());
+        var hero = team.GetProperty("heroes")[0];
+        Assert.Equal(31, hero.GetProperty("heroId").GetInt32());
+        Assert.Equal("intelligence", hero.GetProperty("attribute").GetString());
+        Assert.Equal("ranged", hero.GetProperty("attackType").GetString());
+        Assert.Equal("support", hero.GetProperty("roles")[0].GetString());
+        var summary = team.GetProperty("summary");
+        var support = summary.GetProperty("roles").EnumerateArray().Single(row => row.GetProperty("role").GetString() == "support");
+        Assert.Equal(1, support.GetProperty("count").GetInt32());
+        Assert.Equal("melee", summary.GetProperty("attackTypes")[0].GetProperty("attackType").GetString());
+        Assert.Equal("strength", summary.GetProperty("attributes")[0].GetProperty("attribute").GetString());
+    }
+
+    private sealed class DraftHeroCatalog : IHeroCatalog
+    {
+        public Task<IReadOnlyDictionary<int, Hero>> GetHeroesAsync(CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyDictionary<int, Hero>>(new Dictionary<int, Hero>
+            {
+                [31] = new(31, "Lich") { Details = new HeroDetails(HeroAttribute.Intelligence,
+                    HeroAttackType.Ranged, new HashSet<HeroRole> { HeroRole.Support }) },
+            });
     }
 
     [Fact]

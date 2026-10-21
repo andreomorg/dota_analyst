@@ -9,6 +9,30 @@ namespace DotaAnalyst.Tests.Domain;
 
 public class CoachingDecisionSceneTests
 {
+    [Fact]
+    public void ControlWindowNeedsNoRetrospectiveEpisodeAndKeepsEarlierFactsOnly()
+    {
+        var facts = CoachingDecisionSceneBuilder.AtAnchor(Replay(true), 1, 20,
+            [new(1, [new(19, 10, 20), new(21, 900, 900)])]);
+        Assert.Equal(20, facts.AnchorSeconds);
+        Assert.Equal(19, Assert.Single(facts.Positions).SampleSeconds);
+        Assert.Equal(100, facts.Economy!.NetWorth);
+        Assert.Empty(facts.RecentPurchases!);
+        Assert.Empty(facts.RecentAbilityUpgrades!);
+        Assert.Empty(facts.RecentObjectives!);
+    }
+
+    [Fact]
+    public void ControlWindowRejectsInvalidAnchorOrUnknownHero()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => CoachingDecisionSceneBuilder.AtAnchor(Replay(), 1, -1, null));
+        Assert.Throws<ArgumentOutOfRangeException>(() => CoachingDecisionSceneBuilder.AtAnchor(Replay(), 1, 61, null));
+        Assert.Throws<ArgumentException>(() => CoachingDecisionSceneBuilder.AtAnchor(Replay(), 999, 20, null));
+        var replay = Replay();
+        var withoutTimeline = new ReplayAnalysis(replay.MatchId, replay.EndsAtSeconds, replay.Players);
+        Assert.Throws<ArgumentException>(() => CoachingDecisionSceneBuilder.AtAnchor(withoutTimeline, 1, 20, null));
+    }
+
     private static ReplayAnalysis Replay(bool withEvents = false)
     {
         MatchId.TryCreate(1, out var id);

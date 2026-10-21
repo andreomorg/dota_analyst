@@ -113,7 +113,13 @@ public class LayeredCatalogTests
     }
 
     private static SavedCatalog Saved(TimeSpan age) =>
-        new(new Dictionary<int, string> { [31] = "Saved Lich" }, Now - age);
+        new(new Dictionary<int, string> { [31] = "Saved Lich" }, Now - age)
+        {
+            Details = new Dictionary<int, string>
+            {
+                [31] = """{"primaryAttribute":2,"attackType":1,"roles":[1,2]}""",
+            },
+        };
 
     private static MemoryCache NewCache() => new(new MemoryCacheOptions { SizeLimit = 1000 });
 

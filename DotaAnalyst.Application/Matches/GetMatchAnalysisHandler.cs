@@ -61,6 +61,8 @@ public class GetMatchAnalysisHandler(
             .ToList();
 
         var (replayStatus, replay) = await GetReplayAsync(match, cancellationToken);
+        var playerDamage = replay?.Damage is { } damageRows && currentPlayer is not null
+            ? ToDamage(damageRows, match, currentPlayer, names) : null;
         var replayMetrics = replay?.Metrics is { } metrics && replay.Purchases is { } purchases
             ? FirstBigItemMetric.AddTo(metrics, purchases, itemsTask.Result)
             : replay?.Metrics;
@@ -81,7 +83,7 @@ public class GetMatchAnalysisHandler(
             Timeline: replay?.Timeline is { } timeline ? ToTimelineChart(replay, timeline, currentPlayer, names) : null,
             Deaths: replay?.Deaths is { } deaths && currentPlayer is not null ? ToDeaths(deaths, currentPlayer, names) : null,
             Wards: replay?.Wards is { } wards ? ToWards(wards, currentPlayer, names) : null,
-            Damage: replay?.Damage is { } damage && currentPlayer is not null ? ToDamage(damage, match, currentPlayer, names) : null,
+            Damage: playerDamage,
             // Deaths read before the damage have no assists: no fights until the replay is read again.
             Fights: replay?.Deaths is { } fightDeaths && replay.Damage is not null ? ToFights(fightDeaths, match, currentPlayer) : null,
             ItemBuild: replay?.Purchases is { } itemPurchases && currentPlayer is not null
@@ -103,7 +105,43 @@ public class GetMatchAnalysisHandler(
                 : null,
             OpenDotaProcessing: openDotaProcessing,
             OpenDotaExtras: currentPlayer?.SupplementalStats is { } supplemental
-                ? ToSupplemental(supplemental, itemsTask.Result) : null);
+                ? ToSupplemental(supplemental, itemsTask.Result) : null,
+            Draft: currentPlayer is null ? null : ToDraft(match, currentPlayer, heroesTask.Result, names, replay, playerDamage));
+    }
+
+    private static MatchDraft? ToDraft(MatchDetails match, MatchPlayer player,
+        IReadOnlyDictionary<int, Hero> catalog, NameLookup names, ReplayAnalysis? replay, PlayerDamage? damage)
+    {
+        HeroDetails? Profile(int id) => catalog.GetValueOrDefault(id)?.Details;
+        if (!match.Players.Any(hero => Profile(hero.HeroId) is not null))
+        {
+            return null;
+        }
+
+        DraftTeam TeamOf(Team team)
+        {
+            var heroes = match.Players.Where(hero => hero.Team == team).ToList();
+            var profile = DraftProfile.From(heroes.Select(hero => Profile(hero.HeroId)));
+            return new(team, team == player.Team, heroes.Select(hero => new DraftHero(
+                hero.HeroId, names.Hero(hero.HeroId), Profile(hero.HeroId)?.PrimaryAttribute,
+                Profile(hero.HeroId)?.AttackType, Profile(hero.HeroId)?.Roles.Order().ToList())).ToList(),
+                new DraftSummary(
+                    profile.Roles.Select(row => new DraftRoleCount(row.Key, row.Value)).ToList(),
+                    profile.AttackTypes.Select(row => new DraftAttackCount(row.Key, row.Value)).ToList(),
+                    profile.Attributes.Select(row => new DraftAttributeCount(row.Key, row.Value)).ToList()));
+        }
+
+        // Reincarnations are visible on the death map but do not award scoreboard kills.
+        var deaths = replay?.Deaths?.Where(death => !death.Reincarnated).ToList();
+        var enemies = replay is null ? [] : match.Players.Where(hero => hero.Team != player.Team)
+            .Select(hero => new DraftEnemy(hero.HeroId, names.Hero(hero.HeroId),
+                deaths?.Count(death => death.HeroId == player.HeroId && death.KillerHeroId == hero.HeroId) ?? 0,
+                deaths?.Count(death => death.HeroId == hero.HeroId && death.KillerHeroId == player.HeroId) ?? 0,
+                damage is null ? null : damage.FromHeroes.FirstOrDefault(row => row.HeroId == hero.HeroId)?.Amount ?? 0,
+                damage is null ? null : damage.ToHeroes.FirstOrDefault(row => row.HeroId == hero.HeroId)?.Amount ?? 0))
+            .OrderByDescending(hero => hero.KillsOnPlayer).ThenByDescending(hero => hero.DamageToPlayer)
+            .ThenBy(hero => hero.HeroId).ToList();
+        return new([TeamOf(player.Team), TeamOf(player.Team == Team.Radiant ? Team.Dire : Team.Radiant)], enemies);
     }
 
     private static OpenDotaPlayerExtras ToSupplemental(SupplementalPlayerStats stats, IReadOnlyDictionary<int, Item> items)

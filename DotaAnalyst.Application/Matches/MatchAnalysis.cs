@@ -31,6 +31,7 @@ namespace DotaAnalyst.Application.Matches;
 /// <param name="Stats">Every statistic of every hero minute by minute, read from the replay, so any moment or period can be shown; null unless replayStatus is ready (and for replays read before the timeline existed).</param>
 /// <param name="OpenDotaProcessing">External processing status, independent of replayStatus; absent for older API responses.</param>
 /// <param name="OpenDotaExtras">Optional external aggregates for the selected player, with explicit source and scope.</param>
+/// <param name="Draft">Catalog composition and observed enemy interactions; null without a player or any known drafted hero profile.</param>
 public record MatchAnalysis(
     long MatchId,
     int DurationSeconds,
@@ -56,7 +57,8 @@ public record MatchAnalysis(
     PlayerAbilityBuild? AbilityBuild = null,
     MatchStats? Stats = null,
     OpenDotaProcessing? OpenDotaProcessing = null,
-    OpenDotaPlayerExtras? OpenDotaExtras = null);
+    OpenDotaPlayerExtras? OpenDotaExtras = null,
+    MatchDraft? Draft = null);
 
 /// <summary>Every statistic of every hero, one value per point of the match (each minute, then the end): the value at any moment is the last point at or before it, and what happened in a period is the difference between two points.</summary>
 /// <param name="Definitions">What each statistic is (the same catalog for every match).</param>

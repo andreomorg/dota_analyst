@@ -123,7 +123,22 @@ public static class OpenDotaMappings
             key,
             item.Cost ?? 0,
             item.Components?.Where(component => !string.IsNullOrWhiteSpace(component)).Select(component => component!).ToList(),
-            isConsumable: item.Qual?.Contains("consumable", StringComparison.OrdinalIgnoreCase) == true);
+            isConsumable: item.Qual?.Contains("consumable", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            Abilities = OpenDotaKitMappings.Array(item.Abilities).Select(ability => new ItemAbility(
+                OpenDotaKitMappings.Text(ability, "type") switch
+                {
+                    "active" => ItemAbilityKind.Active, "passive" => ItemAbilityKind.Passive,
+                    "toggle" => ItemAbilityKind.Toggle, "use" => ItemAbilityKind.Use,
+                    "upgrade" => ItemAbilityKind.Upgrade, _ => ItemAbilityKind.Other,
+                }, OpenDotaKitMappings.Text(ability, "title"), OpenDotaKitMappings.Text(ability, "description"))).ToArray(),
+            Behavior = OpenDotaKitMappings.Strings(item.Behavior),
+            Cooldown = OpenDotaKitMappings.Numbers(item.Cd).Cast<double?>().FirstOrDefault(),
+            ManaCost = OpenDotaKitMappings.Numbers(item.Mc).Cast<double?>().FirstOrDefault(),
+            Values = OpenDotaKitMappings.Values(item.Attrib),
+            HasCharges = item.Charges.ValueKind == System.Text.Json.JsonValueKind.True
+                || OpenDotaKitMappings.Numbers(item.Charges).Any(value => value > 0),
+        };
     }
 
     private static Team? ToWinningTeam(bool? radiantWin) => radiantWin switch

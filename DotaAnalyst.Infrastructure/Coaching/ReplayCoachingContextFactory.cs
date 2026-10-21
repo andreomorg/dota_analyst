@@ -24,16 +24,6 @@ public static class ReplayCoachingContextFactory
             ReplayParserMappings.ReadPositions(response));
     }
 
-    private static ReplayParserMatchResponse Read(string document, MatchId matchId)
-    {
-        using var parsed = JsonDocument.Parse(document);
-        if (parsed.RootElement.ValueKind != JsonValueKind.Object
-            || !parsed.RootElement.TryGetProperty("match", out var match) || match.ValueKind != JsonValueKind.Object
-            || !match.TryGetProperty("matchId", out var id) || id.ValueKind != JsonValueKind.String
-            || id.GetString() != matchId.ToString())
-            throw new InvalidDataException("The replay document belongs to a different or unknown match.");
-        var response = JsonSerializer.Deserialize<ReplayParserMatchResponse>(document, CoachingJson.Options)
-            ?? throw new InvalidDataException("Missing replay document.");
-        return response;
-    }
+    private static ReplayParserMatchResponse Read(string document, MatchId matchId) =>
+        ArchivedReplaySource.Read(document, matchId);
 }

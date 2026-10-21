@@ -14,10 +14,10 @@ import (
 	"github.com/andreomorg/dota_analyst/replay-parser/internal/matchdata"
 )
 
-// maxMatchResponseBytes caps the POST /v1/match answer (uncompressed). The spike measured ~270 KB for 30 minutes and
-// ~550 KB for 60, so anything near 4 MB means a collector went wrong (event-by-event data, a loop): refuse it instead
-// of pushing megabytes through the tunnel.
-const maxMatchResponseBytes = 4 << 20
+// maxMatchResponseBytes caps the POST /v1/match answer (uncompressed). With the prediction models' sections (21/10/2026)
+// a 30-minute match is ~1.8 MB and a long one went past 4.3 MB (gzip ~4x smaller through the tunnel), so the cap is
+// 16 MB: anything near it still means a collector went wrong (event-by-event data, a loop) and is refused.
+const maxMatchResponseBytes = 16 << 20
 
 // match answers POST /v1/match: the same request, limits and errors as /v1/laning, the whole match as the answer
 // (the matchdata package is the contract).

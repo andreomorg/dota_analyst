@@ -87,6 +87,22 @@ public class RefreshReplayHandlerTests
         Assert.Empty(analyses.Saved);
     }
 
+    [Fact]
+    public async Task Prefetch_OnlyDownloads_WithTheSameUrl_AndSavesNothing()
+    {
+        var parser = new FakeParser(() => throw new InvalidOperationException("must not parse"));
+        var analyses = new FakeAnalyses();
+
+        var result = await Handler(parser, analyses, saved: null, new FakeOpenDota(OpenDotaUrl)).PrefetchAsync(Match, CancellationToken.None);
+        var gone = await Handler(new FakeParser(() => throw new InvalidOperationException()) { PrefetchFails = new ReplayExpiredException("Gone.") },
+            analyses, saved: SavedUrl, new FakeOpenDota(null)).PrefetchAsync(Match, CancellationToken.None);
+
+        Assert.Equal((RefreshReplayResult.Prefetched, RefreshReplayResult.Expired), (result, gone));
+        Assert.Equal([(Match, OpenDotaUrl)], parser.Prefetches);
+        Assert.Empty(parser.FreshCalls);
+        Assert.Empty(analyses.Saved);
+    }
+
     private static RefreshReplayHandler Handler(FakeParser parser, FakeAnalyses analyses, Uri? saved, FakeOpenDota openDota) =>
         new(parser, analyses, new FakeMatches(saved), openDota, new FixedTimeProvider(Now), NullLogger<RefreshReplayHandler>.Instance);
 
@@ -106,6 +122,16 @@ public class RefreshReplayHandlerTests
         {
             FreshCalls.Add((matchId, replayUrl));
             return Task.FromResult(parse());
+        }
+
+        public List<(MatchId MatchId, Uri ReplayUrl)> Prefetches { get; } = [];
+
+        public Exception? PrefetchFails { get; init; }
+
+        public Task PrefetchAsync(MatchId matchId, Uri replayUrl, CancellationToken cancellationToken)
+        {
+            Prefetches.Add((matchId, replayUrl));
+            return PrefetchFails is null ? Task.CompletedTask : Task.FromException(PrefetchFails);
         }
     }
 

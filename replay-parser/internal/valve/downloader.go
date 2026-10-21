@@ -91,6 +91,15 @@ func orDefault(value, fallback int64) int64 {
 // Open starts downloading replayURL and returns the decompressed replay as a stream. Reading the stream reads the
 // download, so ctx must stay alive until the stream is closed. Close releases the decompressor and the connection.
 func (d *Downloader) Open(ctx context.Context, replayURL string) (io.ReadCloser, error) {
+	raw, err := d.OpenCompressed(ctx, replayURL)
+	if err != nil {
+		return nil, err
+	}
+	return d.openCompressed(raw)
+}
+
+// OpenCompressed opens the validated, bounded response without decoding.
+func (d *Downloader) OpenCompressed(ctx context.Context, replayURL string) (io.ReadCloser, error) {
 	u, err := d.parseURL(replayURL)
 	if err != nil {
 		return nil, err
@@ -112,11 +121,19 @@ func (d *Downloader) Open(ctx context.Context, replayURL string) (io.ReadCloser,
 		response.Body.Close()
 		return nil, fmt.Errorf("%w: download of %d bytes, limit %d", ErrTooLarge, response.ContentLength, d.maxDownload)
 	}
+	return &compressedStream{Reader: &limitedReader{r: response.Body, remaining: d.maxDownload, wrap: downloadError}, Closer: response.Body}, nil
+}
 
-	body := &limitedReader{r: response.Body, remaining: d.maxDownload, wrap: downloadError}
+type compressedStream struct {
+	io.Reader
+	io.Closer
+}
+
+func (d *Downloader) openCompressed(raw io.ReadCloser) (io.ReadCloser, error) {
+	body := &limitedReader{r: raw, remaining: d.maxDownload, wrap: downloadError}
 	decompressed, err := Decompress(body)
 	if err != nil {
-		response.Body.Close()
+		raw.Close()
 		if errors.Is(err, io.EOF) {
 			return nil, fmt.Errorf("%w: empty response", ErrDownloadFailed)
 		}
@@ -126,7 +143,7 @@ func (d *Downloader) Open(ctx context.Context, replayURL string) (io.ReadCloser,
 		limited:      &limitedReader{r: decompressed, remaining: d.maxDecompressed, wrap: identity},
 		body:         body,
 		decompressor: decompressed,
-		httpBody:     response.Body,
+		httpBody:     raw,
 	}, nil
 }
 

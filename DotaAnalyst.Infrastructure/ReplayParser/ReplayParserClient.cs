@@ -41,6 +41,7 @@ public class ReplayParserClient(
     public static readonly TimeSpan DefaultBusyWait = TimeSpan.FromSeconds(5);
 
     private const string MatchPath = "v1/match";
+    private const string PrefetchPath = "v1/prefetch";
     private const string ProblemJson = "application/problem+json";
     private const string NgrokErrorHeader = "ngrok-error-code";
 
@@ -56,21 +57,39 @@ public class ReplayParserClient(
         await FromKeptDocumentAsync(matchId, requireModelSections: true, cancellationToken)
         ?? await ParseWithTheParserAsync(matchId, replayUrl, cancellationToken);
 
-    private async Task<ReplayAnalysis> ParseWithTheParserAsync(MatchId matchId, Uri replayUrl, CancellationToken cancellationToken)
+    // POST /v1/prefetch: the parser only downloads the replay into its cache (PF-go). A fresh kept document needs no
+    // download at all.
+    public async Task PrefetchAsync(MatchId matchId, Uri replayUrl, CancellationToken cancellationToken)
+    {
+        if (await FromKeptDocumentAsync(matchId, requireModelSections: true, cancellationToken) is not null)
+        {
+            return;
+        }
+
+        await WithTheParserAsync(PrefetchPath, matchId, replayUrl, (_, _) => Task.FromResult(true), cancellationToken);
+    }
+
+    private Task<ReplayAnalysis> ParseWithTheParserAsync(MatchId matchId, Uri replayUrl, CancellationToken cancellationToken) =>
+        WithTheParserAsync(MatchPath, matchId, replayUrl, (response, ct) => ReadAnalysisAsync(response, matchId, ct), cancellationToken);
+
+    // One call to the parser, with the busy retries; errors become the IReplayParser exceptions.
+    private async Task<T> WithTheParserAsync<T>(
+        string path, MatchId matchId, Uri replayUrl, Func<HttpResponseMessage, CancellationToken, Task<T>> read,
+        CancellationToken cancellationToken)
     {
         for (var attempt = 1; ; attempt++)
         {
             TimeSpan wait;
-            using (var response = await SendAsync(replayUrl, cancellationToken))
+            using (var response = await SendAsync(path, replayUrl, cancellationToken))
             {
                 if (response.IsSuccessStatusCode)
                 {
-                    return await ReadAnalysisAsync(response, matchId, cancellationToken);
+                    return await read(response, cancellationToken);
                 }
 
                 if (!IsBusy(response))
                 {
-                    return await ThrowForErrorAsync(response, matchId, cancellationToken);
+                    await ThrowForErrorAsync(response, matchId, cancellationToken);
                 }
 
                 if (attempt == MaxAttempts)
@@ -124,9 +143,9 @@ public class ReplayParserClient(
     }
 
     // A new HttpRequestMessage each time: one can't be sent twice.
-    private async Task<HttpResponseMessage> SendAsync(Uri replayUrl, CancellationToken cancellationToken)
+    private async Task<HttpResponseMessage> SendAsync(string path, Uri replayUrl, CancellationToken cancellationToken)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Post, MatchPath)
+        using var request = new HttpRequestMessage(HttpMethod.Post, path)
         {
             Content = JsonContent.Create(new ReplayParserRequest(replayUrl.AbsoluteUri), options: JsonOptions),
         };

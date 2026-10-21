@@ -103,8 +103,9 @@ public static class DependencyInjection
                 var options = serviceProvider.GetRequiredService<IOptions<ReplayParserOptions>>().Value;
                 client.BaseAddress = options.BaseUrl;
                 client.Timeout = options.Timeout;
-                // The whole match is ~330 KB for 30 min; the parser itself refuses answers over 4 MB.
-                client.MaxResponseContentBufferSize = 4 * 1024 * 1024;
+                // The whole match is ~1.8 MB for 30 min (4.3 MB for a long one) since the prediction models' sections;
+                // the parser itself refuses answers over 16 MB.
+                client.MaxResponseContentBufferSize = 16 * 1024 * 1024;
             })
             // A redirect is not something our parser does: it is answered as "unavailable" instead of followed.
             // gzip: the parser compresses when asked (~330 KB â†’ ~80 KB), which matters through the ngrok tunnel.

@@ -19,6 +19,8 @@ public enum RefreshReplayResult
     // The parser was busy or unavailable: nothing changed; try again later.
     ParserBusy,
     ParserUnavailable,
+    // PrefetchAsync: the replay is in the parser's cache (or the kept document is already fresh): a refresh can follow.
+    Prefetched,
 }
 
 // Use case of the local re-parse (internal route, the owner's machine): parse a match's replay again so its kept
@@ -32,7 +34,25 @@ public sealed class RefreshReplayHandler(
     TimeProvider timeProvider,
     ILogger<RefreshReplayHandler> logger)
 {
-    public async Task<RefreshReplayResult> HandleAsync(MatchId matchId, CancellationToken cancellationToken)
+    public Task<RefreshReplayResult> HandleAsync(MatchId matchId, CancellationToken cancellationToken) =>
+        WithReplayUrlAsync(matchId, async replayUrl =>
+        {
+            var analysis = await replayParser.ParseFreshAsync(matchId, replayUrl, cancellationToken);
+            await analyses.SaveAsync(SavedReplayAnalysis.Ready(analysis, timeProvider.GetUtcNow()), cancellationToken);
+            return RefreshReplayResult.Refreshed;
+        }, cancellationToken);
+
+    // Downloads the replay into the parser's cache ahead of HandleAsync (a batch keeps the parse slots busy parsing,
+    // not waiting on Valve). Saves nothing.
+    public Task<RefreshReplayResult> PrefetchAsync(MatchId matchId, CancellationToken cancellationToken) =>
+        WithReplayUrlAsync(matchId, async replayUrl =>
+        {
+            await replayParser.PrefetchAsync(matchId, replayUrl, cancellationToken);
+            return RefreshReplayResult.Prefetched;
+        }, cancellationToken);
+
+    private async Task<RefreshReplayResult> WithReplayUrlAsync(
+        MatchId matchId, Func<Uri, Task<RefreshReplayResult>> use, CancellationToken cancellationToken)
     {
         // The site's saved matches have the replay URL; the comparison base's (most of the kept documents) don't, so
         // OpenDota is asked, as the collector does.
@@ -56,9 +76,7 @@ public sealed class RefreshReplayHandler(
 
         try
         {
-            var analysis = await replayParser.ParseFreshAsync(matchId, replayUrl, cancellationToken);
-            await analyses.SaveAsync(SavedReplayAnalysis.Ready(analysis, timeProvider.GetUtcNow()), cancellationToken);
-            return RefreshReplayResult.Refreshed;
+            return await use(replayUrl);
         }
         catch (ReplayExpiredException)
         {

@@ -28,7 +28,16 @@ public sealed class ModelSamplesController(
     /// <summary>Parses a match's replay again so its kept document has the newest sections (never downgrades a saved
     /// analysis: a gone replay changes nothing).</summary>
     [HttpPost("replays/{matchId}/refresh")]
-    public async Task<IActionResult> Refresh(long matchId, CancellationToken cancellationToken)
+    public Task<IActionResult> Refresh(long matchId, CancellationToken cancellationToken) =>
+        Replay(matchId, id => refresh.HandleAsync(id, cancellationToken));
+
+    /// <summary>Downloads a match's replay into the parser's cache ahead of a refresh (a batch keeps the parse slots
+    /// parsing instead of waiting on Valve). Saves nothing.</summary>
+    [HttpPost("replays/{matchId}/prefetch")]
+    public Task<IActionResult> Prefetch(long matchId, CancellationToken cancellationToken) =>
+        Replay(matchId, id => refresh.PrefetchAsync(id, cancellationToken));
+
+    private async Task<IActionResult> Replay(long matchId, Func<MatchId, Task<RefreshReplayResult>> handle)
     {
         var options = settings.Value;
         if (!options.Enabled) return NotFound();
@@ -36,7 +45,7 @@ public sealed class ModelSamplesController(
         if (!MatchId.TryCreate(matchId, out var id)) return Problem(statusCode: 400, title: "Invalid match ID.");
         try
         {
-            var result = await refresh.HandleAsync(id, cancellationToken);
+            var result = await handle(id);
             return Ok(new { status = result });
         }
         catch (DotaAnalyst.Application.Abstractions.StorageUnavailableException)

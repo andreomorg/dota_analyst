@@ -62,10 +62,19 @@ func WithMatchAnalyzer(analyzer MatchAnalyzer) Option {
 	return func(s *server) { s.matchAnalyzer = analyzer }
 }
 
+// Prefetcher stages a replay without acquiring a parse slot.
+type Prefetcher interface {
+	Prefetch(context.Context, string) (int64, error)
+}
+
+func WithPrefetcher(p Prefetcher) Option { return func(s *server) { s.prefetcher = p } }
+
 type server struct {
-	parser        *parsing.Service
-	analyzer      Analyzer
-	matchAnalyzer MatchAnalyzer
+	prefetcher      Prefetcher
+	prefetchTimeout time.Duration
+	parser          *parsing.Service
+	analyzer        Analyzer
+	matchAnalyzer   MatchAnalyzer
 	// maxMatchBytes is the largest /v1/match answer (uncompressed); bigger is a bug, answered with 500.
 	maxMatchBytes int
 	authEnabled   bool
@@ -88,10 +97,11 @@ func NewHandler(source ReplaySource, analyzer Analyzer, config Config, logger *s
 			logger.Info("parse resources", "openMs", m.Open.Milliseconds(), "analyzeMs", m.Analyze.Milliseconds(),
 				"elapsedMs", m.Elapsed.Milliseconds(), "readBytes", m.ReadBytes, "activeAtStart", m.ActiveAtStart)
 		})),
-		analyzer:    analyzer,
-		authEnabled: config.APIKey != "",
-		apiKeyHash:  sha256.Sum256([]byte(config.APIKey)),
-		logger:      logger,
+		prefetchTimeout: config.RequestTimeout,
+		analyzer:        analyzer,
+		authEnabled:     config.APIKey != "",
+		apiKeyHash:      sha256.Sum256([]byte(config.APIKey)),
+		logger:          logger,
 
 		maxMatchBytes: maxMatchResponseBytes,
 	}
@@ -103,6 +113,9 @@ func NewHandler(source ReplaySource, analyzer Analyzer, config Config, logger *s
 	// answer from this service, so a wrong base URL is never mistaken for "replay not found".
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", s.health)
+	if s.prefetcher != nil {
+		mux.Handle("POST /v1/prefetch", s.requireAPIKey(http.HandlerFunc(s.prefetch)))
+	}
 	mux.Handle("POST /v1/laning", s.requireAPIKey(http.HandlerFunc(s.laning)))
 	if s.matchAnalyzer != nil {
 		mux.Handle("POST /v1/match", s.requireAPIKey(http.HandlerFunc(s.match)))
@@ -285,4 +298,35 @@ func writeJSON(w http.ResponseWriter, status int, body any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(body)
+}
+
+func (s *server) prefetch(w http.ResponseWriter, r *http.Request) {
+	var request replayRequest
+	if err := decodeJSON(w, r, &request); err != nil {
+		writeProblem(w, 400, "Invalid request body", err.Error())
+		return
+	}
+	if strings.TrimSpace(request.ReplayURL) == "" {
+		writeProblem(w, 400, "Invalid request body", "replayUrl is required")
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), s.prefetchTimeout)
+	defer cancel()
+	n, err := s.prefetcher.Prefetch(ctx, request.ReplayURL)
+	if errors.Is(err, parsing.ErrBusy) {
+		w.Header().Set("Retry-After", strconv.Itoa(retryAfterSeconds))
+		writeProblem(w, 503, "Busy", err.Error())
+		return
+	}
+	if err != nil {
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			err = fmt.Errorf("%w: %v", parsing.ErrTimedOut, err)
+		}
+		s.writeAnalyzeError(w, r, s.logger, err)
+		return
+	}
+	writeJSON(w, 200, struct {
+		Cached bool  `json:"cached"`
+		Bytes  int64 `json:"bytes"`
+	}{true, n})
 }

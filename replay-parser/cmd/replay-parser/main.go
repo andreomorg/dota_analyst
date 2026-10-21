@@ -55,9 +55,12 @@ func main() {
 }
 
 type config struct {
-	port   string
-	api    httpapi.Config
-	limits valve.Limits
+	cacheDir   string
+	cacheMax   int64
+	prefetches int
+	port       string
+	api        httpapi.Config
+	limits     valve.Limits
 }
 
 func loadConfig() (config, error) {
@@ -70,6 +73,9 @@ func loadConfig() (config, error) {
 	if port, err := strconv.Atoi(c.port); err != nil || port < 1 || port > 65535 {
 		errs = append(errs, fmt.Errorf("PORT %q is not a port number", c.port))
 	}
+	c.cacheDir = os.Getenv("REPLAY_CACHE_DIR")
+	c.cacheMax = int64(envInt("REPLAY_CACHE_MAX_BYTES", int(valve.DefaultCacheMaxBytes), &errs))
+	c.prefetches = envInt("MAX_CONCURRENT_PREFETCHES", 4, &errs)
 	c.api.APIKey = os.Getenv("REPLAY_PARSER_API_KEY")
 	c.api.MaxConcurrentParses = envInt("MAX_CONCURRENT_PARSES", httpapi.DefaultMaxConcurrentParses, &errs)
 	c.limits.MaxDownloadBytes = int64(envInt("MAX_DOWNLOAD_MB", int(valve.DefaultMaxDownloadBytes>>20), &errs)) << 20
@@ -106,8 +112,19 @@ func run(c config, logger *slog.Logger) error {
 			"(local use only)")
 	}
 
-	handler := httpapi.NewHandler(valve.NewDownloader(c.limits), replay.Analyzer{}, c.api, logger,
-		httpapi.WithMatchAnalyzer(replay.MatchAnalyzer{}))
+	cache, err := valve.NewCache(valve.NewDownloader(c.limits), c.cacheDir, c.cacheMax, c.prefetches)
+	if err != nil {
+		return err
+	}
+	if err := cache.Cleanup(); err != nil {
+		return err
+	}
+	options := []httpapi.Option{httpapi.WithMatchAnalyzer(replay.MatchAnalyzer{})}
+	if c.cacheDir != "" {
+		options = append(options, httpapi.WithPrefetcher(cache))
+	}
+	handler := httpapi.NewHandler(cache, replay.Analyzer{}, c.api, logger,
+		options...)
 
 	server := &http.Server{
 		Addr:              ":" + c.port,
@@ -122,6 +139,20 @@ func run(c config, logger *slog.Logger) error {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	go func() {
+		ticker := time.NewTicker(time.Minute)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				if err := cache.Cleanup(); err != nil {
+					logger.Warn("cache cleanup failed", "error", err)
+				}
+			}
+		}
+	}()
 
 	listener, err := net.Listen("tcp", server.Addr)
 	if err != nil {

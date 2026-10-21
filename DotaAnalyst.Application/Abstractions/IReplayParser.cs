@@ -25,4 +25,9 @@ public interface IReplayParser
     // the replay is parsed again. Same exceptions. By default, ParseAsync (parsers that keep no documents).
     Task<ReplayAnalysis> ParseFreshAsync(MatchId matchId, Uri replayUrl, CancellationToken cancellationToken) =>
         ParseAsync(matchId, replayUrl, cancellationToken);
+
+    // Downloads the replay ahead of a ParseFreshAsync, without parsing it (the parser keeps it in its cache), so a batch
+    // re-parse does not wait on Valve inside the parse slots. Nothing to do when the kept document is already fresh.
+    // Same exceptions as ParseAsync. By default nothing (parsers without a cache).
+    Task PrefetchAsync(MatchId matchId, Uri replayUrl, CancellationToken cancellationToken) => Task.CompletedTask;
 }

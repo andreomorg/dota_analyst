@@ -380,6 +380,29 @@ public class ReplayParserClientTests
     }
 
     [Fact]
+    public async Task Prefetch_AsksOnlyForTheDownload_UnlessTheKeptDocumentIsFresh()
+    {
+        var parser = new FakeParser(Json(HttpStatusCode.OK, """{"cached": true, "bytes": 1}""", "application/json"));
+        var archive = new FakeArchive { Stored = MatchJson() }; // without the models' sections
+
+        await CreateClient(parser, archive: archive).PrefetchAsync(Match, ReplayUrl, CancellationToken.None);
+        var fresh = new FakeParser(Problem(HttpStatusCode.InternalServerError));
+        await CreateClient(fresh, archive: new FakeArchive { Stored = ModelJson() }).PrefetchAsync(Match, ReplayUrl, CancellationToken.None);
+
+        Assert.EndsWith("/v1/prefetch", Assert.Single(parser.Requests).Uri);
+        Assert.Empty(archive.Kept);
+        Assert.Empty(fresh.Requests);
+    }
+
+    [Fact]
+    public async Task Prefetch_OfAReplayValveNoLongerHas_IsExpired()
+    {
+        var parser = new FakeParser(Problem(HttpStatusCode.NotFound));
+
+        await Assert.ThrowsAsync<ReplayExpiredException>(() => CreateClient(parser).PrefetchAsync(Match, ReplayUrl, CancellationToken.None));
+    }
+
+    [Fact]
     public async Task ParseFresh_WithAnOlderKeptDocument_AsksTheParser_AndKeepsTheNewDocument()
     {
         // Up to date for the analysis page (ParseAsync would use it), but without the models' sections.

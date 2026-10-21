@@ -11,6 +11,7 @@ WORKDIR /src
 COPY go.mod go.sum ./
 RUN --mount=type=cache,target=/go/pkg/mod go mod download
 COPY . .
+RUN mkdir -p /out/cache && chown 65532:65532 /out/cache
 # -trimpath: no local paths in the binary; -s -w: no debug symbols (smaller image).
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
@@ -20,6 +21,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 # no shell or package manager. Pinned by digest; update it on purpose (docker buildx imagetools inspect <tag>).
 FROM gcr.io/distroless/static-debian13:nonroot@sha256:e2e927ec666bae08560abb3c55d0659eceabb657f56b6782ab500a9fc7f555e3
 COPY --from=build /out/replay-parser /replay-parser
+COPY --from=build --chown=65532:65532 /out/cache /cache
 USER nonroot:nonroot
 EXPOSE 8081
 # No curl in the image: the binary checks itself (used by the compose healthcheck).

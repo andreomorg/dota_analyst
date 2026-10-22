@@ -29,7 +29,7 @@ internal sealed record ReplayParserMatchResponse(
     // Read only for the prediction models' samples.
     IReadOnlyList<ReplayParserBuyback?>? Buybacks = null);
 
-internal sealed record ReplayParserBuyback(double? T, int? Player);
+internal sealed record ReplayParserBuyback(double? T, int? Player, int? Cost = null);
 
 // A scan or a glyph: when and which team.
 internal sealed record ReplayParserTeamEvent(double? T, string? Team);
@@ -39,10 +39,14 @@ internal sealed record ReplayParserRune(double? T, int? Player, int? RuneType);
 // uses: one entry per player with every cast as [t, "ability_name"] (read only for the prediction models' samples).
 internal sealed record ReplayParserAbilities(
     IReadOnlyList<ReplayParserPlayerAbilityLevels?>? Upgrades, IReadOnlyList<ReplayParserPlayerAbilities?>? Uses = null,
-    IReadOnlyList<ReplayParserPlayerCooldowns?>? Cooldowns = null);
+    IReadOnlyList<ReplayParserPlayerCooldowns?>? Cooldowns = null,
+    IReadOnlyList<ReplayParserPlayerCooldownChanges?>? CooldownChanges = null, JsonElement? Stolen = null);
 
 // One player's cooldowns that started, as [t, "name", readyAt] (newer documents).
 internal sealed record ReplayParserPlayerCooldowns(int? Player, IReadOnlyList<JsonElement>? Cooldowns);
+
+// One player's cooldown drops (DATA-D15), as [t, "name", entity, serial, readyAt].
+internal sealed record ReplayParserPlayerCooldownChanges(int? Player, IReadOnlyList<JsonElement>? Changes);
 
 // One player's inventory changes, as [t, slot, "item_name" | null] (newer documents).
 internal sealed record ReplayParserPlayerSlots(int? Player, IReadOnlyList<JsonElement>? Changes);
@@ -57,7 +61,9 @@ internal sealed record ReplayParserObjectives(
     IReadOnlyList<ReplayParserCreatureKill?>? Roshan,
     IReadOnlyList<ReplayParserCreatureKill?>? Tormentors,
     IReadOnlyList<ReplayParserRune?>? Runes = null, IReadOnlyList<ReplayParserBuildingHealth?>? BuildingHealth = null,
-    IReadOnlyList<ReplayParserNeutralCamp?>? NeutralCamps = null, IReadOnlyList<JsonElement>? RunesOnMap = null);
+    IReadOnlyList<ReplayParserNeutralCamp?>? NeutralCamps = null, IReadOnlyList<JsonElement>? RunesOnMap = null,
+    JsonElement? OutpostCaptures = null, JsonElement? Outposts = null,
+    JsonElement? TormentorStates = null, JsonElement? Couriers = null, JsonElement? BossTracks = null);
 
 // One tower/barracks/Ancient: its combat-log name, owner, kind, lane/tier (null for the Ancient and tier 4s), where it
 // stands (X15b) and its sparse [t, health, maxHealth] readings.
@@ -73,7 +79,9 @@ internal sealed record ReplayParserCreatureKill(double? T, string? Team, int? Ki
 // uses: every item activated, same shape as the purchases (read only for the prediction models' samples).
 internal sealed record ReplayParserItems(
     IReadOnlyList<ReplayParserPlayerItems?>? Purchases, IReadOnlyList<ReplayParserPlayerItems?>? Uses = null,
-    IReadOnlyList<ReplayParserPlayerSlots?>? Slots = null, IReadOnlyList<ReplayParserPlayerCooldowns?>? Cooldowns = null);
+    IReadOnlyList<ReplayParserPlayerSlots?>? Slots = null, IReadOnlyList<ReplayParserPlayerCooldowns?>? Cooldowns = null,
+    IReadOnlyList<ReplayParserPlayerCrafts?>? NeutralCrafts = null, JsonElement? Final = null,
+    IReadOnlyList<ReplayParserPlayerCooldownChanges?>? CooldownChanges = null);
 
 // One player's purchases as [t, "item_name"] tuples (JSON arrays, read one by one in the mapping).
 internal sealed record ReplayParserPlayerItems(int? Player, IReadOnlyList<JsonElement>? Items);
@@ -81,7 +89,7 @@ internal sealed record ReplayParserPlayerItems(int? Player, IReadOnlyList<JsonEl
 internal sealed record ReplayParserVision(
     IReadOnlyList<ReplayParserWard?>? Wards, IReadOnlyList<ReplayParserSmoke?>? Smokes = null,
     IReadOnlyList<ReplayParserTeamEvent?>? Scans = null, IReadOnlyList<ReplayParserTeamEvent?>? Glyphs = null,
-    IReadOnlyList<JsonElement>? Pings = null);
+    IReadOnlyList<JsonElement>? Pings = null, JsonElement? ChatWheel = null, JsonElement? Lanterns = null);
 
 // A Smoke of Deceit: when and which player used it (x/y not read).
 internal sealed record ReplayParserSmoke(double? T, int? Player);
@@ -104,7 +112,7 @@ internal sealed record ReplayParserCombat(
     IReadOnlyList<ReplayParserCombatBuckets?>? Buckets = null, IReadOnlyList<JsonElement>? HeroHits = null,
     IReadOnlyList<JsonElement>? CreepKills = null, IReadOnlyList<JsonElement>? Debuffs = null,
     IReadOnlyList<JsonElement>? Buffs = null, IReadOnlyList<JsonElement>? LaneCreepDeaths = null,
-    IReadOnlyList<JsonElement>? Economy = null);
+    IReadOnlyList<JsonElement>? Economy = null, JsonElement? Healing = null, JsonElement? GoldEvents = null);
 
 // One player's [t, amount] buckets of damage dealt to and taken from enemy heroes.
 // ByType (X30) = [t, physicalTo, magicalTo, pureTo, physicalFrom, magicalFrom, pureFrom]; Healing = [t, received, done].
@@ -128,17 +136,33 @@ internal sealed record ReplayParserCombatMinutes(
 internal sealed record ReplayParserDamage(
     int? SourcePlayer, string? SourceKind, int? TargetPlayer, string? TargetKind, string? Inflictor, int? Amount);
 
-internal sealed record ReplayParserMatchInfo(double? DurationSeconds);
+// startedAt: Unix seconds of the horn (null when the replay does not say): picks the patch's map for the terrain metrics.
+internal sealed record ReplayParserMatchInfo(double? DurationSeconds, uint? EngineBuild = null,
+    string? ProducerVersion = null, bool? MatchEnded = null, long? StartedAt = null);
 
 // role: role-queue position 1-5; null without role queue (Turbo, unranked).
-internal sealed record ReplayParserMatchPlayer(int? Player, int? HeroId, string? Team, int? Role);
+// final: the end-of-match numbers (read by ReplayParserFacts as a final fact). players[].facet is not read: 7.41 has no
+// facet to choose (always null in the local replays).
+internal sealed record ReplayParserMatchPlayer(int? Player, int? HeroId, string? Team, int? Role, JsonElement? Final = null);
 
 // waves (newer documents): per lane, [t, radiant, dire] creep fronts (x + y) every 2 s, for the prediction models only.
 internal sealed record ReplayParserTimelines(
     IReadOnlyList<ReplayParserPlayerMinutes?>? PerMinute, IReadOnlyList<ReplayParserPlayerPositions?>? Positions,
     IReadOnlyList<ReplayParserLaneWaves?>? Waves = null, IReadOnlyList<JsonElement>? DayNight = null,
     IReadOnlyList<JsonElement>? OffLaneCreeps = null, IReadOnlyList<JsonElement>? CreepHeroDamage = null,
-    IReadOnlyList<ReplayParserCourier?>? Couriers = null);
+    IReadOnlyList<ReplayParserCourier?>? Couriers = null, IReadOnlyList<ReplayParserPlayerMadstones?>? Madstones = null,
+    ReplayParserTrees? Trees = null, IReadOnlyList<JsonElement>? VisionUnits = null, JsonElement? TempTrees = null,
+    JsonElement? GoldBalances = null);
+
+// MP3: { deadAtStart: [index], changes: [[t, index, alive]] } — index = the tree in the map of the patch.
+internal sealed record ReplayParserTrees(IReadOnlyList<int>? DeadAtStart, IReadOnlyList<JsonElement>? Changes);
+
+// N2: one player's Madstone counters as [t, inHand, acquired, found, neutralGold], kept when one changes.
+internal sealed record ReplayParserPlayerMadstones(int? Player, IReadOnlyList<JsonElement>? Samples);
+
+// N2: one player's neutral crafts as [t, "item_artifact", artifactLevel | null, tier 1-5, "item_enhancement" | null,
+// enhancementLevel | null].
+internal sealed record ReplayParserPlayerCrafts(int? Player, IReadOnlyList<JsonElement>? Crafts);
 
 // Sizes: parallel to Fronts (same t, same order); absent in documents from before X16.
 internal sealed record ReplayParserLaneWaves(
@@ -146,13 +170,14 @@ internal sealed record ReplayParserLaneWaves(
     IReadOnlyList<JsonElement>? Composition = null);
 
 // A neutral camp (W3): its spawner's position and type, and sparse [t, aliveNeutrals] readings.
-internal sealed record ReplayParserNeutralCamp(string? Id, int? X, int? Y, string? Type, IReadOnlyList<JsonElement>? Alive);
+internal sealed record ReplayParserNeutralCamp(string? Id, int? X, int? Y, string? Type, IReadOnlyList<JsonElement>? Alive, int? SpawnerType = null);
 
 // One player's hero positions as [t, x, y] tuples (JSON arrays, read one by one in the mapping), while alive; vitals
 // (newer documents) is [health, maxHealth, mana, maxMana, visibility] for the sample with the same index.
 internal sealed record ReplayParserPlayerPositions(
     int? Player, IReadOnlyList<JsonElement>? Samples, IReadOnlyList<JsonElement>? Vitals = null,
-    IReadOnlyList<JsonElement>? Stats = null, IReadOnlyList<JsonElement>? Orders = null, IReadOnlyList<JsonElement>? Facing = null);
+    IReadOnlyList<JsonElement>? Stats = null, IReadOnlyList<JsonElement>? Orders = null, IReadOnlyList<JsonElement>? Facing = null,
+    IReadOnlyList<JsonElement>? CombatDetails = null);
 
 // One value per point: every minute of the game clock from 0:00, then the end of the match. Totals so far (gold
 // earned, last hits...), except net worth and level (the value at that moment).
@@ -174,13 +199,25 @@ internal sealed record ReplayParserLaning(int? EndsAtSeconds, IReadOnlyList<Repl
 internal sealed record ReplayParserPlayerLane(int? Player, string? Lane);
 
 // The parser's format -> the domain model, like OpenDotaMappings does for OpenDota.
-internal static class ReplayParserMappings
+internal static partial class ReplayParserMappings
 {
+    internal static ReplayMetadata ReadMetadata(ReplayParserMatchResponse response)
+    {
+        var info = response.Match ?? throw new InvalidDataException("match is missing.");
+        if (info.DurationSeconds is not { } duration || !double.IsFinite(duration) || duration < 0)
+            throw new InvalidDataException("Invalid match duration.");
+        return new(duration, info.EngineBuild is > 0 ? info.EngineBuild : null, info.ProducerVersion, info.MatchEnded);
+    }
     // The /v1/match schema this mapping understands; a newer one only adds fields (a breaking change is /v2/).
     public const int SupportedSchemaVersion = 1;
 
     /// <exception cref="InvalidDataException">The answer is incomplete or breaks a domain rule.</exception>
     public static ReplayAnalysis ToReplayAnalysis(this ReplayParserMatchResponse response, MatchId matchId)
+        => response.ToMappedReplay(matchId).Analysis;
+
+    internal sealed record MappedReplay(ReplayAnalysis Analysis, IReadOnlyList<HeroPositions> Positions);
+
+    internal static MappedReplay ToMappedReplay(this ReplayParserMatchResponse response, MatchId matchId)
     {
         try
         {
@@ -194,7 +231,7 @@ internal static class ReplayParserMappings
         }
     }
 
-    private static ReplayAnalysis Map(ReplayParserMatchResponse response, MatchId matchId)
+    private static MappedReplay Map(ReplayParserMatchResponse response, MatchId matchId)
     {
         if (response.SchemaVersion is not >= SupportedSchemaVersion)
         {
@@ -321,13 +358,43 @@ internal static class ReplayParserMappings
                 Required(entry.DamageToHeroes, "perMinute.damageToHeroes"),
                 Required(entry.DamageFromHeroes, "perMinute.damageFromHeroes")))
             .ToList();
+        // The terrain metrics need the map of the match's patch (none for another patch: Terrain stays unknown).
+        var map = GameData.EmbeddedGameMaps.ForMatch(response.Match?.StartedAt is { } started ? DateTimeOffset.FromUnixTimeSeconds(started) : null);
         var metrics = MatchMetricsCalculator.Calculate(
             laningStats, timeline, deaths, wards, positions, queueRoles ?? RoleInference.Infer(laningStats),
-            rolesInferred: queueRoles is null, damageMinutes) ?? [];
+            rolesInferred: queueRoles is null, damageMinutes, map, map is null ? null : ReadTrees(response),
+            mapObjectives, ObjectivePlaces.Locate(mapObjectives, ReadFacts(response).BossTracks, map),
+            ObjectiveCounts(players),
+            response.Objectives?.Runes?
+                .Where(rune => rune is { RuneType: MapObjectiveMetricsCalculator.WisdomRuneType, T: not null, Player: not null })
+                .Select(rune => (HeroOfPlayer(rune!.Player)!.Value, (int)rune.T!.Value))
+                .ToList(),
+            response.Combat?.Buffs?.Where(EndsAfterStart).Select(tuple => ToBuff(tuple, player => HeroOfPlayer(player)!.Value)).ToList(),
+            ActivityForMetrics(response),
+            // Each hero's kit as far as the replay shows it: the abilities it learned (talents included, harmless).
+            abilityUpgrades.GroupBy(upgrade => upgrade.HeroId)
+                .ToDictionary(group => group.Key, group => (IReadOnlyCollection<string>)group.Select(upgrade => upgrade.AbilityName).ToHashSet())) ?? [];
 
-        return new ReplayAnalysis(
+        // N2: absent in documents from before the neutral crafts (the analysis then has no neutral section).
+        var neutralCrafts = response.Items?.NeutralCrafts?.Select(entry => entry ?? throw Empty("neutral crafts entry"))
+            .SelectMany(entry => Required(entry.Crafts, "neutralCrafts.crafts")
+                .Select(tuple => ToNeutralCraft(HeroOfPlayer(entry.Player ?? throw Missing("neutralCrafts.player"))!.Value, tuple)))
+            .ToList();
+        var neutralProgress = response.Timelines?.Madstones?.Select(entry => entry ?? throw Empty("madstones entry"))
+            .Select(entry => NeutralProgress.From(new MadstoneTrack(
+                HeroOfPlayer(entry.Player ?? throw Missing("madstones.player"))!.Value,
+                Required(entry.Samples, "madstones.samples").Select(ToMadstoneReading).ToList())))
+            .OfType<NeutralProgress>()
+            .ToList();
+
+        var analysis = new ReplayAnalysis(
             matchId, endsAt, laningStats, timeline, deaths, wards, damage, purchases, mapObjectives, metrics,
-            positions.Select(hero => HeroHeatmap.FromPositions(hero, AlliesOf(hero))).ToList(), abilityUpgrades);
+            positions.Select(hero => HeroHeatmap.FromPositions(hero, AlliesOf(hero))).ToList(), abilityUpgrades)
+        {
+            NeutralCrafts = neutralCrafts,
+            NeutralProgress = neutralProgress,
+        };
+        return new(analysis, positions);
 
         // The positions of the hero's teammates (the laning stats say each hero's team).
         IReadOnlyList<HeroPositions> AlliesOf(HeroPositions hero)
@@ -415,9 +482,31 @@ internal static class ReplayParserMappings
             .Select(entry => new HeroPositions(
                 heroOf.TryGetValue(entry.Player ?? throw Missing("positions.player"), out var hero)
                     ? hero : throw new InvalidDataException($"Unknown player {entry.Player}."),
-                WithFacing(WithOrders(WithStats(WithVitals(Required(entry.Samples, "positions.samples").Select(ToPositionSample).ToList(),
-                    entry.Vitals), entry.Stats), entry.Orders), entry.Facing)))
+                WithCombatDetails(WithFacing(WithOrders(WithStats(WithVitals(Required(entry.Samples, "positions.samples").Select(ToPositionSample).ToList(),
+                    entry.Vitals), entry.Stats), entry.Orders), entry.Facing), entry.CombatDetails)))
             .ToArray();
+    }
+
+    private static List<PositionSample> WithCombatDetails(List<PositionSample> samples, IReadOnlyList<JsonElement>? details)
+    {
+        if (details is null) return samples;
+        if (details.Count != samples.Count) throw new InvalidDataException("positions.combatDetails needs one entry per sample.");
+        return samples.Zip(details, (sample, tuple) =>
+        {
+            if (tuple.ValueKind != JsonValueKind.Array || tuple.GetArrayLength() != 12
+                || tuple[11].ValueKind != JsonValueKind.Null
+                || tuple.EnumerateArray().Any(v => v.ValueKind is not (JsonValueKind.Null or JsonValueKind.Number)
+                    || (v.ValueKind == JsonValueKind.Number && (!v.TryGetDouble(out var d) || !double.IsFinite(d)))))
+                throw new InvalidDataException("Invalid combatDetails component tuple.");
+            double? At(int i) => tuple[i].ValueKind == JsonValueKind.Null ? null : tuple[i].GetDouble();
+            int? capability = null;
+            if (tuple[8].ValueKind != JsonValueKind.Null)
+            {
+                if (!tuple[8].TryGetInt32(out var raw)) throw new InvalidDataException("Attack capability must be an integer.");
+                capability = raw;
+            }
+            return sample with { CombatDetails = new(At(0), At(1), At(2), At(3), At(4), At(5), At(6), At(7), capability, At(9), At(10)) };
+        }).ToList();
     }
 
     // X29: integer yaw degrees (or null) parallel to the samples; older documents have none.
@@ -565,7 +654,9 @@ internal static class ReplayParserMappings
         && response.Combat.Buffs is not null
         // X15/X15b: building health, with positions.
         && response.Objectives?.BuildingHealth is { Count: > 0 } buildings && buildings.All(entry => entry?.X is not null && entry.Y is not null)
-        && response.Items?.Slots is not null && response.Items.Cooldowns is not null && response.Abilities?.Cooldowns is not null;
+        && response.Items?.Slots is not null && response.Items.Cooldowns is not null && response.Abilities?.Cooldowns is not null
+        // N2: neutral crafts and Madstones (always present in a new document, [] when nothing happened).
+        && response.Items.NeutralCrafts is not null && response.Timelines.Madstones is not null;
 
     // Smokes and item/ability uses, for the prediction models' samples only (never saved with the analysis). Null when
     // the document lacks one of the three sections: unknown activity is not "nothing was used".
@@ -610,7 +701,8 @@ internal static class ReplayParserMappings
             Cooldowns(response.Items?.Cooldowns, "item cooldowns"),
             Cooldowns(response.Abilities?.Cooldowns, "ability cooldowns"),
             response.Buybacks?.Select(buyback => buyback ?? throw Empty("buyback"))
-                .Select(buyback => new BuybackUse(HeroOf(buyback.Player), buyback.T ?? throw Missing("buyback.t")))
+                .Select(buyback => new BuybackUse(HeroOf(buyback.Player), buyback.T ?? throw Missing("buyback.t"),
+                    buyback.Cost is < 0 ? throw new InvalidDataException("Invalid buyback cost.") : buyback.Cost))
                 .ToList(),
             TeamActions(response.Vision?.Scans, "scan"),
             TeamActions(response.Vision?.Glyphs, "glyph"),
@@ -630,8 +722,8 @@ internal static class ReplayParserMappings
             response.Timelines?.DayNight?.Select(ToDayNight).ToList(),
             response.Combat?.HeroHits?.Select(tuple => ToHeroHit(tuple, HeroOf)).ToList(),
             response.Combat?.CreepKills?.Select(tuple => ToCreepKill(tuple, HeroOf)).ToList(),
-            response.Combat?.Debuffs?.Select(tuple => ToDebuff(tuple, HeroOf)).ToList(),
-            response.Combat?.Buffs?.Select(tuple => ToBuff(tuple, HeroOf)).ToList(),
+            response.Combat?.Debuffs?.Where(EndsAfterStart).Select(tuple => ToDebuff(tuple, HeroOf)).ToList(),
+            response.Combat?.Buffs?.Where(EndsAfterStart).Select(tuple => ToBuff(tuple, HeroOf)).ToList(),
             response.Objectives?.BuildingHealth?.Select(entry => ToBuildingHealth(entry ?? throw Empty("building health"))).ToList(),
             response.Timelines?.OffLaneCreeps?.Select(ToOffLaneCreeps).ToList(),
             response.Combat?.LaneCreepDeaths?.Select(tuple => ToLaneCreepDeath(tuple, HeroOf)).ToList(),
@@ -647,7 +739,23 @@ internal static class ReplayParserMappings
             response.Combat?.Buckets is { } healingBuckets && healingBuckets.Any(entry => entry?.Healing is not null)
                 ? healingBuckets.SelectMany(entry => (entry!.Healing ?? []).Select(tuple => ToHealing(HeroOf(entry.Player), tuple))).ToList()
                 : null,
-            response.Timelines?.Couriers?.Select(courier => ToCourier(courier ?? throw Empty("courier"))).ToList());
+            response.Timelines?.Couriers?.Select(courier => ToCourier(courier ?? throw Empty("courier"))).ToList(),
+            response.Items?.NeutralCrafts?.Select(entry => entry ?? throw Empty("neutral crafts entry"))
+                .SelectMany(entry => Required(entry.Crafts, "neutralCrafts.crafts").Select(tuple => ToNeutralCraft(HeroOf(entry.Player), tuple)))
+                .ToList(),
+            response.Timelines?.Madstones?.Select(entry => entry ?? throw Empty("madstones entry"))
+                .Select(entry => new MadstoneTrack(HeroOf(entry.Player),
+                    Required(entry.Samples, "madstones.samples").Select(ToMadstoneReading).ToList()))
+                .ToList(),
+            ReadTrees(response),
+            response.Timelines?.VisionUnits?.Select(ToVisionUnits).ToList(),
+            CooldownChanges(response.Items?.CooldownChanges, "item cooldown changes"),
+            CooldownChanges(response.Abilities?.CooldownChanges, "ability cooldown changes"));
+
+        List<CooldownCorrection>? CooldownChanges(IReadOnlyList<ReplayParserPlayerCooldownChanges?>? entries, string name) =>
+            entries?.Select(entry => entry ?? throw Empty(name))
+                .SelectMany(entry => Required(entry.Changes, name).Select(tuple => ToCooldownChange(HeroOf(entry.Player), tuple)))
+                .ToList();
 
         // Targets[i] is the target of uses[i]; a different length means the lists are not parallel.
         List<RecordedUse> WithTargets(List<RecordedUse> uses, IReadOnlyList<JsonElement>? targets)
@@ -665,14 +773,17 @@ internal static class ReplayParserMappings
             return uses.Select((use, index) =>
             {
                 var target = targets[index];
-                if (target.ValueKind != JsonValueKind.Array || target.GetArrayLength() != 4
-                    || Enumerable.Range(0, 4).Any(i => target[i].ValueKind is not (JsonValueKind.Number or JsonValueKind.Null)))
+                if (target.ValueKind != JsonValueKind.Array || target.GetArrayLength() is not (3 or 4)
+                    || Enumerable.Range(0, target.GetArrayLength()).Any(i => target[i].ValueKind is not (JsonValueKind.Number or JsonValueKind.Null)))
                 {
                     throw new InvalidDataException("An ability target is not [player, x, y, source].");
                 }
 
                 int? At(int i) => target[i].ValueKind == JsonValueKind.Null ? null : (int)Math.Round(target[i].GetDouble());
-                return use with { TargetHeroId = At(0) is { } player ? HeroOf(player) : null, TargetX = At(1), TargetY = At(2) };
+                if (target.GetArrayLength() == 4 && target[3].ValueKind != JsonValueKind.Null && !target[3].TryGetInt32(out _))
+                    throw new InvalidDataException("Ability target source is not an integer.");
+                return use with { TargetHeroId = At(0) is { } player ? HeroOf(player) : null, TargetX = At(1), TargetY = At(2),
+                    PointSource = target.GetArrayLength() == 4 ? At(3) : null };
             }).ToList();
         }
 
@@ -729,6 +840,14 @@ internal static class ReplayParserMappings
         return new Buff(m.Start, m.End, m.Source, m.Target, m.Modifier, BuffKinds.Of(m.Kind, m.Modifier));
     }
 
+    // A modifier applied during a pause gets a start too late: the Go clock counts the pause only when it ends, so the
+    // removal can land before the application (0.14% of the rows, in the matches with pauses). Those times are not
+    // trustworthy and the row is dropped; a malformed tuple still fails in ReadModifier.
+    private static bool EndsAfterStart(JsonElement tuple) =>
+        tuple.ValueKind != JsonValueKind.Array || tuple.GetArrayLength() < 2
+        || tuple[0].ValueKind != JsonValueKind.Number || tuple[1].ValueKind != JsonValueKind.Number
+        || tuple[1].GetDouble() >= tuple[0].GetDouble();
+
     // [start, end | null, source | null, target, "modifier", "kind"] (player indexes; the same tuple for both lists).
     private static (double Start, double? End, int? Source, int Target, string Modifier, string Kind) ReadModifier(
         JsonElement tuple, Func<int?, int> heroOf, string name)
@@ -756,6 +875,75 @@ internal static class ReplayParserMappings
         && tuple[1].ValueKind is JsonValueKind.True or JsonValueKind.False
             ? new DayNightChange(seconds, tuple[1].GetBoolean())
             : throw new InvalidDataException("A day/night change is not [t, isDay].");
+
+    // [t, index, alive] -> a tree going down or growing back.
+    // Each hero's counters of the map's objectives from players[].final; null unless every player has all of them.
+    private static Dictionary<int, MapObjectiveCounts>? ObjectiveCounts(IReadOnlyList<ReplayParserMatchPlayer> players)
+    {
+        var counts = new Dictionary<int, MapObjectiveCounts>();
+        foreach (var player in players)
+        {
+            if (player is not { HeroId: { } heroId, Final: { ValueKind: JsonValueKind.Object } block }
+                || block.Deserialize<ReplayParserPlayerFinal>(Coaching.CoachingJson.Options) is not
+                {
+                    BountyRunes: >= 0 and var bounty, PowerRunes: >= 0 and var power, WaterRunes: >= 0 and var water,
+                    WisdomShrinesTaken: >= 0 and var wisdom, LotusesTaken: >= 0 and var lotuses, WatchersTaken: >= 0 and var watchers,
+                    OutpostsCaptured: >= 0 and var outposts, TormentorKills: >= 0 and var tormentors, CampsStacked: >= 0 and var stacked,
+                })
+            {
+                return null;
+            }
+
+            counts[heroId] = new MapObjectiveCounts(bounty, power, water, wisdom, lotuses, watchers, outposts, tormentors, stacked);
+        }
+
+        return counts;
+    }
+
+    // The activity for the play quality metrics: a malformed activity section only leaves them unknown, it never fails
+    // an analysis that did not need it before.
+    private static ReplayActivity? ActivityForMetrics(ReplayParserMatchResponse response)
+    {
+        try
+        {
+            return ReadActivity(response);
+        }
+        catch (Exception ex) when (ex is InvalidDataException or JsonException or ArgumentException or InvalidOperationException)
+        {
+            return null;
+        }
+    }
+
+    // timelines.trees (MP3); null in documents from before it.
+    private static TreeTimeline? ReadTrees(ReplayParserMatchResponse response) =>
+        response.Timelines?.Trees is { } trees
+            ? new TreeTimeline(Required(trees.DeadAtStart, "trees.deadAtStart"),
+                Required(trees.Changes, "trees.changes").Select(ToTreeChange).ToList())
+            : null;
+
+    private static TreeChange ToTreeChange(JsonElement tuple) =>
+        tuple.ValueKind == JsonValueKind.Array && tuple.GetArrayLength() == 3 && tuple[0].TryGetInt32(out var seconds)
+        && tuple[1].TryGetInt32(out var index) && tuple[2].ValueKind is JsonValueKind.True or JsonValueKind.False
+            ? new TreeChange(seconds, index, tuple[2].GetBoolean())
+            : throw new InvalidDataException("A tree change is not [t, index, alive].");
+
+    // [t, [[x, y, day, night]...radiant], [[...]...dire]] -> each team's moving vision at a second.
+    private static VisionUnitsSample ToVisionUnits(JsonElement tuple)
+    {
+        if (tuple.ValueKind != JsonValueKind.Array || tuple.GetArrayLength() != 3 || !tuple[0].TryGetInt32(out var seconds)
+            || tuple[1].ValueKind != JsonValueKind.Array || tuple[2].ValueKind != JsonValueKind.Array)
+        {
+            throw new InvalidDataException("A vision units sample is not [t, radiant, dire].");
+        }
+
+        static List<VisionCircle> Circles(JsonElement list) => list.EnumerateArray().Select(circle =>
+            circle.ValueKind == JsonValueKind.Array && circle.GetArrayLength() == 4 && circle[0].TryGetInt32(out var x)
+            && circle[1].TryGetInt32(out var y) && circle[2].TryGetInt32(out var day) && circle[3].TryGetInt32(out var night)
+                ? new VisionCircle(x, y, day, night)
+                : throw new InvalidDataException("A vision circle is not [x, y, day, night].")).ToList();
+
+        return new VisionUnitsSample(seconds, Circles(tuple[1]), Circles(tuple[2]));
+    }
 
     // [t, attacker, target, amount] (player indexes) -> a hero hit.
     private static HeroHit ToHeroHit(JsonElement tuple, Func<int?, int> heroOf) =>
@@ -913,10 +1101,18 @@ internal static class ReplayParserMappings
         courier.Id ?? throw Missing("couriers.id"),
         ToTeam(courier.Team),
         Required(courier.Samples, "couriers.samples").Select(tuple =>
-            tuple.ValueKind == JsonValueKind.Array && tuple.GetArrayLength() == 5 && tuple[0].TryGetInt32(out var t)
+            tuple.ValueKind == JsonValueKind.Array && tuple.GetArrayLength() is 4 or 5
+                && Enumerable.Range(0, 4).All(i => tuple[i].ValueKind == JsonValueKind.Number) && tuple[0].TryGetInt32(out var t)
                 && tuple[1].TryGetInt32(out var alive) && alive is 0 or 1 && tuple[2].TryGetInt32(out var x) && tuple[3].TryGetInt32(out var y)
                 ? (t, alive == 1, x, y)
-                : throw new InvalidDataException("A courier reading is not [t, alive, x, y, flying].")).ToList());
+                : throw new InvalidDataException("A courier reading is not [t, alive, x, y, flying].")).ToList())
+    {
+        Flight = Required(courier.Samples, "couriers.samples").Select(tuple => new CourierFlight(tuple[0].GetInt32(),
+            tuple.GetArrayLength() < 5 || tuple[4].ValueKind == JsonValueKind.Null ? null
+                : tuple[4].ValueKind == JsonValueKind.True ? 1 : tuple[4].ValueKind == JsonValueKind.False ? 0
+                : tuple[4].ValueKind == JsonValueKind.Number && tuple[4].TryGetInt32(out var raw) ? raw
+                : throw new InvalidDataException("Courier flying is not a boolean, integer or null."))).ToList(),
+    };
 
     // [t, runeType, x, y, appeared (1) / vanished (0)] -> a rune change on the map.
     private static RuneOnMap ToRuneOnMap(JsonElement tuple)
@@ -959,7 +1155,7 @@ internal static class ReplayParserMappings
             tuple.ValueKind == JsonValueKind.Array && tuple.GetArrayLength() == 2 && tuple[0].TryGetInt32(out var t)
                 && tuple[1].TryGetInt32(out var alive)
                 ? (t, alive)
-                : throw new InvalidDataException("A camp reading is not [t, alive].")).ToList());
+                : throw new InvalidDataException("A camp reading is not [t, alive].")).ToList()) { SpawnerType = camp.SpawnerType };
 
     // [t, radiantCount, direCount, radiantX | null, radiantY | null, direX | null, direY | null] -> off-lane creeps.
     private static OffLaneCreeps ToOffLaneCreeps(JsonElement tuple)
@@ -1036,7 +1232,50 @@ internal static class ReplayParserMappings
         return new SlotChange(heroId, seconds, slot, tuple[2].ValueKind == JsonValueKind.Null ? null : tuple[2].GetString());
     }
 
+    // [t, "item_artifact", artifactLevel | null, tier, "item_enhancement" | null, enhancementLevel | null] -> a craft.
+    private static NeutralCraft ToNeutralCraft(int heroId, JsonElement tuple)
+    {
+        if (tuple.ValueKind != JsonValueKind.Array || tuple.GetArrayLength() != 6
+            || !tuple[0].TryGetDouble(out var seconds) || tuple[1].ValueKind != JsonValueKind.String
+            || !tuple[3].TryGetInt32(out var tier)
+            || tuple[4].ValueKind is not (JsonValueKind.String or JsonValueKind.Null)
+            || new[] { tuple[2], tuple[5] }.Any(level => level.ValueKind is not (JsonValueKind.Number or JsonValueKind.Null)))
+        {
+            throw new InvalidDataException("A neutral craft is not [t, artifact, level, tier, enhancement, level].");
+        }
+
+        int? Level(JsonElement value) => value.ValueKind == JsonValueKind.Null ? null : value.GetInt32();
+        return new NeutralCraft(heroId, seconds, tuple[1].GetString()!, Level(tuple[2]), tier,
+            tuple[4].ValueKind == JsonValueKind.Null ? null : tuple[4].GetString(), Level(tuple[5]));
+    }
+
+    // [t, inHand, acquired, found, neutralGold] -> a Madstone reading.
+    private static MadstoneReading ToMadstoneReading(JsonElement tuple)
+    {
+        if (tuple.ValueKind != JsonValueKind.Array || tuple.GetArrayLength() != 5
+            || Enumerable.Range(0, 5).Any(index => tuple[index].ValueKind != JsonValueKind.Number))
+        {
+            throw new InvalidDataException("A Madstone reading is not [t, inHand, acquired, found, neutralGold].");
+        }
+
+        int At(int index) => (int)Math.Round(tuple[index].GetDouble());
+        return new MadstoneReading(At(0), At(1), At(2), At(3), At(4));
+    }
+
     // [t, "name", readyAt] -> a cooldown that started.
+    // [t, "name", entity, serial, readyAt] -> a cooldown drop.
+    private static CooldownCorrection ToCooldownChange(int heroId, JsonElement tuple)
+    {
+        if (tuple.ValueKind != JsonValueKind.Array || tuple.GetArrayLength() != 5 || tuple[0].ValueKind != JsonValueKind.Number
+            || tuple[1].ValueKind != JsonValueKind.String || !tuple[2].TryGetInt32(out var entity) || !tuple[3].TryGetInt32(out var serial)
+            || tuple[4].ValueKind != JsonValueKind.Number)
+        {
+            throw new InvalidDataException("A cooldown change is not [t, name, entity, serial, readyAt].");
+        }
+
+        return new CooldownCorrection(heroId, tuple[0].GetDouble(), tuple[1].GetString()!, entity, serial, tuple[4].GetDouble());
+    }
+
     private static CooldownStart ToCooldown(int heroId, JsonElement tuple)
     {
         if (tuple.ValueKind != JsonValueKind.Array || tuple.GetArrayLength() != 3

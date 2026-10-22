@@ -32,6 +32,8 @@ namespace DotaAnalyst.Application.Matches;
 /// <param name="OpenDotaProcessing">External processing status, independent of replayStatus; absent for older API responses.</param>
 /// <param name="OpenDotaExtras">Optional external aggregates for the selected player, with explicit source and scope.</param>
 /// <param name="Draft">Catalog composition and observed enemy interactions; null without a player or any known drafted hero profile.</param>
+/// <param name="Neutrals">Neutral items crafted by every hero (from our replay reading); null for replays read before neutral crafts were.</param>
+/// <param name="Catalog">Source and availability of the calculation rules, separate from display names.</param>
 public record MatchAnalysis(
     long MatchId,
     int DurationSeconds,
@@ -58,7 +60,50 @@ public record MatchAnalysis(
     MatchStats? Stats = null,
     OpenDotaProcessing? OpenDotaProcessing = null,
     OpenDotaPlayerExtras? OpenDotaExtras = null,
-    MatchDraft? Draft = null);
+    MatchDraft? Draft = null,
+    MatchNeutrals? Neutrals = null,
+    CatalogProvenance? Catalog = null);
+
+/// <summary>The source of the rules used for this analysis, separate from names used for display.</summary>
+public sealed record CatalogProvenance(string Scope, string? BuildId, bool ItemRulesAvailable, bool HeroProfilesAvailable);
+
+/// <summary>The neutral items of the match (patch 7.38+: crafted from Madstones, one artifact and one enhancement per tier).</summary>
+/// <param name="Tiers">When each tier opened (game clock) and its Madstone cost, from the game build of the match; empty when the build is not known here (no delays then).</param>
+/// <param name="Heroes">Every hero, the point of view first.</param>
+public sealed record MatchNeutrals(IReadOnlyList<NeutralTierInfo> Tiers, IReadOnlyList<HeroNeutralItems> Heroes);
+
+/// <summary>A neutral tier of the match's build.</summary>
+/// <param name="Tier">Tier, 1 to 5.</param>
+/// <param name="OpensAtSeconds">Game-clock second it opens.</param>
+/// <param name="CraftCost">Madstones a craft costs.</param>
+public sealed record NeutralTierInfo(int Tier, int OpensAtSeconds, int CraftCost);
+
+/// <summary>What one hero did with neutral items.</summary>
+/// <param name="HeroId">Hero identifier.</param>
+/// <param name="HeroName">Hero display name.</param>
+/// <param name="IsCurrentPlayer">Whether this is the point of view's hero.</param>
+/// <param name="Crafts">Crafts in time order.</param>
+/// <param name="TiersSkipped">Tiers opened in time to craft that this hero never crafted.</param>
+/// <param name="AverageDelaySeconds">Average delay after each tier opened; null without the build's tiers or crafts.</param>
+/// <param name="MadstonesAcquired">Madstones acquired in the match; null without Madstone readings.</param>
+/// <param name="MadstonesFound">Neutral item tokens found; null without Madstone readings.</param>
+/// <param name="MadstonesUnused">Madstones still in hand at the end; null without Madstone readings.</param>
+/// <param name="NeutralGold">Gold from neutral creeps; null without Madstone readings.</param>
+public sealed record HeroNeutralItems(int HeroId, string HeroName, bool IsCurrentPlayer, IReadOnlyList<NeutralCraftInfo> Crafts,
+    IReadOnlyList<int> TiersSkipped, double? AverageDelaySeconds, int? MadstonesAcquired, int? MadstonesFound, int? MadstonesUnused,
+    int? NeutralGold);
+
+/// <summary>One neutral craft.</summary>
+/// <param name="Seconds">Game-clock second of the craft.</param>
+/// <param name="Tier">Tier, 1 to 5.</param>
+/// <param name="ArtifactId">Item ID of the artifact (icon); null when the catalog does not know it.</param>
+/// <param name="Artifact">Artifact display name, or its internal name when unknown.</param>
+/// <param name="EnhancementId">Item ID of the enhancement; null when unknown or none.</param>
+/// <param name="Enhancement">Enhancement display name; null when none.</param>
+/// <param name="EnhancementLevel">Enhancement level; null when unknown.</param>
+/// <param name="DelaySeconds">Seconds after the tier opened; null without the build's tiers.</param>
+public sealed record NeutralCraftInfo(double Seconds, int Tier, int? ArtifactId, string Artifact, int? EnhancementId, string? Enhancement,
+    int? EnhancementLevel, int? DelaySeconds);
 
 /// <summary>Every statistic of every hero, one value per point of the match (each minute, then the end): the value at any moment is the last point at or before it, and what happened in a period is the difference between two points.</summary>
 /// <param name="Definitions">What each statistic is (the same catalog for every match).</param>

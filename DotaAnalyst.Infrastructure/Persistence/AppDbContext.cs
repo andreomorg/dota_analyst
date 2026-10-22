@@ -30,6 +30,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     // The finished comparison base (what the sites read; production's copy is a mirror of the collector's machine).
     public DbSet<BaselineDistributionRecord> BaselineDistributions => Set<BaselineDistributionRecord>();
 
+    // The game's own files of each build (abilities, items, heroes, translation), synchronized on the owner's machine.
+    public DbSet<GameData.GameBuildRecord> GameBuilds => Set<GameData.GameBuildRecord>();
+
+    public DbSet<GameData.GameFileRecord> GameFiles => Set<GameData.GameFileRecord>();
+
     // ASP.NET Core Data Protection keys (they encrypt the future login cookie), so they survive restarts.
     public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
 

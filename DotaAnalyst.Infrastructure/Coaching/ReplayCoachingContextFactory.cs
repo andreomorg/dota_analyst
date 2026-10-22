@@ -13,15 +13,15 @@ public static class ReplayCoachingContextFactory
     public static CoachingContext Create(string document, MatchId matchId, int heroId, CoachingPatch patch)
     {
         var response = Read(document, matchId);
-        return BuildCoachingContext.Build(response.ToReplayAnalysis(matchId), heroId, patch,
-            ReplayParserMappings.ReadPositions(response));
+        var mapped = response.ToMappedReplay(matchId);
+        return BuildCoachingContext.Build(mapped.Analysis, heroId, patch, mapped.Positions);
     }
 
     public static CoachingDecisionContext CreateDecision(string document, MatchId matchId, int heroId, CoachingPatch patch)
     {
         var response = Read(document, matchId);
-        return BuildCoachingDecisionContext.Build(response.ToReplayAnalysis(matchId), heroId, patch,
-            ReplayParserMappings.ReadPositions(response));
+        var mapped = response.ToMappedReplay(matchId);
+        return BuildCoachingDecisionContext.Build(mapped.Analysis, heroId, patch, mapped.Positions);
     }
 
     private static ReplayParserMatchResponse Read(string document, MatchId matchId) =>

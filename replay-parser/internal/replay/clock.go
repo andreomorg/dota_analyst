@@ -13,6 +13,20 @@ type gameClock struct {
 	pause       pauseTracker
 	gameStart   float64 // m_flGameStartTime in server seconds; 0 until the horn
 	pausedTicks float64 // m_nTotalPausedTicks on the last tick seen
+	// pauses are every pause seen, in order, on the server clock (G3, 21/10/2026). The counter only grows when a pause
+	// ends, so an event stamped with the counter of its moment came out up to a whole pause ahead (and the next one
+	// went back): with the spans, a moment inside a pause is the moment it began (the game clock is frozen) and a
+	// moment after it leaves the whole pause out, whenever the server updates the counter.
+	pauses []pauseSpan
+}
+
+// pauseSpan is one pause: when it began on the server clock and the paused-ticks counter before and after it. Open
+// until the counter changes after the pause flag clears (or the settle wait gives up: then after == before).
+type pauseSpan struct {
+	begin         float64
+	before, after float64
+	cleared       float64 // server seconds when the pause flag cleared; -1 while still paused
+	closed        bool
 }
 
 // update reads the game rules on this tick and returns the seconds since the horn. It is not running before the horn,
@@ -22,17 +36,59 @@ func (c *gameClock) update(netTick uint32, rules *manta.Entity) (float64, bool) 
 	if pausedTicks, ok := number(rules, "m_pGameRules.m_nTotalPausedTicks"); ok {
 		c.pausedTicks = pausedTicks
 	}
+	paused, _ := rules.GetBool("m_pGameRules.m_bGamePaused")
+	c.trackPause(float64(netTick)/ticksPerSecond, paused)
 	gameStart, ok := number(rules, "m_pGameRules.m_flGameStartTime")
 	if !ok || gameStart <= 0 {
 		return 0, false
 	}
 	c.gameStart = gameStart
-	paused, _ := rules.GetBool("m_pGameRules.m_bGamePaused")
 	if !c.pause.running(paused, c.pausedTicks) {
 		return 0, false
 	}
 	clock := float64(netTick)/ticksPerSecond - gameStart - c.pausedTicks/ticksPerSecond
 	return clock, clock >= 0
+}
+
+// trackPause opens a span on the first paused tick and closes it once the flag cleared and the counter moved (or after
+// maxPauseSettleTicks of waiting, as pauseTracker does).
+func (c *gameClock) trackPause(serverSeconds float64, paused bool) {
+	if len(c.pauses) == 0 || c.pauses[len(c.pauses)-1].closed {
+		if paused {
+			c.pauses = append(c.pauses, pauseSpan{begin: serverSeconds, before: c.pausedTicks, cleared: -1})
+		}
+		return
+	}
+	span := &c.pauses[len(c.pauses)-1]
+	if paused {
+		span.cleared = -1
+		return
+	}
+	if span.cleared < 0 {
+		span.cleared = serverSeconds
+	}
+	if c.pausedTicks != span.before || serverSeconds-span.cleared >= float64(maxPauseSettleTicks)/ticksPerSecond {
+		span.after = c.pausedTicks
+		span.closed = true
+	}
+}
+
+// pausedTicksAt is the paused-ticks counter that applies to a server-clock moment, from the pause spans: inside a pause,
+// the counter before it plus the time already paused (so the game clock stays at the pause's start); after it, the
+// counter after it.
+func (c *gameClock) pausedTicksAt(serverSeconds float64) float64 {
+	total := c.pauses[0].before
+	for _, span := range c.pauses {
+		if serverSeconds < span.begin {
+			return total
+		}
+		inside := (serverSeconds - span.begin) * ticksPerSecond
+		if !span.closed || inside < span.after-span.before {
+			return span.before + inside
+		}
+		total = span.after
+	}
+	return total
 }
 
 // maxPauseSettleTicks is how long, after a pause, the clock waits for m_nTotalPausedTicks to count the pause.
@@ -105,9 +161,15 @@ func (c *Clock) Started() bool {
 	return c.game.gameStart > 0
 }
 
-// Game converts a ServerTime to the game clock: seconds since the horn, pauses left out, negative before the horn.
+// Game converts a ServerTime to the game clock: seconds since the horn, pauses left out, negative before the horn. With
+// the pauses seen (a real replay) the pause spans decide (a moment inside a pause is the pause's start); without any
+// (no pause, or a hand-made clock) the counter stamped on the moment does, as before.
 func (c *Clock) Game(t ServerTime) float64 {
-	return t.Seconds - c.game.gameStart - t.PausedTicks/ticksPerSecond
+	paused := t.PausedTicks
+	if len(c.game.pauses) > 0 {
+		paused = c.game.pausedTicksAt(t.Seconds)
+	}
+	return t.Seconds - c.game.gameStart - paused/ticksPerSecond
 }
 
 // Seconds is Game as the contract's type.

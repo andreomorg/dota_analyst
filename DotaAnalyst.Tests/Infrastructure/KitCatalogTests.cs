@@ -25,15 +25,24 @@ public sealed class KitCatalogTests
         var http = new KitHttp();
         var catalog = Abilities(store, http);
         var abilities = await catalog.GetAbilitiesAsync(default);
-        Assert.Equal(4, http.Calls);
-        Assert.Equal(26, (await catalog.GetKitsAsync(default))[26].HeroId);
+        Assert.Equal(5, http.Calls);
+        var kit = (await catalog.GetKitsAsync(default))[26];
+        Assert.Equal(26, kit.HeroId);
         Assert.Equal("7.41", await catalog.GetPatchAsync(default));
-        Assert.Equal(4, http.Calls);
+        Assert.Equal(5, http.Calls);
         var offline = new KitHttp { Fails = true };
         var restarted = Abilities(store, offline);
-        Assert.Equal(abilities["lion_impale"], (await restarted.GetAbilitiesAsync(default))["lion_impale"]);
+        var reloaded = await restarted.GetAbilitiesAsync(default);
+        Assert.Equal(abilities["lion_impale"], reloaded["lion_impale"]);
+        Assert.Equal(abilities["lion_mana_drain"], reloaded["lion_mana_drain"]);
+        Assert.True(reloaded["lion_to_hell_and_back"].IsInnate);
+        Assert.Equal([25d, 50, 75, 150], reloaded["centaur_khan_war_stomp"].BaseDamage);
         Assert.Equal("7.41", await restarted.GetPatchAsync(default));
-        Assert.Equal(5, (await restarted.GetKitsAsync(default))[26].Abilities.Count);
+        var restartedKit = (await restarted.GetKitsAsync(default))[26];
+        Assert.Equal(kit, restartedKit);
+        Assert.Equal(5, restartedKit.Abilities.Count);
+        Assert.Equal("Mana Drain", restartedKit.Shard!.AbilityName);
+        Assert.Equal("+{s:bonus_movespeed}% Mana Drain Slow", restartedKit.Talents[0].Name);
         Assert.Equal(0, offline.Calls);
     }
 
@@ -43,7 +52,30 @@ public sealed class KitCatalogTests
         var store = new KitStore { Saved = new(new Dictionary<int, string> { [1] = "current" }, Now) };
         var http = new KitHttp();
         Assert.NotEmpty(await Abilities(store, http).GetAbilitiesAsync(default));
-        Assert.Equal(4, http.Calls);
+        Assert.Equal(5, http.Calls);
+    }
+
+    [Fact]
+    public async Task VersionOneSnapshot_IsRefreshedWhenFresh_AndStillUsedWhenOpenDotaFails()
+    {
+        const string v1 = """{"version":1,"patch":"7.40","abilities":{"lion_impale":{"key":"lion_impale","name":"Earth Spike","behavior":[],"targetTypes":[],"cooldown":[],"manaCost":[90],"values":[]}},"kits":{"26":{"heroId":26,"abilities":["lion_impale"],"talents":[],"facets":[{"id":0,"key":"f","deprecated":true}]}}}""";
+        SavedCatalog Saved() => new(new Dictionary<int, string> { [1] = "current" }, Now) { Details = new Dictionary<int, string> { [1] = v1 } };
+        var http = new KitHttp();
+        Assert.Equal("7.41", await Abilities(new KitStore { Saved = Saved() }, http).GetPatchAsync(default));
+        Assert.Equal(5, http.Calls);
+        var offline = Abilities(new KitStore { Saved = Saved() }, new() { Fails = true });
+        Assert.Equal("7.40", await offline.GetPatchAsync(default));
+        Assert.Empty((await offline.GetKitsAsync(default))[26].Facets[0].Abilities);
+        Assert.Empty((await offline.GetAbilitiesAsync(default))["lion_impale"].BaseDamage);
+    }
+
+    [Fact]
+    public async Task AghanimUnavailable_KitStillLoadsWithoutIt()
+    {
+        var http = new KitHttp { AghanimFails = true };
+        var kit = (await Abilities(new KitStore(), http).GetKitsAsync(default))[26];
+        Assert.Null(kit.Scepter);
+        Assert.Equal(5, kit.Abilities.Count);
     }
 
     [Theory]
@@ -137,17 +169,19 @@ public sealed class KitCatalogTests
     private sealed class KitHttp : HttpMessageHandler
     {
         public int Calls;
-        public bool Fails, Empty;
+        public bool Fails, Empty, AghanimFails;
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             Interlocked.Increment(ref Calls);
-            if (Fails) return Task.FromResult(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable));
+            if (Fails || (AghanimFails && request.RequestUri!.AbsolutePath == "/constants/aghs_desc"))
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable));
             var body = request.RequestUri!.AbsolutePath switch
             {
                 "/heroes" => """[{"id":26,"localized_name":"Lion","name":"npc_dota_hero_lion"}]""",
                 "/constants/abilities" => Empty ? "{}" : KitSamples.Abilities,
                 "/constants/hero_abilities" => KitSamples.Kits,
                 "/constants/patch" => """[{"name":"7.40"},{"name":"7.41"}]""",
+                "/constants/aghs_desc" => KitSamples.Aghanim,
                 "/constants/item_ids" => """{"1":"blink","116":"black_king_bar"}""",
                 "/constants/items" => KitSamples.Items,
                 _ => throw new InvalidOperationException("Unexpected offline request"),

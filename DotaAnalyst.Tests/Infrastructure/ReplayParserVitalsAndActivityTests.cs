@@ -118,6 +118,25 @@ public class ReplayParserVitalsAndActivityTests
     }
 
     [Fact]
+    public void ModifiersRemovedBeforeTheirStart_AreDropped()
+    {
+        // A pause counted late by the Go clock (21/10/2026: 0.14% of the rows): the real row would make the document unreadable.
+        var activity = ReplayParserMappings.ReadActivity(Read("""
+            "vision": { "wards": [], "smokes": [] },
+            "items": { "purchases": [], "uses": [] },
+            "abilities": { "upgrades": [], "uses": [] },
+            "combat": { "damage": [], "perMinute": [],
+              "buffs": [[-88.6, -249, 0, 0, "modifier_kez_switch_weapons_flutter_sai", "other"],
+                        [10, 12, 0, 0, "modifier_item_phase_boots_active", "other"],
+                        [20, null, 0, 0, "modifier_smoke_of_deceit", "smoke"]],
+              "debuffs": [[300, 290, 5, 0, "modifier_stunned", "stun"], [400, 401.5, 5, 0, "modifier_stunned", "stun"]] }
+            """))!;
+
+        Assert.Equal(["modifier_item_phase_boots_active", "modifier_smoke_of_deceit"], activity.Buffs!.Select(buff => buff.Modifier));
+        Assert.Equal(400, Assert.Single(activity.Debuffs!).Start);
+    }
+
+    [Fact]
     public void BuildingHealth_IsReadWithItsPositionAndReadings()
     {
         var activity = ReplayParserMappings.ReadActivity(Read("""
@@ -188,6 +207,7 @@ public class ReplayParserVitalsAndActivityTests
         Assert.Equal(new DotaAnalyst.Domain.Replays.CreepHeroHits(26, DotaAnalyst.Domain.Replays.Lane.Middle,
             DotaAnalyst.Domain.Matches.Team.Radiant, 6, 1), activity.CreepHeroHits![0]);
         var camp = activity.NeutralCamps![0];
+        Assert.Equal(2, camp.SpawnerType);
         Assert.Equal(("camp:-1454:-3356", -1454, "large", 3, (int?)null), (camp.Id, camp.X, camp.Type, camp.AliveAt(50), camp.AliveAt(-1)));
     }
 
@@ -205,9 +225,10 @@ public class ReplayParserVitalsAndActivityTests
             """))!;
 
         Assert.Equal(
-            [new DotaAnalyst.Domain.Replays.RecordedUse(1, 415.5, "riki_smoke_screen", null, 506, 1106),
-             new DotaAnalyst.Domain.Replays.RecordedUse(1, 420, "riki_tricks", 6, null, null)],
+            [new DotaAnalyst.Domain.Replays.RecordedUse(1, 415.5, "riki_smoke_screen", null, 506, 1106, 1),
+             new DotaAnalyst.Domain.Replays.RecordedUse(1, 420, "riki_tricks", 6, null, null, 0)],
             activity.AbilityUses);
+        Assert.Equal((1, "castPositionOrder"), (activity.AbilityUses[0].PointSource, activity.AbilityUses[0].PointOrigin));
         Assert.Equal(
             [(DotaAnalyst.Domain.Replays.EconomyResource.Gold, DotaAnalyst.Domain.Replays.EconomySource.Other, 600),
              (DotaAnalyst.Domain.Replays.EconomyResource.Experience, DotaAnalyst.Domain.Replays.EconomySource.Creeps, 57),
@@ -237,6 +258,7 @@ public class ReplayParserVitalsAndActivityTests
         Assert.Equal(new DotaAnalyst.Domain.Replays.TypedDamageBucket(1, 22, 0, 0, 0, 0, 89, 0), Assert.Single(activity.TypedDamage!));
         Assert.Equal(new DotaAnalyst.Domain.Replays.HealingBucket(1, 24, 12, 12), Assert.Single(activity.Healing!));
         Assert.Equal((true, -6841), (activity.Couriers![0].AliveAt(10), activity.Couriers[0].Samples[0].X));
+        Assert.False(activity.Couriers[0].Flight![0].Flying);
         Assert.Equal(new int?[] { 55, null }, positions[0].Samples.Select(sample => sample.Facing));
     }
 
@@ -270,6 +292,101 @@ public class ReplayParserVitalsAndActivityTests
             "items": { "purchases": [], "uses": [] },
             "abilities": { "upgrades": [] }
             """)));
+    }
+
+    [Fact]
+    public void NeutralCrafts_Madstones_AndTheEnhancementSlot_AreRead()
+    {
+        var activity = ReplayParserMappings.ReadActivity(Read("""
+            "vision": { "wards": [], "smokes": [] },
+            "items": { "purchases": [], "uses": [],
+              "slots": [{ "player": 0, "changes": [[1208, 16, "item_occult_bracelet"], [1208, 17, "item_enhancement_brawny"]] }],
+              "neutralCrafts": [
+                { "player": 0, "crafts": [[1207.5, "item_occult_bracelet", 1, 1, "item_enhancement_brawny", 1]] },
+                { "player": 5, "crafts": [] }
+              ] },
+            "abilities": { "upgrades": [], "uses": [] },
+            "timelines": { "positions": [], "madstones": [
+              { "player": 0, "samples": [[0, 0, 0, 0, 0], [612, 4, 4, 6, 163]] },
+              { "player": 5, "samples": [[0, 0, 0, 0, 0]] }
+            ] }
+            """))!;
+
+        Assert.Equal(new DotaAnalyst.Domain.Replays.NeutralCraft(1, 1207.5, "item_occult_bracelet", 1, 1, "item_enhancement_brawny", 1),
+            Assert.Single(activity.NeutralCrafts!));
+        Assert.Equal(DotaAnalyst.Domain.Replays.SlotChange.EnhancementSlot, activity.SlotChanges![1].Slot);
+        var madstones = activity.Madstones!.Single(track => track.HeroId == 1);
+        Assert.Equal(new DotaAnalyst.Domain.Replays.MadstoneReading(612, 4, 4, 6, 163), madstones.At(700));
+        Assert.Equal(0, madstones.At(611)!.InHand);
+        Assert.Equal(2, activity.Madstones!.Count);
+    }
+
+    [Fact]
+    public void DocumentsWithoutNeutralSections_LeaveThemUnknown_AndBrokenTuplesThrow()
+    {
+        const string Without = """
+            "vision": { "wards": [], "smokes": [] },
+            "items": { "purchases": [], "uses": [] },
+            "abilities": { "upgrades": [], "uses": [] }
+            """;
+        var older = ReplayParserMappings.ReadActivity(Read(Without))!;
+        Assert.Null(older.NeutralCrafts);
+        Assert.Null(older.Madstones);
+
+        Assert.Throws<InvalidDataException>(() => ReplayParserMappings.ReadActivity(Read("""
+            "vision": { "wards": [], "smokes": [] },
+            "items": { "purchases": [], "uses": [], "neutralCrafts": [{ "player": 0, "crafts": [[10, "item_x", 1]] }] },
+            "abilities": { "upgrades": [], "uses": [] }
+            """)));
+        Assert.Throws<InvalidDataException>(() => ReplayParserMappings.ReadActivity(Read("""
+            "vision": { "wards": [], "smokes": [] },
+            "items": { "purchases": [], "uses": [] },
+            "abilities": { "upgrades": [], "uses": [] },
+            "timelines": { "positions": [], "madstones": [{ "player": 0, "samples": [[0, 1, 2]] }] }
+            """)));
+    }
+
+    [Theory]
+    [InlineData("[0,1,10,20]", null)]
+    [InlineData("[0,1,10,20,null]", null)]
+    [InlineData("[0,1,10,20,7]", null)]
+    [InlineData("[0,1,10,20,true]", true)]
+    public void CourierFlight_PreservesLegacyAndUnknown(string sample, bool? flying)
+    {
+        var response = Read($$"""
+            "vision": { "wards": [], "smokes": [] }, "items": { "uses": [] }, "abilities": { "uses": [] },
+            "timelines": { "couriers": [{ "id": "one", "team": "radiant", "samples": [{{sample}}] }] }
+            """);
+        var flight = ReplayParserMappings.ReadActivity(response)!.Couriers![0].Flight![0];
+        Assert.Equal(flying, flight.Flying);
+        if (sample.EndsWith(",7]", StringComparison.Ordinal)) Assert.Equal(7, flight.Raw);
+    }
+
+    [Theory]
+    [InlineData("[null,1,10,20,false]")]
+    [InlineData("[0,1,\"x\",20,false]")]
+    [InlineData("[0,1,10,20,\"flying\"]")]
+    public void CourierFlight_RejectsInvalidTupleAsUnreadable(string sample)
+    {
+        var response = Read($$"""
+            "vision": { "wards": [], "smokes": [] }, "items": { "uses": [] }, "abilities": { "uses": [] },
+            "timelines": { "couriers": [{ "id": "one", "team": "radiant", "samples": [{{sample}}] }] }
+            """);
+        Assert.Throws<InvalidDataException>(() => ReplayParserMappings.ReadActivity(response));
+    }
+
+    [Fact]
+    public void Metadata_PreservesEngineIdentityAndFractionalDuration_WithoutInventingLegacyValues()
+    {
+        var legacy = ReplayParserMappings.ReadMetadata(Read("\"match\": { \"durationSeconds\": 690.4 }"));
+        Assert.Equal(690.4, legacy.DurationSeconds);
+        Assert.Null(legacy.EngineBuild);
+        Assert.Null(legacy.MatchEnded);
+        var current = ReplayParserMappings.ReadMetadata(Read("""
+            "match": { "durationSeconds": 690.4, "engineBuild": 6962, "producerVersion": "abc+modified", "matchEnded": true }
+            """));
+        Assert.Equal((6962u, "abc+modified", true), (current.EngineBuild, current.ProducerVersion, current.MatchEnded));
+        Assert.Throws<InvalidDataException>(() => ReplayParserMappings.ReadMetadata(Read("\"match\": { \"durationSeconds\": -1 }")));
     }
 
     private static ReplayParserMatchResponse Read(string sections) =>

@@ -48,11 +48,18 @@ type itemsCollector struct {
 	abilityOwners   map[entityKey]abilitySlot  // where each ability entity sits (hero "" = not a player's hero)
 	upgrades        []upgradeEvent
 
-	// m_fCooldown last seen of every item/ability entity, and the cooldowns that started (it rose past now).
-	itemCooldownAt    map[entityKey]float64
-	abilityCooldownAt map[entityKey]float64
-	itemCooldowns     []cooldownEvent
-	abilityCooldowns  []cooldownEvent
+	// m_fCooldown last seen of every item/ability entity (and when), the cooldowns that started (it rose past now) and
+	// the ones that dropped while running (DATA-D15: resets, reductions).
+	itemCooldownAt         map[entityKey]cooldownReading
+	abilityCooldownAt      map[entityKey]cooldownReading
+	itemCooldowns          []cooldownEvent
+	abilityCooldowns       []cooldownEvent
+	itemCooldownChanges    []cooldownChangeEvent
+	abilityCooldownChanges []cooldownChangeEvent
+	// Stolen abilities (DATA-D17): the ones held now, every period that ended, and their cooldowns that started.
+	stolenNow       map[entityKey]*stolenPeriod
+	stolenPeriods   []*stolenPeriod
+	stolenCooldowns []cooldownChangeEvent
 	// The inventory, teleport and neutral slots last read of every hero, and their changes.
 	slotsNow    map[string][itemSlots]string // hero name -> item name per slot ("" = empty)
 	slotChanges []slotEvent
@@ -66,6 +73,29 @@ type cooldownEvent struct {
 	readyAt ServerTime
 }
 
+// cooldownReading is m_fCooldown (the time remaining) read at a server second.
+type cooldownReading struct {
+	remaining, at float64
+}
+
+// stolenPeriod is a stolen ability held by a hero from `from` to `to` (nil: still held), with its observed level and hidden
+// flag.
+type stolenPeriod struct {
+	hero, name string
+	entity     entityKey
+	level      int
+	hidden     bool
+	from       ServerTime
+	to         *ServerTime
+}
+
+// cooldownChangeEvent is a running cooldown that dropped at `at` (reset or reduction): ready at readyAt instead.
+type cooldownChangeEvent struct {
+	namedEvent
+	entity  entityKey
+	readyAt ServerTime
+}
+
 // slotEvent is a slot of a hero's inventory that changed at a second of the game clock (name "" = empty).
 type slotEvent struct {
 	second int
@@ -75,8 +105,9 @@ type slotEvent struct {
 }
 
 // Stash slots 9-14 are replicated too, so pending deliveries remain distinguishable from usable items.
-// Backpack and enhancement slots retain their existing behavior.
-var trackedSlots = []int{0, 1, 2, 3, 4, 5, 9, 10, 11, 12, 13, 14, teleportSlot, neutralSlot}
+// Enhancement changes use the same two-second cadence as artifacts. Backpack slots 6-8 are tracked too (DATA-D16): an
+// item moved to or from the backpack shows up, while consumers keep counting only the usable slots as usable.
+var trackedSlots = []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, teleportSlot, neutralSlot, enhancementSlot}
 
 // namedEvent is something a hero did with a named item or ability. The hero is kept by name and resolved to a player
 // in Fill: entries from the start of the pre-game come before the players are known.
@@ -144,8 +175,9 @@ func (c *itemsCollector) Register(s *Session) {
 	c.earlyItems = map[entityKey]bool{}
 	c.abilities = map[entityKey]abilityState{}
 	c.abilityOwners = map[entityKey]abilitySlot{}
-	c.itemCooldownAt = map[entityKey]float64{}
-	c.abilityCooldownAt = map[entityKey]float64{}
+	c.stolenNow = map[entityKey]*stolenPeriod{}
+	c.itemCooldownAt = map[entityKey]cooldownReading{}
+	c.abilityCooldownAt = map[entityKey]cooldownReading{}
 	c.slotsNow = map[string][itemSlots]string{}
 
 	s.OnCombatLog(func(entry CombatEntry) {
@@ -184,24 +216,27 @@ func (c *itemsCollector) Register(s *Session) {
 	s.OnSecond(func(second int) {
 		if second%matchdata.PositionIntervalSeconds == 0 {
 			c.readSlots(second)
+			c.readStolen()
 		}
 	})
 	s.OnEnd(func(int) { c.readFinalItems() })
 }
 
-// cooldownStarted remembers m_fCooldown and reports the server time the item or ability is ready when a new cooldown
-// started. m_fCooldown is the time remaining, in seconds (checked on a replay: a teleport's 24.0 is 23.0 a second later
-// and 14.0 ten seconds later), so it only goes down while a cooldown runs: a rise means a new one. An entity seen for the
-// first time counts as having had no cooldown.
-func (c *itemsCollector) cooldownStarted(e *manta.Entity, last map[entityKey]float64) (float64, bool) {
+// readCooldown remembers m_fCooldown and reports the server time the item or ability is ready, whether a new cooldown
+// started and whether a running one dropped. m_fCooldown is the time remaining, in seconds (checked on a replay: a
+// teleport's 24.0 is 23.0 a second later and 14.0 ten seconds later), so it only goes down while a cooldown runs: a
+// rise means a new one; falling faster than the time passed means a reset or a reduction. An entity seen for the first
+// time counts as having had no cooldown (never a drop).
+func (c *itemsCollector) readCooldown(e *manta.Entity, last map[entityKey]cooldownReading) (readyAt float64, started, dropped bool) {
 	key := keyOf(e)
 	remaining, ok := number(e, "m_fCooldown")
 	if !ok {
-		return 0, false
+		return 0, false, false
 	}
-	before := last[key]
-	last[key] = remaining
-	return float64(c.session.Clock.Now().Seconds) + remaining, cooldownRose(before, remaining)
+	now := c.session.Clock.Now().Seconds
+	before, seen := last[key]
+	last[key] = cooldownReading{remaining: remaining, at: now}
+	return now + remaining, cooldownRose(before.remaining, remaining), seen && cooldownDropped(before, remaining, now)
 }
 
 // cooldownRose says whether the time remaining went up (a new cooldown), given the last value seen. Half a second of
@@ -210,42 +245,115 @@ func cooldownRose(before, remaining float64) bool {
 	return remaining > before+0.5
 }
 
+// cooldownDropped says whether a running cooldown fell more than half a second below what the server time passed
+// since the last reading explains (a reset to 0 included). Server time also runs during pauses, when cooldowns stop:
+// that only makes the expected value lower, never a false drop.
+func cooldownDropped(before cooldownReading, remaining, now float64) bool {
+	expected := before.remaining - (now - before.at)
+	return expected > 0.5 && remaining < expected-0.5
+}
+
 // onItemCooldown records the cooldowns of the players' items (owner by m_iPlayerOwnerID).
 func (c *itemsCollector) onItemCooldown(e *manta.Entity, op manta.EntityOp) {
 	if op.Flag(manta.EntityOpDeleted) {
 		delete(c.itemCooldownAt, keyOf(e))
 		return
 	}
-	readyAt, started := c.cooldownStarted(e, c.itemCooldownAt)
-	if !started {
+	readyAt, started, dropped := c.readCooldown(e, c.itemCooldownAt)
+	if !started && !dropped {
 		return
 	}
 	owner, ok := number(e, "m_iPlayerOwnerID")
 	if !ok {
 		return
 	}
-	if hero := c.heroOfPlayerID(int32(owner)); hero != "" {
-		c.itemCooldowns = append(c.itemCooldowns, cooldownEvent{
-			namedEvent: namedEvent{at: c.session.Clock.Now(), hero: hero, name: c.session.EntityName(e)},
-			readyAt:    c.session.Clock.At(readyAt),
-		})
+	hero := c.heroOfPlayerID(int32(owner))
+	if hero == "" {
+		return
+	}
+	event := namedEvent{at: c.session.Clock.Now(), hero: hero, name: c.session.EntityName(e)}
+	if started {
+		c.itemCooldowns = append(c.itemCooldowns, cooldownEvent{namedEvent: event, readyAt: c.session.Clock.At(readyAt)})
+	} else {
+		c.itemCooldownChanges = append(c.itemCooldownChanges,
+			cooldownChangeEvent{namedEvent: event, entity: keyOf(e), readyAt: c.session.Clock.At(readyAt)})
 	}
 }
 
 // onAbilityCooldown records the cooldowns of the players' heroes' abilities (not stolen ones).
 func (c *itemsCollector) onAbilityCooldown(e *manta.Entity, key entityKey) {
-	readyAt, started := c.cooldownStarted(e, c.abilityCooldownAt)
-	if !started {
+	readyAt, started, dropped := c.readCooldown(e, c.abilityCooldownAt)
+	if !started && !dropped {
 		return
 	}
+	owner, ok := c.abilityOwner(e, key)
+	if !ok {
+		return
+	}
+	event := namedEvent{at: c.session.Clock.Now(), hero: owner.hero, name: c.session.EntityName(e)}
+	// A stolen ability's cooldowns are its carrier's, kept apart with the entity (never the original hero's).
 	if stolen, _ := e.GetBool("m_bStolen"); stolen {
+		if started {
+			c.stolenCooldowns = append(c.stolenCooldowns,
+				cooldownChangeEvent{namedEvent: event, entity: key, readyAt: c.session.Clock.At(readyAt)})
+		}
 		return
 	}
-	if owner, ok := c.abilityOwner(e, key); ok {
-		c.abilityCooldowns = append(c.abilityCooldowns, cooldownEvent{
-			namedEvent: namedEvent{at: c.session.Clock.Now(), hero: owner.hero, name: c.session.EntityName(e)},
-			readyAt:    c.session.Clock.At(readyAt),
-		})
+	if started {
+		c.abilityCooldowns = append(c.abilityCooldowns, cooldownEvent{namedEvent: event, readyAt: c.session.Clock.At(readyAt)})
+	} else {
+		c.abilityCooldownChanges = append(c.abilityCooldownChanges,
+			cooldownChangeEvent{namedEvent: event, entity: key, readyAt: c.session.Clock.At(readyAt)})
+	}
+}
+
+// readStolen follows the stolen abilities (m_bStolen) in every player's hero's m_vecAbilities: a period starts when one
+// appears and ends when it is gone (spike: cmd/inspect -stolen-spike).
+func (c *itemsCollector) readStolen() {
+	now := c.session.Clock.Now()
+	seen := map[entityKey]bool{}
+	for _, hero := range c.heroesNow() {
+		heroName := c.session.EntityName(hero)
+		for _, property := range abilitySlotNames {
+			handle, ok := hero.GetUint32(property)
+			if !ok {
+				continue
+			}
+			ability := c.session.Parser.FindEntityByHandle(uint64(handle))
+			if ability == nil {
+				continue
+			}
+			if stolen, _ := ability.GetBool("m_bStolen"); !stolen {
+				continue
+			}
+			key := keyOf(ability)
+			seen[key] = true
+			level, _ := ability.GetInt32("m_iLevel")
+			hidden, _ := ability.GetBool("m_bHidden")
+			c.observeStolen(key, heroName, c.session.EntityName(ability), int(level), hidden, now)
+		}
+	}
+	for key, period := range c.stolenNow {
+		if !seen[key] {
+			at := now
+			period.to = &at
+			delete(c.stolenNow, key)
+		}
+	}
+}
+
+// observeStolen starts a new observation period when the carrier or replicated state changes.
+func (c *itemsCollector) observeStolen(key entityKey, hero, name string, level int, hidden bool, now ServerTime) {
+	period := c.stolenNow[key]
+	if period != nil && (period.hero != hero || period.name != name || period.level != level || period.hidden != hidden) {
+		at := now
+		period.to = &at
+		period = nil
+	}
+	if period == nil {
+		period = &stolenPeriod{hero: hero, name: name, entity: key, from: now, level: level, hidden: hidden}
+		c.stolenNow[key] = period
+		c.stolenPeriods = append(c.stolenPeriods, period)
 	}
 }
 
@@ -486,6 +594,39 @@ func (c *itemsCollector) Fill(m *matchdata.Match) error {
 	itemCooldowns := cooldownsByPlayer(c.itemCooldowns)
 	abilityCooldowns := cooldownsByPlayer(c.abilityCooldowns)
 
+	changesByPlayer := func(events []cooldownChangeEvent) [playerCount]matchdata.List[matchdata.CooldownChange] {
+		var lists [playerCount]matchdata.List[matchdata.CooldownChange]
+		for _, event := range events {
+			if player, t, ok := playerAt(event.namedEvent); ok {
+				lists[player] = append(lists[player], matchdata.CooldownChange{
+					T: matchdata.Seconds(t), Name: event.name, Entity: int(event.entity.index), Serial: int(event.entity.serial),
+					ReadyAt: matchdata.Seconds(clock.Game(event.readyAt))})
+			}
+		}
+		for _, list := range lists {
+			sort.SliceStable(list, func(i, j int) bool { return list[i].T < list[j].T })
+		}
+		return lists
+	}
+	itemChanges := changesByPlayer(c.itemCooldownChanges)
+	abilityChanges := changesByPlayer(c.abilityCooldownChanges)
+	// The stolen abilities' cooldowns share the [t, name, entity, serial, readyAt] tuple (here: cooldowns that started).
+	stolenCooldowns := changesByPlayer(c.stolenCooldowns)
+	var stolen [playerCount]matchdata.List[matchdata.StolenAbility]
+	for _, period := range c.stolenPeriods {
+		player, from, ok := playerAt(namedEvent{at: period.from, hero: period.hero, name: period.name})
+		if !ok {
+			continue
+		}
+		row := matchdata.StolenAbility{From: matchdata.Seconds(from), Name: period.name, Entity: int(period.entity.index),
+			Serial: int(period.entity.serial), Level: period.level, Hidden: period.hidden}
+		if period.to != nil && clock.Game(*period.to) <= end {
+			to := matchdata.Seconds(clock.Game(*period.to))
+			row.To = &to
+		}
+		stolen[player] = append(stolen[player], row)
+	}
+
 	var slots [playerCount]matchdata.List[matchdata.SlotChange]
 	for _, change := range c.slotChanges { // already in time order
 		player, ok := players.ByHeroName(change.hero)
@@ -511,6 +652,9 @@ func (c *itemsCollector) Fill(m *matchdata.Match) error {
 		items.Slots = append(items.Slots, matchdata.PlayerSlotChanges{Player: i, Changes: slots[i]})
 		items.Cooldowns = append(items.Cooldowns, matchdata.PlayerCooldowns{Player: i, Cooldowns: itemCooldowns[i]})
 		abilities.Cooldowns = append(abilities.Cooldowns, matchdata.PlayerCooldowns{Player: i, Cooldowns: abilityCooldowns[i]})
+		items.CooldownChanges = append(items.CooldownChanges, matchdata.PlayerCooldownChanges{Player: i, Changes: itemChanges[i]})
+		abilities.CooldownChanges = append(abilities.CooldownChanges, matchdata.PlayerCooldownChanges{Player: i, Changes: abilityChanges[i]})
+		abilities.Stolen = append(abilities.Stolen, matchdata.PlayerStolenAbilities{Player: i, Abilities: stolen[i], Cooldowns: stolenCooldowns[i]})
 		final, ok := c.final[player.HeroName]
 		if !ok { // the replay stopped before the end and the hero was gone
 			final = matchdata.FinalItems{

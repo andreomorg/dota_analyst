@@ -98,7 +98,19 @@ SURROUNDINGS = ['moveSpeedNow', 'advanceSpeed', 'buybackReady', 'underSmoke', 'a
                 'enemiesWithStunInKit', 'enemiesWithSilenceOrHexInKit', 'enemiesWithEscapeInKit',
                 'enemiesWithInvisibilityInKit', 'myDisableReady', 'myEscapeReady',
                 # How much of each jungle and the river the team's observers see.
-                'observerCoverageOwnJungle', 'observerCoverageEnemyJungle', 'observerCoverageRiver']
+                'observerCoverageOwnJungle', 'observerCoverageEnemyJungle', 'observerCoverageRiver',
+                # What the spells can do now: own ready damage/healing/mana, allies' healing near, enemy kit damage.
+                'myReadySpellDamage', 'myReadySpellHealing', 'myReadySpellsManaCost', 'myManaAfterReadySpells',
+                'alliesReadySpellHealingNear', 'enemyKitDamageAlive',
+                # Shape and reach (build of the match): own ready area/single-target spells, range, disables that
+                # reach the seen enemy; enemies' learned disables: reach, undispellable, through spell immunity.
+                'myReadyAreaSpells', 'myReadySingleTargetSpells', 'myReadySpellMaxRange',
+                'myReadyDisablesReachingSeenEnemy', 'enemyKitDisableMaxRange', 'enemyKitUndispellableDisables',
+                'enemyKitImmunityPiercingDisables',
+                # Neutral items: tier open and the next, own artifact tier/behind/active, enhancement, Madstones, crafts.
+                'neutralTierOpen', 'secondsToNextNeutralTier', 'myNeutralArtifactTier', 'myNeutralTiersBehind',
+                'myNeutralActiveReady', 'myNeutralEnhancementLevel', 'myMadstones', 'canCraftNeutralNow',
+                'secondsSinceNeutralCraft']
 VISIBLE_BY_VERSION = {1: _VISIBLE_V1,
                       2: _VISIBLE_V1 + ACTIVITY + READINESS + MAP_STATE + CONDITION + WAVES + BODY_FIGHT_FARM + INTENT
                       + MISSING + AFFLICTIONS + BOONS + BUILDINGS + THREAT + LANE_OPPONENT + SURROUNDINGS}
@@ -117,7 +129,14 @@ HIDDEN_BY_VERSION = {1: _HIDDEN_V1, 2: _HIDDEN_V1 + ['hiddenEnemySmokeSecondsAgo
                                                      'hiddenEnemyBigItemsLast2Minutes', 'hiddenEnemiesWithDisableReadyNear',
                                                      'hiddenEnemiesUltimateReadyNear',
                                                      'hiddenEnemiesBlackKingBarReadyNear', 'hiddenLaneOpponentDistance',
-                                                     'hiddenLaneOpponentNetWorthLead', 'hiddenSeenByEnemies']}
+                                                     'hiddenLaneOpponentNetWorthLead', 'hiddenSeenByEnemies',
+                                                     'hiddenEnemiesReadySpellDamageNear',
+                                                     'hiddenEnemiesReadySpellHealingNear',
+                                                     'hiddenEnemyReadySpellsReachingMe',
+                                                     'hiddenEnemyReadyDisablesReachingMe',
+                                                     'hiddenEnemyReadyDamageReachingMe',
+                                                     'hiddenEnemyNeutralActivesReadyNear', 'hiddenEnemyMadstones',
+                                                     'hiddenEnemyNeutralTiersBehind']}
 # The simple model to beat: three numbers anyone would look at first.
 SIMPLE = ['nearestAllyDistance', 'onEnemySide', 'seconds']
 CATEGORICAL = ['region']

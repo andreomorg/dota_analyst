@@ -9,15 +9,16 @@ internal static class FirstBigItemMetric
     public static IReadOnlyList<HeroMetrics> AddTo(
         IReadOnlyList<HeroMetrics> metrics,
         IReadOnlyList<ItemPurchase>? purchases,
-        IReadOnlyDictionary<int, Item> items)
+        IReadOnlyDictionary<int, Item> items,
+        IReadOnlyDictionary<string, ItemDetails>? rules = null)
     {
-        var byKey = items.Values
+        var byKey = rules ?? items.Values
             .Where(item => item.Details is not null)
             .DistinctBy(item => item.Details!.Key)
             .ToDictionary(item => item.Details!.Key, item => item.Details!);
         if (byKey.Count == 0 || purchases is null)
         {
-            return metrics;
+            return rules is null ? metrics : metrics.Select(hero => hero with { FirstBigItemSeconds = null }).ToList();
         }
 
         return metrics.Select(hero => hero with

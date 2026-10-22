@@ -22,7 +22,9 @@ _SITUATION_V1 = ['heroId', 'team', 'seconds', 'role', 'roleInferred', 'x', 'y', 
                  'secondsSinceLastDeath']
 _HIDDEN_V1 = ['hiddenNearestEnemyDistance', 'hiddenEnemiesNear', 'hiddenEnemiesWithinFightRange']
 # The situation columns of each feature version, in the order of SituationRow in DotaAnalyst.Application. An export (and
-# every model trained on it) keeps its version, so older models stay readable on older exports.
+# every model trained on it) keeps its version, so older models stay readable on older exports. Version 2 had never
+# been exported by 22/10/2026 (only v1 exports and models-v1 exist), so the ultimate-from-catalog (DATA-D03) and the
+# readiness with cooldown resets (DATA-D15) meaning changes stay in v2; once a v2 export is saved, changes bump it.
 SITUATION_BY_VERSION = {
     1: _SITUATION_V1 + _HIDDEN_V1,
     2: _SITUATION_V1 + ['activityKnown', 'ownSmokeSecondsAgo', 'teleportSecondsAgo', 'escapeItemSecondsAgo',
@@ -76,7 +78,14 @@ SITUATION_BY_VERSION = {
                         'enemiesWithUltimateLevel', 'secondsSinceMyBigItem', 'enemiesWithStunInKit',
                         'enemiesWithSilenceOrHexInKit', 'enemiesWithEscapeInKit', 'enemiesWithInvisibilityInKit',
                         'myDisableReady', 'myEscapeReady',
-                        'observerCoverageOwnJungle', 'observerCoverageEnemyJungle', 'observerCoverageRiver']
+                        'observerCoverageOwnJungle', 'observerCoverageEnemyJungle', 'observerCoverageRiver',
+                        'myReadySpellDamage', 'myReadySpellHealing', 'myReadySpellsManaCost', 'myManaAfterReadySpells',
+                        'alliesReadySpellHealingNear', 'enemyKitDamageAlive', 'myReadyAreaSpells',
+                        'myReadySingleTargetSpells', 'myReadySpellMaxRange', 'myReadyDisablesReachingSeenEnemy',
+                        'enemyKitDisableMaxRange', 'enemyKitUndispellableDisables', 'enemyKitImmunityPiercingDisables',
+                        'neutralTierOpen', 'secondsToNextNeutralTier', 'myNeutralArtifactTier', 'myNeutralTiersBehind',
+                        'myNeutralActiveReady', 'myNeutralEnhancementLevel', 'myMadstones', 'canCraftNeutralNow',
+                        'secondsSinceNeutralCraft']
        + _HIDDEN_V1 + ['hiddenEnemySmokeSecondsAgo', 'hiddenEnemiesHealthShare', 'hiddenEnemyScanSecondsAgo',
                        'hiddenEnemyPowerRuneSecondsAgo', 'hiddenEnemyWaveAhead', 'hiddenEnemyWaveCreepsAtFront',
                        'hiddenWaveHealthBalanceAtFront', 'hiddenEnemyWaveStacked', 'hiddenEnemyCampsStacked',
@@ -86,7 +95,11 @@ SITUATION_BY_VERSION = {
                        'hiddenPowerRuneOnMap', 'hiddenEnemyBigItemsLast2Minutes', 'hiddenEnemiesWithDisableReadyNear',
                        'hiddenEnemiesUltimateReadyNear',
                        'hiddenEnemiesBlackKingBarReadyNear', 'hiddenLaneOpponentDistance',
-                       'hiddenLaneOpponentNetWorthLead', 'hiddenSeenByEnemies'],
+                       'hiddenLaneOpponentNetWorthLead', 'hiddenSeenByEnemies',
+                       'hiddenEnemiesReadySpellDamageNear', 'hiddenEnemiesReadySpellHealingNear',
+                       'hiddenEnemyReadySpellsReachingMe', 'hiddenEnemyReadyDisablesReachingMe',
+                       'hiddenEnemyReadyDamageReachingMe', 'hiddenEnemyNeutralActivesReadyNear', 'hiddenEnemyMadstones',
+                       'hiddenEnemyNeutralTiersBehind'],
 }
 # Each model's label columns, after the situation; and the API route of its samples.
 LABELS = {'death-risk': ['diesSoon', 'diedAtSeconds'], 'next-region': ['regionLater']}
@@ -103,7 +116,8 @@ def columns_of(version, kind='death-risk'):
 
 # What the API sends today for death risk (the default kind).
 COLUMNS = columns_of(FEATURE_VERSION)
-MAX_BODY = 16 * 1024 * 1024
+# A sanity cap: ~8 KB per sample with the v2 columns, ~3,600 samples in a 60-minute match (~30 MB).
+MAX_BODY = 128 * 1024 * 1024
 MAX_RETRY_AFTER = 60
 
 

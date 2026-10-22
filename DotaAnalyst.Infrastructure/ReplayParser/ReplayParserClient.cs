@@ -121,13 +121,13 @@ public class ReplayParserClient(
 
         try
         {
-            var response = JsonSerializer.Deserialize<ReplayParserMatchResponse>(document, JsonOptions);
-            if (requireModelSections && (response is null || !ReplayParserMappings.HasModelSections(response)))
+            var response = ArchivedReplaySource.Read(document, matchId);
+            if (requireModelSections && !ReplayParserMappings.HasModelSections(response))
             {
                 return null;
             }
 
-            var analysis = response?.ToReplayAnalysis(matchId);
+            var analysis = response.ToReplayAnalysis(matchId);
             if (analysis is { IsOutdated: false })
             {
                 logger.LogInformation("Match {MatchId} was read again from its kept replay document", matchId);
@@ -203,8 +203,7 @@ public class ReplayParserClient(
         try
         {
             var document = await response.Content.ReadAsStringAsync(cancellationToken);
-            var body = JsonSerializer.Deserialize<ReplayParserMatchResponse>(document, JsonOptions)
-                ?? throw new InvalidDataException("The answer is empty.");
+            var body = ArchivedReplaySource.Read(document, matchId);
             var analysis = body.ToReplayAnalysis(matchId);
 
             // Only a document that made a valid analysis is kept. Keeping it never fails the parse (the archive

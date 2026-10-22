@@ -33,6 +33,40 @@ public enum ComparedMetric
     TeamObserverUptime,
     LeadLostPerDeath,
     FirstBigItemSeconds,
+    // Deaths by terrain (TerrainMetrics, MP8), per 30 minutes.
+    DeathsOnEnemyHighGroundPer30,
+    DeathsBelowEnemyHighGroundPer30,
+    NarrowGroundDeathsPer30,
+    DeepEnemyJungleDeathsPer30,
+    // Vision (VisionMetrics): share of the time seen by the enemy, deaths per 30 minutes while tracked / unseen
+    // before / to a killer from the fog, and kills from the fog per 30 minutes.
+    SeenByEnemies,
+    DeathsWhileTrackedPer30,
+    DeathsUnseenBeforePer30,
+    DeathsToKillerFromFogPer30,
+    KillsFromFogPer30,
+    // Of the ground in range of the hero's observer wards, the part they really saw (terrain, trees).
+    ObserverSeenShare,
+    // The map's objectives (MapObjectiveMetrics): the hero's counters per 30 minutes, and the share of the team's
+    // Roshan / Tormentor kills and enemy towers it was there for.
+    BountyRunesPer30,
+    PowerRunesPer30,
+    WisdomShrinesPer30,
+    LotusesPer30,
+    WatchersPer30,
+    OutpostsPer30,
+    CampsStackedPer30,
+    RoshanPresence,
+    TormentorPresence,
+    TowerPresence,
+    // Wisdom Shrines per 30 minutes: of the team's side lost to the enemy, of the enemy's side taken.
+    OwnShrinesLostPer30,
+    EnemyShrinesTakenPer30,
+    // Teleports (TeleportMetrics) that arrived into a fight, per 30 minutes.
+    TeleportsIntoFightsPer30,
+    // Play quality (PlayQualityMetrics): share of the listed skillshots that hit, allies saved per 30 minutes.
+    SkillshotAccuracy,
+    SavesPer30,
 }
 
 // One hero's metrics in one match of the base, with the match's length (for the per-30-minutes numbers), and the
@@ -101,6 +135,32 @@ public static class BaselineComparer
         (ComparedMetric.TeamObserverUptime, (hero, _) => hero.TeamObserverUptime, true),
         (ComparedMetric.LeadLostPerDeath, (hero, _) => hero.LeadLostPerDeath, false),
         (ComparedMetric.FirstBigItemSeconds, (hero, _) => hero.FirstBigItemSeconds, false),
+        (ComparedMetric.DeathsOnEnemyHighGroundPer30, (hero, seconds) => hero.Terrain is { } terrain ? Per30(terrain.DeathsOnEnemyHighGround, seconds) : null, false),
+        (ComparedMetric.DeathsBelowEnemyHighGroundPer30, (hero, seconds) => hero.Terrain is { } terrain ? Per30(terrain.DeathsBelowEnemyHighGround, seconds) : null, false),
+        (ComparedMetric.NarrowGroundDeathsPer30, (hero, seconds) => hero.Terrain?.DeathsInNarrowGround is { } narrow ? Per30(narrow, seconds) : null, false),
+        (ComparedMetric.DeepEnemyJungleDeathsPer30, (hero, seconds) => hero.Terrain?.DeathsInDeepEnemyJungle is { } deep ? Per30(deep, seconds) : null, false),
+        // Less seen is better: the enemy knows less where the hero is.
+        (ComparedMetric.SeenByEnemies, (hero, _) => hero.Vision?.SeenByEnemiesShare, false),
+        (ComparedMetric.DeathsWhileTrackedPer30, (hero, seconds) => hero.Vision?.DeathsWhileTracked is { } tracked ? Per30(tracked, seconds) : null, false),
+        (ComparedMetric.DeathsUnseenBeforePer30, (hero, seconds) => hero.Vision?.DeathsUnseenBefore is { } unseen ? Per30(unseen, seconds) : null, false),
+        (ComparedMetric.DeathsToKillerFromFogPer30, (hero, seconds) => hero.Vision?.DeathsToKillerFromFog is { } fogDeaths ? Per30(fogDeaths, seconds) : null, false),
+        (ComparedMetric.KillsFromFogPer30, (hero, seconds) => hero.Vision?.KillsFromFog is { } fogKills ? Per30(fogKills, seconds) : null, true),
+        (ComparedMetric.ObserverSeenShare, (hero, _) => hero.Vision?.ObserverSeenShare, true),
+        (ComparedMetric.BountyRunesPer30, (hero, seconds) => hero.Objectives?.Counts is { } counts ? Per30(counts.BountyRunes, seconds) : null, true),
+        (ComparedMetric.PowerRunesPer30, (hero, seconds) => hero.Objectives?.Counts is { } counts ? Per30(counts.PowerRunes, seconds) : null, true),
+        (ComparedMetric.WisdomShrinesPer30, (hero, seconds) => hero.Objectives?.Counts is { } counts ? Per30(counts.WisdomShrines, seconds) : null, true),
+        (ComparedMetric.LotusesPer30, (hero, seconds) => hero.Objectives?.Counts is { } counts ? Per30(counts.Lotuses, seconds) : null, true),
+        (ComparedMetric.WatchersPer30, (hero, seconds) => hero.Objectives?.Counts is { } counts ? Per30(counts.Watchers, seconds) : null, true),
+        (ComparedMetric.OutpostsPer30, (hero, seconds) => hero.Objectives?.Counts is { } counts ? Per30(counts.Outposts, seconds) : null, true),
+        (ComparedMetric.CampsStackedPer30, (hero, seconds) => hero.Objectives?.Counts is { } counts ? Per30(counts.CampsStacked, seconds) : null, true),
+        (ComparedMetric.RoshanPresence, (hero, _) => hero.Objectives is { RoshanKills: > 0 and var kills, RoshanKillsNearby: { } near } ? (double)near / kills : null, true),
+        (ComparedMetric.TormentorPresence, (hero, _) => hero.Objectives is { TormentorKills: > 0 and var kills, TormentorKillsNearby: { } near } ? (double)near / kills : null, true),
+        (ComparedMetric.TowerPresence, (hero, _) => hero.Objectives is { EnemyTowersTaken: > 0 and var towers, EnemyTowersTakenNearby: { } near } ? (double)near / towers : null, true),
+        (ComparedMetric.OwnShrinesLostPer30, (hero, seconds) => hero.Objectives?.OwnShrinesLost is { } lost ? Per30(lost, seconds) : null, false),
+        (ComparedMetric.EnemyShrinesTakenPer30, (hero, seconds) => hero.Objectives?.EnemyShrinesTaken is { } stolen ? Per30(stolen, seconds) : null, true),
+        (ComparedMetric.TeleportsIntoFightsPer30, (hero, seconds) => hero.Teleports?.IntoFights is { } joined ? Per30(joined, seconds) : null, true),
+        (ComparedMetric.SkillshotAccuracy, (hero, _) => hero.Plays is { SkillshotUses: > 0 and var uses, SkillshotHits: { } hits } ? (double)hits / uses : null, true),
+        (ComparedMetric.SavesPer30, (hero, seconds) => hero.Plays?.Saves is { } saves ? Per30(saves, seconds) : null, true),
     ];
 
     // The distribution of each metric the base has at least MinSampleSize values of.

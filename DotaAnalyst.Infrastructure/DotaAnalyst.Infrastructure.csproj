@@ -19,6 +19,13 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The map of each patch (tools/MapExtractor), read by GameMapCatalog. -->
+    <EmbeddedResource Include="GameData\Maps\*.map.json.gz" LogicalName="DotaAnalyst.Maps.%(Filename)%(Extension)" />
+    <!-- Valve's patch list as of the last save, used when Valve is not asked or does not answer (GamePatchCatalog). -->
+    <EmbeddedResource Include="GameData\Patches\patchnoteslist.json" LogicalName="DotaAnalyst.Patches.patchnoteslist.json" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- Lets tests use OpenDotaClient.JsonOptions to read JSON fixtures exactly like the client. -->
     <InternalsVisibleTo Include="DotaAnalyst.Tests" />
   </ItemGroup>

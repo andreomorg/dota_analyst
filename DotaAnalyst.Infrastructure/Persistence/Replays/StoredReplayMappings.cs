@@ -33,7 +33,15 @@ internal sealed record StoredReplayAnalysis(
     // Added with the heatmaps, the same way.
     IReadOnlyList<StoredHeatmap>? Heatmaps = null,
     // Added when the match page began showing the player's skill build; older rows are re-read from the replay.
-    IReadOnlyList<StoredAbilityUpgrade>? AbilityUpgrades = null);
+    IReadOnlyList<StoredAbilityUpgrade>? AbilityUpgrades = null,
+    // Added with the neutral crafts (N6), the same way (rows saved before have none and are NOT re-read for it).
+    IReadOnlyList<StoredNeutralCraft>? NeutralCrafts = null,
+    IReadOnlyList<StoredNeutralProgress>? NeutralProgress = null);
+
+internal sealed record StoredNeutralCraft(int HeroId, double Seconds, string Artifact, int? ArtifactLevel, int Tier, string? Enhancement,
+    int? EnhancementLevel);
+
+internal sealed record StoredNeutralProgress(int HeroId, int Acquired, int Found, int InHandAtEnd, int NeutralGold);
 
 // Each phase as a flat list [column, row, samples, column, row, samples, ...]: a match's heatmaps are about 30
 // lists of a few hundred cells, and objects per cell would triple the size of the row.
@@ -74,7 +82,30 @@ internal sealed record StoredHeroMetrics(
     IReadOnlyDictionary<MapRegion, double>? NetWorthGainByRegion = null,
     IReadOnlyDictionary<MapRegion, int>? MinutesByRegion = null,
     // Added after the first-item timing metric; null in older metric rows.
-    int? FirstBigItemSeconds = null);
+    int? FirstBigItemSeconds = null,
+    // Terrain metrics (MP8); absent in older rows, which stay valid (never parsed again for it).
+    StoredTerrainMetrics? Terrain = null,
+    // Vision metrics; absent in older rows, which stay valid.
+    StoredVisionMetrics? Vision = null,
+    // Map objective metrics; absent in older rows, which stay valid.
+    StoredMapObjectiveMetrics? Objectives = null,
+    // Teleport metrics; absent in older rows, which stay valid.
+    TeleportMetrics? Teleports = null,
+    // Play quality metrics; absent in older rows, which stay valid.
+    PlayQualityMetrics? Plays = null);
+
+internal sealed record StoredMapObjectiveMetrics(
+    MapObjectiveCounts? Counts, int RoshanKills, int? RoshanKillsNearby, int TormentorKills, int? TormentorKillsNearby,
+    int EnemyTowersTaken, int? EnemyTowersTakenNearby, int? OwnShrinesLost = null, int? EnemyShrinesTaken = null);
+
+internal sealed record StoredVisionMetrics(
+    double SeenByEnemiesShare, int? DeathsWhileTracked, int? DeathsUnseenBefore, int? DeathsToKillerFromFog, int? KillsFromFog,
+    double? ObserverSeenShare = null);
+
+internal sealed record StoredTerrainMetrics(
+    double? OwnHighGroundShare, double? EnemyHighGroundShare, double? RiverLevelShare, double? NarrowGroundShare,
+    double? DeepEnemyJungleShare, int DeathsOnEnemyHighGround, int DeathsBelowEnemyHighGround, int? DeathsInNarrowGround,
+    int? DeathsInDeepEnemyJungle);
 
 internal sealed record StoredRegionPhases<T>(
     IReadOnlyDictionary<MapRegion, T> EarlyGame,
@@ -236,7 +267,18 @@ internal static class StoredReplayMappings
                 stored.AbilityUpgrades?.Select(upgrade => upgrade is null
                     ? throw new InvalidDataException("A saved replay analysis has an empty ability upgrade.")
                     : new AbilityUpgrade(upgrade.HeroId, upgrade.Seconds, upgrade.AbilityName, upgrade.Level))
-                    .ToList());
+                    .ToList())
+            {
+                NeutralCrafts = stored.NeutralCrafts?.Select(craft => craft is null
+                        ? throw new InvalidDataException("A saved replay analysis has an empty neutral craft.")
+                        : new NeutralCraft(craft.HeroId, craft.Seconds, craft.Artifact, craft.ArtifactLevel, craft.Tier,
+                            craft.Enhancement, craft.EnhancementLevel))
+                    .ToList(),
+                NeutralProgress = stored.NeutralProgress?.Select(entry => entry is null
+                        ? throw new InvalidDataException("A saved replay analysis has an empty neutral progress.")
+                        : new NeutralProgress(entry.HeroId, entry.Acquired, entry.Found, entry.InHandAtEnd, entry.NeutralGold))
+                    .ToList(),
+            };
         }
         catch (ArgumentException ex)
         {
@@ -300,6 +342,13 @@ internal static class StoredReplayMappings
             AbilityUpgrades: analysis.AbilityUpgrades?
                 .Select(upgrade => new StoredAbilityUpgrade(
                     upgrade.HeroId, upgrade.Seconds, upgrade.AbilityName, upgrade.Level))
+                .ToList(),
+            NeutralCrafts: analysis.NeutralCrafts?
+                .Select(craft => new StoredNeutralCraft(craft.HeroId, craft.Seconds, craft.Artifact, craft.ArtifactLevel, craft.Tier,
+                    craft.Enhancement, craft.EnhancementLevel))
+                .ToList(),
+            NeutralProgress: analysis.NeutralProgress?
+                .Select(entry => new StoredNeutralProgress(entry.HeroId, entry.Acquired, entry.Found, entry.InHandAtEnd, entry.NeutralGold))
                 .ToList());
 
     private static PerGamePhase<TeamProximity>? ToProximity(IReadOnlyList<int>? flat) => flat switch
@@ -341,7 +390,23 @@ internal static class StoredReplayMappings
             hero.TeamObserverUptime, hero.LeadLostPerDeath,
             hero.NetWorthGainByRegion is { } gain ? PerRegion<double>.Of(gain.GetValueOrDefault) : null,
             hero.MinutesByRegion is { } minutes ? PerRegion<int>.Of(minutes.GetValueOrDefault) : null,
-            hero.FirstBigItemSeconds);
+            hero.FirstBigItemSeconds,
+            hero.Terrain is { } terrain
+                ? new TerrainMetrics(terrain.OwnHighGroundShare, terrain.EnemyHighGroundShare, terrain.RiverLevelShare,
+                    terrain.NarrowGroundShare, terrain.DeepEnemyJungleShare, terrain.DeathsOnEnemyHighGround,
+                    terrain.DeathsBelowEnemyHighGround, terrain.DeathsInNarrowGround, terrain.DeathsInDeepEnemyJungle)
+                : null,
+            hero.Vision is { } vision
+                ? new VisionMetrics(vision.SeenByEnemiesShare, vision.DeathsWhileTracked, vision.DeathsUnseenBefore,
+                    vision.DeathsToKillerFromFog, vision.KillsFromFog, vision.ObserverSeenShare)
+                : null,
+            hero.Objectives is { } objectives
+                ? new MapObjectiveMetrics(objectives.Counts, objectives.RoshanKills, objectives.RoshanKillsNearby,
+                    objectives.TormentorKills, objectives.TormentorKillsNearby, objectives.EnemyTowersTaken, objectives.EnemyTowersTakenNearby,
+                    objectives.OwnShrinesLost, objectives.EnemyShrinesTaken)
+                : null,
+            hero.Teleports,
+            hero.Plays);
 
     public static StoredHeroMetrics ToStored(HeroMetrics hero) =>
         new(hero.HeroId, hero.Team, hero.Role, hero.Deaths, hero.IsolatedDeaths, hero.DeathsOnEnemySide,
@@ -360,7 +425,23 @@ internal static class StoredReplayMappings
             hero.TeamObserverUptime, hero.LeadLostPerDeath,
             hero.NetWorthGainByRegion is { } gain ? ByRegion(gain) : null,
             hero.MinutesByRegion is { } minutes ? ByRegion(minutes) : null,
-            hero.FirstBigItemSeconds);
+            hero.FirstBigItemSeconds,
+            hero.Terrain is { } terrain
+                ? new StoredTerrainMetrics(terrain.OwnHighGroundShare, terrain.EnemyHighGroundShare, terrain.RiverLevelShare,
+                    terrain.NarrowGroundShare, terrain.DeepEnemyJungleShare, terrain.DeathsOnEnemyHighGround,
+                    terrain.DeathsBelowEnemyHighGround, terrain.DeathsInNarrowGround, terrain.DeathsInDeepEnemyJungle)
+                : null,
+            hero.Vision is { } vision
+                ? new StoredVisionMetrics(vision.SeenByEnemiesShare, vision.DeathsWhileTracked, vision.DeathsUnseenBefore,
+                    vision.DeathsToKillerFromFog, vision.KillsFromFog, vision.ObserverSeenShare)
+                : null,
+            hero.Objectives is { } objectives
+                ? new StoredMapObjectiveMetrics(objectives.Counts, objectives.RoshanKills, objectives.RoshanKillsNearby,
+                    objectives.TormentorKills, objectives.TormentorKillsNearby, objectives.EnemyTowersTaken, objectives.EnemyTowersTakenNearby,
+                    objectives.OwnShrinesLost, objectives.EnemyShrinesTaken)
+                : null,
+            hero.Teleports,
+            hero.Plays);
 
     private static PerGamePhase<PerRegion<T>> ToDomain<T>(StoredRegionPhases<T> phases) =>
         new(ToRegion(phases.EarlyGame), ToRegion(phases.MidGame), ToRegion(phases.LateGame));

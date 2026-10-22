@@ -255,6 +255,35 @@ public sealed record SituationRow(
     double ObserverCoverageOwnJungle,
     double ObserverCoverageEnemyJungle,
     double ObserverCoverageRiver,
+    // What the spells can do now (SpellPower): own ready damage/healing/mana cost and mana left, allies' ready healing
+    // near, the living enemies' learned spell damage.
+    int? MyReadySpellDamage,
+    int? MyReadySpellHealing,
+    int? MyReadySpellsManaCost,
+    int? MyManaAfterReadySpells,
+    int? AlliesReadySpellHealingNear,
+    int? EnemyKitDamageAlive,
+    // Shape and reach of the spells (game build of the match: talents, Scepter and Shard applied): own ready area /
+    // single-target spells, longest ready range, ready disables reaching the nearest seen enemy; the living enemies'
+    // learned disables: longest reach, not removable by a basic dispel, through spell immunity.
+    int? MyReadyAreaSpells,
+    int? MyReadySingleTargetSpells,
+    int? MyReadySpellMaxRange,
+    int? MyReadyDisablesReachingSeenEnemy,
+    int? EnemyKitDisableMaxRange,
+    int? EnemyKitUndispellableDisables,
+    int? EnemyKitImmunityPiercingDisables,
+    // Neutral items (build rules + crafts/Madstones): tier open, seconds to the next, own artifact tier, tiers behind,
+    // artifact active ready, enhancement level, Madstones in hand, can craft now, seconds since the last craft.
+    int? NeutralTierOpen,
+    int? SecondsToNextNeutralTier,
+    int? MyNeutralArtifactTier,
+    int? MyNeutralTiersBehind,
+    bool? MyNeutralActiveReady,
+    int? MyNeutralEnhancementLevel,
+    int? MyMadstones,
+    bool? CanCraftNeutralNow,
+    int? SecondsSinceNeutralCraft,
     int? HiddenNearestEnemyDistance,
     int HiddenEnemiesNear,
     int HiddenEnemiesWithinFightRange,
@@ -281,11 +310,24 @@ public sealed record SituationRow(
     int? HiddenEnemiesBlackKingBarReadyNear,
     int? HiddenLaneOpponentDistance,
     int? HiddenLaneOpponentNetWorthLead,
-    bool? HiddenSeenByEnemies)
+    bool? HiddenSeenByEnemies,
+    int? HiddenEnemiesReadySpellDamageNear,
+    int? HiddenEnemiesReadySpellHealingNear,
+    int? HiddenEnemyReadySpellsReachingMe,
+    int? HiddenEnemyReadyDisablesReachingMe,
+    int? HiddenEnemyReadyDamageReachingMe,
+    int? HiddenEnemyNeutralActivesReadyNear,
+    int? HiddenEnemyMadstones,
+    double? HiddenEnemyNeutralTiersBehind)
 {
     // Bumped whenever a column is added, removed or changes meaning: the trainer refuses mixed versions.
     // 1: the situation (death risk only, flat rows). 2: recent activity, readiness, Roshan/Aegis and towers per lane,
     // health/mana, the enemies' smoke/scan/runes/health (hidden); rows as { situation, label... }.
+    // Version 2 has never been exported (22/10/2026: only v1 exports and models-v1 exist; the O3 v2 export was stopped
+    // before it was saved), so its columns kept growing and these meaning changes stay in v2 instead of a v3: the
+    // ultimate from the catalog (UltimateReady, DATA-D03) and readiness honoring observed cooldown resets/reductions
+    // (DATA-D15; documents without items/abilities.cooldownChanges read exactly as before). Once a v2 export is saved,
+    // any further change bumps the version.
     public const int FeatureVersion = 2;
 
     public static SituationRow From(HeroSituation s, bool activityKnown)
@@ -351,13 +393,24 @@ public sealed record SituationRow(
             s.Kit.EnemiesWithStun, s.Kit.EnemiesWithSilenceOrHex, s.Kit.EnemiesWithEscape, s.Kit.EnemiesWithInvisibility,
             s.Kit.MyDisableReady, s.Kit.MyEscapeReady,
             s.Vision.OwnJungle, s.Vision.EnemyJungle, s.Vision.River,
+            s.Spells.MyReadyDamage, s.Spells.MyReadyHealing, s.Spells.MyReadyManaCost, s.Spells.MyManaAfterReadySpells,
+            s.Spells.AlliesReadyHealingNear, s.Spells.EnemyKitDamageAlive,
+            s.Spells.MyReadyAreaSpells, s.Spells.MyReadySingleTargetSpells, s.Spells.MyReadySpellMaxRange,
+            s.Spells.MyReadyDisablesReachingSeenEnemy, s.Spells.EnemyKitDisableMaxRange, s.Spells.EnemyKitUndispellableDisables,
+            s.Spells.EnemyKitImmunityPiercingDisables,
+            s.Neutrals.TierOpen, s.Neutrals.SecondsToNextTier, s.Neutrals.MyArtifactTier, s.Neutrals.MyTiersBehind,
+            s.Neutrals.MyArtifactActiveReady, s.Neutrals.MyEnhancementLevel, s.Neutrals.MyMadstones, s.Neutrals.CanCraftNow,
+            s.Neutrals.SecondsSinceLastCraft,
             s.Hidden.NearestEnemyDistance, s.Hidden.EnemiesNear, s.Hidden.EnemiesWithinFightRange,
             s.Hidden.EnemySmokeSecondsAgo, Share(s.Hidden.EnemiesHealthShare), s.Hidden.EnemyScanSecondsAgo,
             s.Hidden.EnemyPowerRuneSecondsAgo, s.Hidden.EnemyWaveAhead, s.Hidden.EnemyCreepsAtFront, s.Hidden.WaveHealthBalanceAtFront, s.Hidden.EnemyWaveStacked, s.Hidden.EnemyCampsStacked, s.Hidden.EnemyBuildingsUnderAttack,
             s.Hidden.EnemiesInMyLane, s.Hidden.InEnemyObserverVision, s.Vision.HiddenEnemyInOwnJungle, s.Hidden.EnemiesUnderSmoke, s.Hidden.EnemiesWithBuyback, s.Hidden.EnemiesWithTeleportReady,
             s.Hidden.PowerRuneOnMap, s.Hidden.EnemyBigItemsLast2Minutes,
             s.Hidden.EnemiesWithDisableReadyNear, s.Hidden.EnemiesUltimateReadyNear, s.Hidden.EnemiesBlackKingBarReadyNear, s.Lane.HiddenDistance,
-            s.Lane.HiddenNetWorthLead, s.Hidden.SeenByEnemies);
+            s.Lane.HiddenNetWorthLead, s.Hidden.SeenByEnemies,
+            s.Spells.HiddenEnemiesReadyDamageNear, s.Spells.HiddenEnemiesReadyHealingNear,
+            s.Spells.HiddenEnemyReadySpellsReachingMe, s.Spells.HiddenEnemyReadyDisablesReachingMe, s.Spells.HiddenEnemyReadyDamageReachingMe,
+            s.Neutrals.HiddenEnemyArtifactActivesReadyNear, s.Neutrals.HiddenEnemyMadstones, s.Neutrals.HiddenEnemyTiersBehind);
     }
 
     // Three decimals are finer than anything the model can use, and keep the export small.

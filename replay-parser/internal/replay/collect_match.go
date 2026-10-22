@@ -2,6 +2,7 @@ package replay
 
 import (
 	"math"
+	"runtime/debug"
 	"strconv"
 
 	"github.com/andreomorg/dota_analyst/replay-parser/internal/matchdata"
@@ -90,6 +91,11 @@ func (c *matchCollector) Fill(m *matchdata.Match) error {
 		info.Winner = &team
 	}
 	end, ended := clock.GameEnd()
+	info.MatchEnded = &ended
+	if build := c.session.Parser.GameBuild; build > 0 {
+		info.EngineBuild = &build
+	}
+	info.ProducerVersion = replayProducerVersion()
 	if ended {
 		info.DurationSeconds = clock.Seconds(end)
 	}
@@ -105,4 +111,28 @@ func (c *matchCollector) Fill(m *matchdata.Match) error {
 	m.Match = info
 	m.Draft = matchdata.Draft{AnnouncedBans: c.bans, PicksBans: c.picksBans}
 	return nil
+}
+
+func replayProducerVersion() *string {
+	build, ok := debug.ReadBuildInfo()
+	if !ok {
+		return nil
+	}
+	var revision string
+	var modified bool
+	for _, setting := range build.Settings {
+		if setting.Key == "vcs.revision" {
+			revision = setting.Value
+		}
+		if setting.Key == "vcs.modified" {
+			modified = setting.Value == "true"
+		}
+	}
+	if revision == "" {
+		return nil
+	}
+	if modified {
+		revision += "+modified"
+	}
+	return &revision
 }

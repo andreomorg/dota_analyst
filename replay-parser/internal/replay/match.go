@@ -30,9 +30,11 @@ func newCollectors() []Collector {
 	return []Collector{
 		&matchCollector{},              // match, draft (collect_match.go)
 		&playersCollector{},            // players, timelines (collect_players.go, card 03)
+		&goldBalancesCollector{},       // independent reliable/unreliable balances, including dead heroes
 		&laningCollector{},             // laning (collect_laning.go, sprint 11)
 		&combatCollector{waves: waves}, // kills, buybacks, combat (collect_combat.go, card 04)
 		&itemsCollector{},              // items, abilities (collect_items.go, card 05)
+		&neutralItemsCollector{},       // chosen neutral crafts and sparse Madstone counters
 		&visionCollector{},             // vision, objectives (collect_vision.go, card 06)
 		waves,                          // timelines.waves (collect_waves.go, death-risk R12-B7)
 		&ordersCollector{},             // timelines.positions[].orders (after players)
@@ -47,6 +49,9 @@ func newCollectors() []Collector {
 		&abilityTargetsCollector{},
 		&couriersCollector{},
 		&mapObjectivesCollector{},
+		&mapPickupsCollector{},  // observed lotus/wisdom counter increments, checked against final totals (OB1)
+		&mapCollector{},         // timelines.trees/tempTrees, objectives.bossTracks, vision.lanterns, combat.goldEvents (MP3)
+		&visionUnitsCollector{}, // timelines.visionUnits: moving vision of each team (MP4)
 	}
 }
 

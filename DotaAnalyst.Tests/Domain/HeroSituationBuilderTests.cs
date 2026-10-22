@@ -233,12 +233,12 @@ public class HeroSituationBuilderTests
 
         var readiness = Builder([Path(1, 100)], activity: activity).At(1, 100)!.Readiness;
 
-        Assert.Equal(new Readiness(TeleportReady: false, HasEscapeItem: true, EscapeItemReady: true, UltimateReady: true,
+        Assert.Equal(new Readiness(TeleportReady: false, HasEscapeItem: true, EscapeItemReady: true, UltimateReady: null,
             AbilitiesOnCooldown: 2), readiness);
     }
 
     [Fact]
-    public void Readiness_IsUnknownWithoutInventories_AndTheUltimateUntilItIsUsed()
+    public void Readiness_IsUnknownWithoutInventories_AndTheUltimateWithoutCatalog()
     {
         var noInventories = Builder([Path(1, 100)], activity: new ReplayActivity([], [], [])).At(1, 100)!.Readiness;
         var notUsedYet = Builder([Path(1, 100)], activity: new ReplayActivity([], [], [], slotChanges: [], itemCooldowns: [],
@@ -247,6 +247,45 @@ public class HeroSituationBuilderTests
         Assert.Equal(Readiness.Unknown, noInventories);
         Assert.Null(notUsedYet.UltimateReady);
         Assert.Equal((false, false, 0), (notUsedYet.TeleportReady, notUsedYet.HasEscapeItem, notUsedYet.AbilitiesOnCooldown));
+    }
+
+    [Theory]
+    [InlineData(49, false, null, "normal")]
+    [InlineData(50, false, true, "normal")]
+    [InlineData(100, false, true, "normal")]
+    [InlineData(100, true, null, "normal")]
+    [InlineData(100, false, false, "cooling")]
+    [InlineData(100, false, null, "partial")]
+    [InlineData(100, false, null, "passive")]
+    public void UltimateReadiness_UsesLearnedCatalogClassification(int seconds, bool variant, bool? expected, string mode)
+    {
+        static AbilityDetails Ability(string name, bool ultimate) => new(name, name, null, ["No Target"],
+            AbilityTargetTeam.None, [], AbilityDamageType.Magical, null, Dispellable.No, [10], [], [],
+            Profile: new AbilityProfile([], [], SpellImmunity.Unknown, ultimate, false, 3,
+                false, false, false, false, [], [], [], [], [], [], [], null, null, [], null, null));
+        var catalog = new GameCatalog(Abilities: new Dictionary<string, AbilityDetails>
+        {
+            ["ultimate"] = Ability("ultimate", true),
+            ["variant"] = Ability("variant", true),
+            ["ordinary"] = Ability("ordinary", false),
+        });
+        var upgrades = new List<AbilityUpgrade> { new(1, 0, "ordinary", 1), new(1, 50, "ultimate", 1) };
+        if (variant) upgrades.Add(new(1, 60, "variant", 1));
+        if (mode == "partial") upgrades.Add(new(1, 60, "unknown_variant", 1));
+        if (mode == "passive") catalog = catalog with
+        {
+            Abilities = new Dictionary<string, AbilityDetails>(catalog.Abilities!)
+            {
+                ["ultimate"] = Ability("ultimate", true) with { Behavior = ["Passive"] },
+            },
+        };
+        var replay = new ReplayAnalysis(Match(), 180, Players, Timeline, [], [], objectives: [], abilityUpgrades: upgrades);
+        var cooldowns = new List<CooldownStart> { new(1, 20, "ordinary", 170) };
+        if (mode == "cooling") cooldowns.Add(new(1, 90, "ultimate", 120));
+        var activity = new ReplayActivity([], [], [], slotChanges: [], itemCooldowns: [], abilityCooldowns: cooldowns);
+        var readiness = HeroSituationBuilder.From(replay, [Path(1, seconds)], activity, catalog)!.At(1, seconds)!.Readiness;
+
+        Assert.Equal(expected, readiness.UltimateReady);
     }
 
     [Fact]
@@ -795,6 +834,149 @@ public class HeroSituationBuilderTests
     }
 
     [Fact]
+    public void Spells_SumReadyDamageHealingAndMana_AtTheLearnedLevels()
+    {
+        static AbilityDetails Spell(string key, double[] mana, params AbilityValue[] values) =>
+            new(key, key, null, ["Unit Target"], AbilityTargetTeam.Enemy, ["Hero"], AbilityDamageType.Magical, false,
+                Dispellable.Yes, [10], mana, values);
+        var abilities = new Dictionary<string, AbilityDetails>
+        {
+            ["lion_impale"] = Spell("lion_impale", [90, 110, 130, 150], new AbilityValue("damage", "DAMAGE:", [105, 170, 235, 300])),
+            ["lion_finger_of_death"] = Spell("lion_finger_of_death", [200, 420, 650], new AbilityValue("damage", "DAMAGE:", [600, 725, 850])),
+            ["lion_to_hell_and_back"] = new("lion_to_hell_and_back", "To Hell and Back", null, ["Passive"], AbilityTargetTeam.None, [],
+                AbilityDamageType.None, null, Dispellable.No, [], [], [new AbilityValue("damage", "DAMAGE:", [999])], IsInnate: true),
+            ["dazzle_shadow_wave"] = Spell("dazzle_shadow_wave", [80], new AbilityValue("damage", "DAMAGE:", [80]),
+                new AbilityValue("heal", "HEAL:", [80])),
+            ["zuus_arc_lightning"] = Spell("zuus_arc_lightning", [80], new AbilityValue("arc_damage", "DAMAGE:", [90])),
+        };
+        var replay = new ReplayAnalysis(Match(), 180, Players, Timeline, [], [], objectives: [], abilityUpgrades:
+        [
+            new AbilityUpgrade(1, 10, "lion_impale", 1),
+            new AbilityUpgrade(1, 50, "lion_impale", 2),
+            new AbilityUpgrade(1, 90, "lion_finger_of_death", 1),
+            new AbilityUpgrade(1, 95, "lion_to_hell_and_back", 1),  // passive: left out
+            new AbilityUpgrade(1, 120, "lion_impale", 3),           // the future: level 2 at 100
+            new AbilityUpgrade(2, 30, "dazzle_shadow_wave", 1),
+            new AbilityUpgrade(6, 30, "zuus_arc_lightning", 1),
+        ]);
+        var activity = new ReplayActivity([], [], [], abilityCooldowns: [new CooldownStart(6, 98, "zuus_arc_lightning", 104)]);
+        HeroPositions At(int hero, int x, int mana) => new(hero, [new PositionSample(100, x, 0, new HeroVitals(500, 1000, mana, 1000))]);
+        var catalog = new GameCatalog(Abilities: abilities);
+
+        var spells = HeroSituationBuilder.From(replay, [At(1, 0, 300), At(2, 500, 200), At(6, 1000, 400)], activity, catalog)!
+            .At(1, 100)!.Spells;
+
+        // Earth Spike level 2 (170 damage, 110 mana) and Finger level 1 (600, 200) each fit in 300 mana on its own, not
+        // both: 10 short. The ally's Shadow Wave heals 80; Zeus's Arc Lightning (90) is cooling, so nothing is ready near.
+        Assert.Equal((770, 0, 310, -10, 80, 90, 0, 0), (spells.MyReadyDamage, spells.MyReadyHealing, spells.MyReadyManaCost,
+            spells.MyManaAfterReadySpells, spells.AlliesReadyHealingNear, spells.EnemyKitDamageAlive,
+            spells.HiddenEnemiesReadyDamageNear, spells.HiddenEnemiesReadyHealingNear));
+    }
+
+    [Fact]
+    public void Spells_ReadRangeAreaAndWhatReachesTheHero_WithTheLearnedTalent()
+    {
+        // Lion's Earth Spike: 650 range (+600 with special_bonus_unique_lion_2), width 140, a stun by its header.
+        var impale = new AbilityDetails("lion_impale", "Earth Spike", null, ["Point Target", "Unit Target"], AbilityTargetTeam.Enemy,
+            ["Hero"], AbilityDamageType.Magical, false, Dispellable.StrongOnly, [12], [100],
+            [
+                new AbilityValue("AbilityCastRange", null, [650], Rules: new ValueRules(
+                    [new ValueBonus("special_bonus_unique_lion_2", BonusOperation.Add, [600])], false, false, false)),
+                new AbilityValue("width", "WIDTH:", [140]),
+                new AbilityValue("duration", "STUN DURATION:", [2]),
+                new AbilityValue("damage", "DAMAGE:", [105]),
+            ]);
+        // Zeus's Lightning Bolt: single target, 700 range, a stun that goes through spell immunity, undispellable.
+        var bolt = new AbilityDetails("zuus_lightning_bolt", "Lightning Bolt", null, ["Unit Target"], AbilityTargetTeam.Enemy,
+            ["Hero"], AbilityDamageType.Magical, true, Dispellable.No, [6], [100],
+            [new AbilityValue("AbilityCastRange", null, [700]), new AbilityValue("ministun_duration", "STUN DURATION:", [0.3]),
+             new AbilityValue("damage", "DAMAGE:", [125])]);
+        var catalog = new GameCatalog(Abilities: new Dictionary<string, AbilityDetails> { [impale.Key] = impale, [bolt.Key] = bolt });
+        var replay = new ReplayAnalysis(Match(), 180, Players, Timeline, [], [], objectives: [], abilityUpgrades:
+        [
+            new AbilityUpgrade(1, 10, "lion_impale", 1),
+            new AbilityUpgrade(1, 50, "special_bonus_unique_lion_2", 1),
+            new AbilityUpgrade(6, 10, "zuus_lightning_bolt", 1),
+        ]);
+        var activity = new ReplayActivity([], [], [], abilityCooldowns: []);
+        HeroPositions At(int hero, int x, bool seen) => new(hero, [new PositionSample(100, x, 0, new HeroVitals(500, 1000, 400, 1000, seen))]);
+
+        // Zeus stands 1,200 away, seen by Lion's team: Earth Spike reaches 1,250 + 140 with the talent; the bolt does not reach Lion.
+        var spells = HeroSituationBuilder.From(replay, [At(1, 0, false), At(6, 1200, true)], activity, catalog)!.At(1, 100)!.Spells;
+
+        Assert.Equal((1, 0, 1250, 1), (spells.MyReadyAreaSpells, spells.MyReadySingleTargetSpells, spells.MyReadySpellMaxRange,
+            spells.MyReadyDisablesReachingSeenEnemy));
+        Assert.Equal((700, 1, 1), (spells.EnemyKitDisableMaxRange, spells.EnemyKitUndispellableDisables, spells.EnemyKitImmunityPiercingDisables));
+        Assert.Equal((0, 0, 0), (spells.HiddenEnemyReadySpellsReachingMe, spells.HiddenEnemyReadyDisablesReachingMe,
+            spells.HiddenEnemyReadyDamageReachingMe));
+
+        // At 600 away the bolt reaches him: one ready disable with 125 damage.
+        var near = HeroSituationBuilder.From(replay, [At(1, 0, false), At(6, 600, true)], activity, catalog)!.At(1, 100)!.Spells;
+        Assert.Equal((1, 1, 125), (near.HiddenEnemyReadySpellsReachingMe, near.HiddenEnemyReadyDisablesReachingMe,
+            near.HiddenEnemyReadyDamageReachingMe));
+    }
+
+    [Fact]
+    public void Neutrals_ReadTheOpenTierTheArtifactMadstonesAndCrafts_UpToTheSecond()
+    {
+        var rules = new NeutralRules(
+            [
+                new NeutralTier(1, 0, 4, 4, 6, 0, ["occult_bracelet"], [new NeutralEnhancement("enhancement_vital", 1)],
+                    new Dictionary<HeroAttribute, IReadOnlyList<NeutralEnhancement>>()),
+                new NeutralTier(2, 900, 5, 5, 10, 0, ["pogo_stick"], [], new Dictionary<HeroAttribute, IReadOnlyList<NeutralEnhancement>>()),
+                new NeutralTier(3, 1500, 5, 5, 10, 0, ["serrated_shiv"], [], new Dictionary<HeroAttribute, IReadOnlyList<NeutralEnhancement>>()),
+            ], 4200, [2, 3, 4], [1, 2, 3]);
+        // Pogo Stick has an active (a hop); the Occult Bracelet is passive.
+        var items = new Dictionary<string, ItemDetails>
+        {
+            ["pogo_stick"] = new("pogo_stick", 0, null, false)
+                { Abilities = [new ItemAbility(ItemAbilityKind.Active, "Hop", "Leaps forward.")] },
+            ["occult_bracelet"] = new("occult_bracelet", 0, null, false)
+                { Abilities = [new ItemAbility(ItemAbilityKind.Passive, "Rites of Eloshar", null)] },
+        };
+        var activity = new ReplayActivity([], [], [],
+            slotChanges:
+            [
+                new SlotChange(1, 300, SlotChange.NeutralSlot, "item_occult_bracelet"),
+                new SlotChange(6, 950, SlotChange.NeutralSlot, "item_pogo_stick"),
+                new SlotChange(1, 1100, SlotChange.NeutralSlot, "item_pogo_stick"), // the future at 1000
+            ],
+            itemCooldowns: [],
+            neutralCrafts:
+            [
+                new NeutralCraft(1, 299.5, "item_occult_bracelet", 1, 1, "item_enhancement_vital", 1),
+                new NeutralCraft(6, 949.0, "item_pogo_stick", 1, 2, "item_enhancement_brawny", 2),
+            ],
+            madstones:
+            [
+                new MadstoneTrack(1, [new MadstoneReading(0, 0, 0, 0, 0), new MadstoneReading(980, 11, 17, 9, 300)]),
+                new MadstoneTrack(6, [new MadstoneReading(0, 0, 0, 0, 0), new MadstoneReading(990, 1, 16, 8, 250)]),
+            ]);
+        var catalog = new GameCatalog(Items: items, Neutrals: rules);
+        HeroPositions At(int hero, int x) => new(hero, [new PositionSample(1000, x, 0)]);
+
+        var replay = new ReplayAnalysis(Match(), 180, Players, Timeline, [], [], objectives: []);
+        var situation = HeroSituationBuilder.From(replay, [At(1, 0), At(6, 800)], activity, catalog)!.At(1, 1000)!;
+
+        // Tier 2 is open (15:00) and tier 3 opens in 500 s; Lion still has the tier 1 bracelet, 11 Madstones (cost 10).
+        Assert.Equal(new NeutralState(TierOpen: 2, SecondsToNextTier: 500, MyArtifactTier: 1, MyTiersBehind: 1,
+            MyArtifactActiveReady: false, MyEnhancementLevel: 1, MyMadstones: 11, CanCraftNow: true, SecondsSinceLastCraft: 701,
+            HiddenEnemyArtifactActivesReadyNear: 1, HiddenEnemyMadstones: 1, HiddenEnemyTiersBehind: 0), situation.Neutrals);
+    }
+
+    [Fact]
+    public void Neutrals_WithoutTheBuildRulesOrTheNewSections_AreUnknown()
+    {
+        var neutrals = Builder([Path(1, 100)]).At(1, 100)!.Neutrals;
+        Assert.Equal((null, null, null, null, null, null), (neutrals.TierOpen, neutrals.MyArtifactTier, neutrals.MyMadstones,
+            neutrals.CanCraftNow, neutrals.MyEnhancementLevel, neutrals.HiddenEnemyMadstones));
+    }
+
+    [Fact]
+    public void Spells_WithoutTheAbilitiesData_AreUnknown() =>
+        Assert.Equal(SpellPower.Unknown, Builder([Path(1, 100)]).At(1, 100)!.Spells);
+
+    [Fact]
     public void Buildings_GiveTheNearestStandingTowers_AndTheBuildingsLosingHealth()
     {
         static BuildingHealth Tower(string name, Team team, int x, int y, params (int T, int Health)[] readings) =>
@@ -848,7 +1030,8 @@ public class HeroSituationBuilderTests
 
         Assert.Equal(new EnemyThreat(MostKillsOnMeByOneEnemy: 1, NearestVisibleEnemyKillsOnMe: 1, NearestVisibleEnemyKillsOnTeam: 2,
             NearestVisibleEnemyLevelLead: 1, NearestVisibleEnemyDisablesOnTeam: 1), situation.Threat);
-        Assert.Equal((1, 1), (situation.Hidden.EnemiesUltimateReadyNear, situation.Hidden.EnemiesBlackKingBarReadyNear));
+        Assert.Null(situation.Hidden.EnemiesUltimateReadyNear);
+        Assert.Equal(1, situation.Hidden.EnemiesBlackKingBarReadyNear);
     }
 
     [Fact]

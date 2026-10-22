@@ -13,7 +13,7 @@ namespace DotaAnalyst.Domain.Situations;
 //
 // A partial class: this file has the state, the entry points and the shared helpers; each part of the situation is
 // read in a file of its own (HeroSituationBuilder.Activity.cs, .Readiness.cs, .Map.cs, .Waves.cs, .Combat.cs,
-// .Vision.cs, .Intent.cs), with the constants it uses.
+// .Vision.cs, .Intent.cs, .Kit.cs, .Spells.cs, .Neutrals.cs...), with the constants it uses.
 public sealed partial class HeroSituationBuilder
 {
     // Same radii as the metrics: an ally this close is nearby; this close to a fight is in it.
@@ -38,6 +38,10 @@ public sealed partial class HeroSituationBuilder
     // The abilities' effects by key and each hero's kit (the KIT part); null when not given.
     private readonly Dictionary<string, IReadOnlySet<AbilityEffect>>? abilityEffects;
     private readonly IReadOnlyDictionary<int, HeroKit>? kits;
+    // The abilities' full data (damage, healing, mana per level) for SpellPower; null when not given.
+    private readonly IReadOnlyDictionary<string, AbilityDetails>? abilityDetails;
+    // The build's neutral item rules (tiers, costs); null with the current OpenDota catalogs.
+    private readonly NeutralRules? neutralRules;
 
     private HeroSituationBuilder(
         ReplayAnalysis replay, MatchStatTimeline stats, IReadOnlyList<HeroPositions> positions, ReplayActivity? activity,
@@ -46,6 +50,8 @@ public sealed partial class HeroSituationBuilder
         itemDetails = catalog.Items;
         heroDetails = catalog.Heroes;
         kits = catalog.Kits;
+        abilityDetails = catalog.Abilities;
+        neutralRules = catalog.Neutrals;
         abilityEffects = catalog.Abilities?.ToDictionary(ability => ability.Key, ability => AbilityEffects.Of(ability.Value));
         this.replay = replay;
         this.stats = stats;
@@ -152,6 +158,8 @@ public sealed partial class HeroSituationBuilder
             Signals: SignalsOf(heroId, team, self, seconds),
             Momentum: MomentumOf(heroId, team, seconds),
             Kit: KitOf(heroId, team, seconds),
+            Spells: SpellsOf(heroId, team, self, seconds),
+            Neutrals: NeutralsOf(heroId, team, self, seconds),
             Threat: ThreatOf(heroId, team, self, seconds),
             Lane: LaneOpponentOf(heroId, team, self, seconds),
             Hidden: new HiddenEnemies(

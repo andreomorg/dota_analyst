@@ -69,6 +69,10 @@ public class OpenDotaClient(HttpClient httpClient)
 
     public async Task<IReadOnlyList<OpenDotaPatch>> GetPatchesAsync(CancellationToken cancellationToken) =>
         await GetJsonAsync<List<OpenDotaPatch>>("constants/patch", false, cancellationToken) ?? [];
+
+    // GET constants/aghs_desc: [{ "hero_id": 26, "scepter_desc": "...", "shard_desc": "...", ... }, ...].
+    public async Task<IReadOnlyList<OpenDotaAghanim>> GetAghanimDescriptionsAsync(CancellationToken cancellationToken) =>
+        await GetJsonAsync<List<OpenDotaAghanim>>("constants/aghs_desc", false, cancellationToken) ?? [];
     // Single place that turns every transport/format problem into DataSourceUnavailableException,
     // so the Application never sees HttpClient or JSON exceptions.
     private async Task<T?> GetJsonAsync<T>(string path, bool notFoundAsNull, CancellationToken cancellationToken)

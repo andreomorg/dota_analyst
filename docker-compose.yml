@@ -20,6 +20,11 @@ services:
       ReplayParser__ApiKey: "${REPLAY_PARSER_API_KEY}"
       # This machine keeps the raw replay documents (replay_documents); production (Render) doesn't.
       ReplayParser__KeepDocuments: "true"
+      # The game's own files of each build (abilities, items, heroes) for the matches' patch: synchronized on this
+      # machine only (production reads the current OpenDota catalogs). GITHUB_TOKEN (optional, a SECRET) raises
+      # GitHub's limit from 60 to 5,000 calls an hour.
+      GameData__SyncEnabled: "${GAME_DATA_SYNC:-true}"
+      GameData__GitHubToken: "${GITHUB_TOKEN:-}"
       CoachMl__Enabled: "${COACH_ML_ENABLED:-false}"
       CoachMl__BaseUrl: "http://coach-ml:8090/"
       CoachMl__ApiKey: "${COACH_ML_API_KEY:-}"

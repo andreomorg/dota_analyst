@@ -11,6 +11,18 @@ namespace DotaAnalyst.Tests.Infrastructure;
 // Profile mapping and storage use an HTTP stub and an in-memory store, without external services.
 public class OpenDotaHeroCatalogTests
 {
+    [Fact]
+    public async Task DamagedExtendedProfileDoesNotDiscardLegacyClassificationOrRefreshForever()
+    {
+        var store = new MemoryStore { Saved = new SavedCatalog(new Dictionary<int,string> { [31] = "Lich" }, Now)
+        { Details = new Dictionary<int,string> { [31] = """{"primaryAttribute":2,"attackType":1,"roles":[1],"profile":{"attributes":{"strength":{"value":10,"origin":99}}}}""" } } };
+        var source = new OpenDota { Fail = true };
+        var heroes = await CreateCatalog(store, source).GetHeroesAsync(default);
+        Assert.Equal(HeroAttribute.Intelligence, heroes[31].Details!.PrimaryAttribute);
+        Assert.Null(heroes[31].Details!.Profile);
+        Assert.Equal(0, source.Calls);
+    }
+
     private static readonly DateTimeOffset Now = new(2026, 10, 12, 12, 0, 0, TimeSpan.Zero);
 
     [Fact]

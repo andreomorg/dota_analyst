@@ -44,6 +44,62 @@ public sealed class KitMappingTests
     }
 
     [Fact]
+    public void LionAbilities_MapInnateLorePercentAndGeneratedValues()
+    {
+        var source = JsonSerializer.Deserialize<Dictionary<string, OpenDotaAbility>>(KitSamples.Abilities, OpenDotaClient.JsonOptions)!;
+        var impale = source["lion_impale"].ToDetails("lion_impale");
+        Assert.False(impale.IsInnate);
+        Assert.StartsWith("The Demon Witch", impale.Lore);
+        Assert.True(impale.Value("abilitycastrange")!.Generated);
+        Assert.False(impale.Value("damage")!.Generated);
+        Assert.Equal(AbilityValueKind.Damage, Assert.Single(impale.ValuesOf(AbilityValueKind.Damage)).Kind);
+        Assert.Equal(90, impale.ManaCostAt(1));
+        Assert.Equal(150, impale.ManaCostAt(9));
+
+        var drain = source["lion_mana_drain"].ToDetails("lion_mana_drain");
+        var slow = drain.Value("movespeed")!;
+        Assert.Equal([15d, 20, 25, 30], slow.Levels);
+        Assert.True(slow.IsPercent);
+        Assert.Null(slow.Text);
+        Assert.False(drain.Value("movespeed_bonus_when_empty_pct")!.IsPercent);
+
+        var innate = source["lion_to_hell_and_back"].ToDetails("lion_to_hell_and_back");
+        Assert.True(innate.IsInnate);
+        Assert.True(innate.IsPassive);
+        Assert.Null(innate.ManaCostAt(1));
+
+        Assert.Equal([25d, 50, 75, 150], source["centaur_khan_war_stomp"].ToDetails("centaur_khan_war_stomp").BaseDamage);
+        Assert.Empty(impale.BaseDamage);
+    }
+
+    [Fact]
+    public void LionKit_MapsTalentTextFacetDetailsAndAghanim()
+    {
+        var kits = JsonSerializer.Deserialize<Dictionary<string, OpenDotaHeroKit>>(KitSamples.Kits, OpenDotaClient.JsonOptions)!;
+        var aghanim = JsonSerializer.Deserialize<List<OpenDotaAghanim>>(KitSamples.Aghanim, OpenDotaClient.JsonOptions)!;
+        var kit = kits["npc_dota_hero_lion"].ToKit(26,
+            new Dictionary<string, string> { ["special_bonus_unique_lion_6"] = "+{s:bonus_movespeed}% Mana Drain Slow" },
+            Assert.Single(aghanim));
+        Assert.Equal("+{s:bonus_movespeed}% Mana Drain Slow", kit.Talents[0].Name);
+        Assert.Null(kit.Talents[1].Name);
+        Assert.Equal("nuke", kit.Facets[0].Icon);
+        Assert.Equal("Purple", kit.Facets[0].Color);
+        Assert.Empty(kit.Facets[0].Abilities);
+        Assert.Equal(["lion_fist_of_death"], kit.Facets[1].Abilities);
+        Assert.Equal(new AghanimUpgrade("Finger of Death gains area of effect damage on the initial cast.", "Finger of Death", false), kit.Scepter);
+        Assert.Equal("Mana Drain", kit.Shard!.AbilityName);
+        Assert.Null(kits["npc_dota_hero_lion"].ToKit(26).Scepter);
+    }
+
+    [Fact]
+    public void Aghanim_WithoutUpgradeOrText_IsNull()
+    {
+        var none = new OpenDotaAghanim(1, false, "ignored", "X", false, true, " ", null, true);
+        Assert.Null(none.Scepter);
+        Assert.Null(none.Shard);
+    }
+
+    [Fact]
     public void Items_MapNewFieldsWithoutChangingBuildData()
     {
         var source = JsonSerializer.Deserialize<Dictionary<string, OpenDotaItem>>(KitSamples.Items, OpenDotaClient.JsonOptions)!;

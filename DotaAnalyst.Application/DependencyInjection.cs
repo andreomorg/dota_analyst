@@ -18,12 +18,16 @@ public static class DependencyInjection
         services.TryAddSingleton(TimeProvider.System);
 
         services.AddScoped<DotaAnalyst.Application.Catalogs.GetHeroKitHandler>();
+        services.AddScoped<DotaAnalyst.Application.Catalogs.GetHeroProfileHandler>();
+        services.AddScoped<DotaAnalyst.Application.Heroes.GetHeroStateHandler>();
         services.AddScoped<DotaAnalyst.Application.Catalogs.GetItemHandler>();
         services.AddScoped<GetRecentMatchesHandler>();
         services.AddScoped<ReviewCoachingHandler>();
         services.AddScoped<GameCatalogLoader>();
         services.AddScoped<GetModelSamplesHandler>();
         services.AddScoped<GetPositionEstimatesHandler>();
+        services.AddScoped<MeasureVisionHandler>();
+        services.AddScoped<GetReplayFactsHandler>();
         services.AddScoped<GetMatchAnalysisHandler>();
         services.AddScoped<GetUserProfileHandler>();
         // Used by the background worker that empties the replay parse queue (Infrastructure), one scope per replay.

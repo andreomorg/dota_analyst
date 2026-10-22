@@ -24,16 +24,20 @@ func TestEmptyMatchJSON(t *testing.T) {
 		`"endedAt":null,"pausedSeconds":0},` +
 		`"draft":{"announcedBans":[],"picksBans":[]},` +
 		`"players":[],` +
-		`"timelines":{"dayNight":[],"perMinute":[],"positionIntervalSeconds":0,"positions":[],"offLaneCreeps":[],"waves":[]},` +
+		`"timelines":{"madstones":[],"dayNight":[],"perMinute":[],"positionIntervalSeconds":0,"positions":[],"offLaneCreeps":[],"waves":[],"trees":{"deadAtStart":[],"changes":[]},"tempTrees":[],"visionUnits":[]},` +
 		`"laning":{"endsAtSeconds":0,"lanes":[]},` +
 		`"kills":[],"buybacks":[],` +
-		`"items":{"purchases":[],"uses":[],"final":[],"slots":[],"cooldowns":[]},` +
-		`"abilities":{"upgrades":[],"uses":[],"cooldowns":[]},` +
-		`"combat":{"debuffs":[],"buffs":[],"damage":[],"healing":[],"perMinute":[],"buckets":[],"heroHits":[],"laneCreepDeaths":[],"creepKills":[]},` +
-		`"vision":{"wards":[],"smokes":[],"scans":[],"glyphs":[]},` +
-		`"objectives":{"buildings":[],"roshan":[],"tormentors":[],"couriers":[],"runes":[],"outposts":[]}}`
+		`"items":{"neutralCrafts":[],"purchases":[],"uses":[],"final":[],"slots":[],"cooldowns":[],"cooldownChanges":[]},` +
+		`"abilities":{"upgrades":[],"uses":[],"cooldowns":[],"cooldownChanges":[],"stolen":[]},` +
+		`"combat":{"goldEvents":[],"debuffs":[],"buffs":[],"damage":[],"healing":[],"perMinute":[],"buckets":[],"heroHits":[],"laneCreepDeaths":[],"creepKills":[]},` +
+		`"vision":{"wards":[],"smokes":[],"scans":[],"glyphs":[],"lanterns":[]},` +
+		`"objectives":{"bossTracks":[],"buildings":[],"roshan":[],"tormentors":[],"couriers":[],"runes":[],"outposts":[]}}`
 	if got := marshal(t, New()); got != want {
 		t.Errorf("empty match\n got %s\nwant %s", got, want)
+	}
+	// Map pickups require reconciled evidence. The empty skeleton must not claim coverage.
+	if got := marshal(t, New()); strings.Contains(got, `"mapPickups"`) {
+		t.Fatal("empty document must omit mapPickups without counter evidence")
 	}
 }
 
@@ -225,5 +229,25 @@ func TestWaveDetailAndLaneDeathTuplesJSON(t *testing.T) {
 				t.Errorf("got %s want %s", got, test.want)
 			}
 		})
+	}
+}
+
+func TestNeutralJSONContract(t *testing.T) {
+	level := 2
+	enhancement := "item_enhancement_alert"
+	for _, test := range []struct {
+		value any
+		want  string
+	}{
+		{PlayerNeutralCrafts{Player: 3}, `{"player":3,"crafts":[]}`},
+		{PlayerMadstones{Player: 4}, `{"player":4,"samples":[]}`},
+		{NeutralCraft{T: Seconds(99.25), Artifact: "item_mana_draught", Tier: 2}, `[99.3,"item_mana_draught",null,2,null,null]`},
+		{NeutralCraft{T: 100, Artifact: "item_mana_draught", ArtifactLevel: &level, Tier: 2, Enhancement: &enhancement, EnhancementLevel: &level}, `[100,"item_mana_draught",2,2,"item_enhancement_alert",2]`},
+		{MadstoneSample{T: 2, Held: 6, Acquired: 8, Found: 10, NeutralGold: 99}, `[2,6,8,10,99]`},
+		{SlotChange{T: 10, Slot: 17, Name: &enhancement}, `[10,17,"item_enhancement_alert"]`},
+	} {
+		if got := marshal(t, test.value); got != test.want {
+			t.Errorf("got %s want %s", got, test.want)
+		}
 	}
 }

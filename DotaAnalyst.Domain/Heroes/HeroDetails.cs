@@ -36,11 +36,15 @@ public record HeroDetails
     public HeroAttackType AttackType { get; }
     public IReadOnlySet<HeroRole> Roles { get; }
 
+    public HeroProfile? Profile { get; init; }
+
+    public HeroDescription? Description => HeroDescription.From(this);
+
     // Set order and collection identity do not change the hero's profile.
     public virtual bool Equals(HeroDetails? other) => other is not null
         && PrimaryAttribute == other.PrimaryAttribute && AttackType == other.AttackType
-        && Roles.SetEquals(other.Roles);
+        && Roles.SetEquals(other.Roles) && Profile == other.Profile;
 
     public override int GetHashCode() => HashCode.Combine(PrimaryAttribute, AttackType,
-        Roles.Aggregate(0, (hash, role) => hash ^ role.GetHashCode()));
+        Roles.Aggregate(0, (hash, role) => hash ^ role.GetHashCode()), Profile);
 }

@@ -65,8 +65,11 @@ public sealed partial class HeroSituationBuilder
         var near = teamOf.Where(hero => hero.Value != team).Select(hero => hero.Key)
             .Where(enemy => PositionAt(enemy, seconds) is { } sample && Distance(self, sample) <= FightRange)
             .ToList();
+        // An enemy whose ultimate readiness is unknown (no catalog, not learned yet...) makes the count unknown: counting
+        // it as "not ready" would turn unknown into zero (DATA-D21 finding on D03).
+        var ultimates = near.Select(enemy => ReadinessOf(enemy, seconds).UltimateReady).ToList();
         return (
-            near.Count(enemy => ReadinessOf(enemy, seconds).UltimateReady == true),
+            ultimates.Any(ready => ready is null) ? null : ultimates.Count(ready => ready == true),
             near.Count(enemy => ItemsAt(enemy, seconds) is { } items
                 && Inventory(items.Slots).Contains(BlackKingBar) && !items.Cooling.Contains(BlackKingBar)));
     }

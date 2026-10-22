@@ -1,4 +1,7 @@
 <Solution>
+  <Folder Name="/tools/">
+    <Project Path="tools/MapExtractor/MapExtractor.csproj" />
+  </Folder>
   <Project Path="DotaAnalyst.Application/DotaAnalyst.Application.csproj" />
   <Project Path="dotaanalyst.client/dotaanalyst.client.esproj">
     <Build />

@@ -1,3 +1,4 @@
+using DotaAnalyst.Application.Abstractions;
 using DotaAnalyst.Application.Models;
 using DotaAnalyst.Application.Replays;
 using DotaAnalyst.Domain.Matches;
@@ -14,8 +15,41 @@ namespace DotaAnalyst.Server.Controllers.Internal;
 [Route("api/internal")]
 public sealed class ModelSamplesController(
     GetModelSamplesHandler samples, RefreshReplayHandler refresh, GetPositionEstimatesHandler positions,
-    IOptions<CoachMlOptions> settings) : ControllerBase
+    MeasureVisionHandler vision, IReplayDocumentReader documents, IOptions<CoachMlOptions> settings) : ControllerBase
 {
+    /// <summary>The vision model against the real fog of war of a replay document handed in (a fresh parse of the
+    /// replay parser's /v1/match): measured and dropped, nothing is saved.</summary>
+    [HttpPost("vision/measure")]
+    [RequestSizeLimit(32 * 1024 * 1024)]
+    public async Task<IActionResult> VisionMeasureDocument(CancellationToken cancellationToken)
+    {
+        var options = settings.Value;
+        if (!options.Enabled) return NotFound();
+        if (!MachineKey.IsValid(Request, options)) return Unauthorized();
+        using var reader = new StreamReader(Request.Body);
+        var document = await reader.ReadToEndAsync(cancellationToken);
+        try
+        {
+            var (matchId, replay) = documents.Read(document);
+            var result = await vision.MeasureAsync(matchId, replay, cancellationToken);
+            return result.Status == ModelSamplesStatus.Found ? Ok(result.Measure)
+                : Problem(statusCode: 422, title: "No map for the match's patch.");
+        }
+        catch (Exception ex) when (ex is InvalidDataException or System.Text.Json.JsonException or NotSupportedException)
+        {
+            return Problem(statusCode: 422, title: "The replay document is unreadable.");
+        }
+    }
+
+    /// <summary>The vision model against the real fog of war of one kept replay (for measuring it, MP4).</summary>
+    [HttpGet("vision/measure/{matchId}")]
+    public Task<IActionResult> VisionMeasure(long matchId, CancellationToken cancellationToken) =>
+        Respond(matchId, async id =>
+        {
+            var result = await vision.HandleAsync(id, cancellationToken);
+            return (result.Status, result.Measure);
+        });
+
     /// <summary>The position estimator against the real positions of one kept replay (for measuring it).</summary>
     [HttpGet("position-estimates/{matchId}")]
     public Task<IActionResult> PositionEstimates(long matchId, CancellationToken cancellationToken) =>

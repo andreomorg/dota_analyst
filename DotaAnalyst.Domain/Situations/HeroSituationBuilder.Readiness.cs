@@ -37,13 +37,28 @@ public sealed partial class HeroSituationBuilder
         var escapes = inventory.Where(EscapeItems.Contains).ToList();
 
         var abilities = abilityCooldowns.Where(cooldown => cooldown.HeroId == heroId && cooldown.Seconds <= seconds).ToList();
-        var ultimate = abilities.MaxBy(cooldown => cooldown.Length)?.Name;
+        var ultimate = LearnedUltimate(heroId, seconds);
         return new Readiness(
             TeleportReady: teleports.Any(Ready),
             HasEscapeItem: escapes.Count > 0,
             EscapeItemReady: escapes.Any(Ready),
             UltimateReady: ultimate is null ? null : !abilities.Any(cooldown => cooldown.Name == ultimate && cooldown.ActiveAt(seconds)),
             AbilitiesOnCooldown: abilities.Where(cooldown => cooldown.ActiveAt(seconds)).Select(cooldown => cooldown.Name).Distinct().Count());
+    }
+
+    // Cooldown duration is not an ability classification. A single learned, active ultimate is required;
+    // multiple variants (or incomplete catalog data) cannot establish which runtime ability is available.
+    private string? LearnedUltimate(int heroId, int seconds)
+    {
+        if (abilityDetails is null || replay.AbilityUpgrades is null) return null;
+        var learned = replay.AbilityUpgrades.Where(upgrade => upgrade.HeroId == heroId
+            && upgrade.Seconds <= seconds && upgrade.Level > 0)
+            .Select(upgrade => upgrade.AbilityName).Distinct().ToArray();
+        if (learned.Where(name => !name.StartsWith("special_bonus_", StringComparison.Ordinal))
+            .Any(name => abilityDetails.GetValueOrDefault(name)?.Profile?.IsUltimate is null)) return null;
+        var candidates = learned.Where(name => abilityDetails.GetValueOrDefault(name) is
+            { IsPassive: false, Profile.IsUltimate: true }).ToArray();
+        return candidates.Length == 1 ? candidates[0] : null;
     }
 
     // The item in each slot at this second (the last change at or before it: the reading at this very second is the
@@ -62,6 +77,11 @@ public sealed partial class HeroSituationBuilder
             .Select(cooldown => cooldown.Name).ToHashSet();
         return (slots, cooling);
     }
+
+    // The items the hero can activate: the inventory and the neutral artifact (Pogo Stick, Ash Legion Shield... are
+    // actives too). The backpack and the stash cannot be used.
+    private static List<string> UsableItems(Dictionary<int, string?> slots) =>
+        slots.GetValueOrDefault(SlotChange.NeutralSlot) is { } artifact ? [.. Inventory(slots), artifact] : Inventory(slots);
 
     private static List<string> Inventory(Dictionary<int, string?> slots) =>
         Enumerable.Range(0, SlotChange.InventorySlots).Select(slot => slots.GetValueOrDefault(slot)).OfType<string>().ToList();

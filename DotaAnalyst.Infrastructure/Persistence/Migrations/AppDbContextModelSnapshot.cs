@@ -191,6 +191,55 @@ namespace DotaAnalyst.Infrastructure.Persistence.Migrations
                     b.ToTable("catalog_entries", (string)null);
                 });
 
+            modelBuilder.Entity("DotaAnalyst.Infrastructure.Persistence.GameData.GameBuildRecord", b =>
+                {
+                    b.Property<string>("CommitSha")
+                        .HasColumnType("text")
+                        .HasColumnName("commit_sha");
+
+                    b.Property<int?>("ClientVersion")
+                        .HasColumnType("integer")
+                        .HasColumnName("client_version");
+
+                    b.Property<string>("Files")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("files");
+
+                    b.Property<DateTimeOffset>("ReleasedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("released_at");
+
+                    b.Property<DateTimeOffset>("SavedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("saved_at");
+
+                    b.HasKey("CommitSha")
+                        .HasName("pk_game_builds");
+
+                    b.HasIndex("ReleasedAt")
+                        .HasDatabaseName("ix_game_builds_released_at");
+
+                    b.ToTable("game_builds", (string)null);
+                });
+
+            modelBuilder.Entity("DotaAnalyst.Infrastructure.Persistence.GameData.GameFileRecord", b =>
+                {
+                    b.Property<string>("BlobSha")
+                        .HasColumnType("text")
+                        .HasColumnName("blob_sha");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("content");
+
+                    b.HasKey("BlobSha")
+                        .HasName("pk_game_files");
+
+                    b.ToTable("game_files", (string)null);
+                });
+
             modelBuilder.Entity("DotaAnalyst.Infrastructure.Persistence.Matches.MatchRecord", b =>
                 {
                     b.Property<long>("MatchId")

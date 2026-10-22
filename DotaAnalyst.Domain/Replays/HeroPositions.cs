@@ -5,7 +5,12 @@ namespace DotaAnalyst.Domain.Replays;
 // degrees (0 = towards +x, counterclockwise, like the game's angles), null when unknown.
 public readonly record struct PositionSample(
     int Seconds, int X, int Y, HeroVitals? Vitals = null, HeroCombatStats? Stats = null, HeroOrders? Orders = null,
-    int? Facing = null);
+    int? Facing = null, HeroCombatDetails? CombatDetails = null);
+
+// Replicated components, not reconstructed effective HUD totals. Think regen is not the combat-log HEAL sum.
+public sealed record HeroCombatDetails(double? StrengthBase, double? AgilityBase, double? IntellectBase,
+    double? DamageBaseMin, double? DamageBaseMax, double? DamageBonus, double? BaseAttackTime,
+    double? AttackRange, int? AttackCapability, double? HealthThinkRegen, double? ManaThinkRegen);
 
 // The orders the player issued since the hero's previous sample (newer documents): how many move, attack and cast
 // orders (for the hero and the units it controls; issued, not necessarily done) and where the last "move to position"

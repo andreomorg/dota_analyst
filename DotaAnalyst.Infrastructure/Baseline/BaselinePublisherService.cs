@@ -27,6 +27,8 @@ public class BaselinePublisherService(
                 await using var scope = scopeFactory.CreateAsyncScope();
                 // Older rows get their statistics per minute first, so the publish compares them at every moment.
                 await scope.ServiceProvider.GetRequiredService<BaselineHistoryBackfill>().RunAsync(stoppingToken);
+                // ...and their terrain (MP8) and vision metrics, from the same kept documents.
+                await scope.ServiceProvider.GetRequiredService<BaselineReplayMetricsBackfill>().RunAsync(stoppingToken);
                 await scope.ServiceProvider.GetRequiredService<PublishBaselineHandler>().PublishAsync(stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)

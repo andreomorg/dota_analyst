@@ -15,9 +15,20 @@ public sealed record OpenDotaHeroKit
 {
     [System.Text.Json.Serialization.JsonExtensionData]
     public Dictionary<string, JsonElement> Fields { get; init; } = [];
-    public HeroKit ToKit(int heroId) => OpenDotaKitMappings.ToKit(heroId, JsonSerializer.SerializeToElement(Fields));
+    public HeroKit ToKit(int heroId, IReadOnlyDictionary<string, string>? talentNames = null, OpenDotaAghanim? aghanim = null) =>
+        OpenDotaKitMappings.ToKit(heroId, JsonSerializer.SerializeToElement(Fields), talentNames, aghanim);
 }
 public sealed record OpenDotaPatch(string? Name);
+// GET constants/aghs_desc: one entry per hero with what Aghanim's Scepter and Shard do.
+public sealed record OpenDotaAghanim(int HeroId, bool HasScepter, string? ScepterDesc, string? ScepterSkillName,
+    bool ScepterNewSkill, bool HasShard, string? ShardDesc, string? ShardSkillName, bool ShardNewSkill)
+{
+    public AghanimUpgrade? Scepter => Upgrade(HasScepter, ScepterDesc, ScepterSkillName, ScepterNewSkill);
+    public AghanimUpgrade? Shard => Upgrade(HasShard, ShardDesc, ShardSkillName, ShardNewSkill);
+    private static AghanimUpgrade? Upgrade(bool has, string? description, string? skill, bool isNew) =>
+        has && !string.IsNullOrWhiteSpace(description)
+            ? new(description, string.IsNullOrWhiteSpace(skill) ? null : skill, isNew) : null;
+}
 
 public static class OpenDotaKitMappings
 {
@@ -30,8 +41,12 @@ public static class OpenDotaKitMappings
     internal static IReadOnlyList<string> Strings(JsonElement value) => value.ValueKind == JsonValueKind.String
         ? string.IsNullOrWhiteSpace(value.GetString()) ? [] : [value.GetString()!]
         : Array(value).Select(Text).Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => s!).ToArray();
-    internal static IReadOnlyList<double> Numbers(JsonElement value)
+    internal static IReadOnlyList<double> Numbers(JsonElement value) => Numbers(value, out _);
+
+    // "15%" is the number 15 (percent = true): 682 attributes of the 7.41 constants are written that way.
+    internal static IReadOnlyList<double> Numbers(JsonElement value, out bool percent)
     {
+        percent = false;
         var parts = value.ValueKind switch
         {
             JsonValueKind.Number => new[] { value.GetRawText() },
@@ -41,20 +56,25 @@ public static class OpenDotaKitMappings
             _ => [],
         };
         var result = new List<double>();
+        var hasPercent = false;
         foreach (var part in parts)
         {
-            if (!double.TryParse(part.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var number)
+            var text = part.Trim();
+            if (text.EndsWith('%')) { hasPercent = true; text = text[..^1].TrimEnd(); }
+            if (!double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var number)
                 || !double.IsFinite(number)) return [];
             result.Add(number);
         }
+        percent = hasPercent;
         return result;
     }
     internal static IReadOnlyList<AbilityValue> Values(JsonElement value) => Array(value).Select(v =>
     {
         var raw = Field(v, "value");
-        var levels = Numbers(raw);
+        var levels = Numbers(raw, out var percent);
         return new AbilityValue(Text(v, "key") ?? "", Text(v, "header") ?? Text(v, "display"), levels,
-            levels.Count > 0 ? null : Text(raw) ?? (raw.ValueKind == JsonValueKind.Undefined ? null : raw.GetRawText()));
+            levels.Count > 0 ? null : Text(raw) ?? (raw.ValueKind == JsonValueKind.Undefined ? null : raw.GetRawText()),
+            percent, Field(v, "generated").ValueKind == JsonValueKind.True);
     }).ToArray();
 
     public static AbilityDetails ToAbility(string key, JsonElement data)
@@ -76,16 +96,23 @@ public static class OpenDotaKitMappings
             {
                 "Yes" => Dispellable.Yes, "No" => Dispellable.No,
                 "Strong Dispels Only" => Dispellable.StrongOnly, _ => Dispellable.Unknown,
-            }, Numbers(Field(data, "cd")), Numbers(Field(data, "mc")), Values(Field(data, "attrib")));
+            }, Numbers(Field(data, "cd")), Numbers(Field(data, "mc")), Values(Field(data, "attrib")),
+            Field(data, "is_innate").ValueKind == JsonValueKind.True || Text(data, "is_innate") == "true",
+            Text(data, "lore"), Numbers(Field(data, "dmg")));
     }
 
-    public static HeroKit ToKit(int heroId, JsonElement data) => new(heroId,
+    // talentNames: display text by talent key (talents are entries of constants/abilities with only a dname).
+    public static HeroKit ToKit(int heroId, JsonElement data, IReadOnlyDictionary<string, string>? talentNames = null,
+        OpenDotaAghanim? aghanim = null) => new(heroId,
         Strings(Field(data, "abilities")).Where(key => key != "generic_hidden").ToArray(),
         Array(Field(data, "talents")).Where(v => !string.IsNullOrWhiteSpace(Text(v, "name")))
-            .Select(v => new Talent(Text(v, "name")!, Integer(Field(v, "level")))).ToArray(),
+            .Select(v => new Talent(Text(v, "name")!, Integer(Field(v, "level")),
+                talentNames?.GetValueOrDefault(Text(v, "name")!))).ToArray(),
         Array(Field(data, "facets")).Where(v => !string.IsNullOrWhiteSpace(Text(v, "name")))
             .Select(v => new Facet(Integer(Field(v, "id")), Text(v, "name")!, Text(v, "title"),
                 Text(v, "description"), Field(v, "deprecated").ValueKind == JsonValueKind.True
-                    || Text(v, "deprecated") == "true")).ToArray());
+                    || Text(v, "deprecated") == "true", Text(v, "icon"), Text(v, "color"),
+                Strings(Field(v, "abilities")))).ToArray(),
+        aghanim?.Scepter, aghanim?.Shard);
     private static int Integer(JsonElement value) => value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var n) ? n : 0;
 }

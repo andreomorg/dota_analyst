@@ -6,7 +6,11 @@ namespace DotaAnalyst.Domain.Replays;
 // after a second leak into it. It says something was used, not that it was ready, hit, or worked.
 // TargetHeroId/TargetX/TargetY (abilities only, X27): the hero it was cast on and the point it was cast at, when the
 // replay links them (null: unknown, not "no target").
-public sealed record RecordedUse(int HeroId, double Seconds, string Name, int? TargetHeroId = null, int? TargetX = null, int? TargetY = null);
+public sealed record RecordedUse(int HeroId, double Seconds, string Name, int? TargetHeroId = null, int? TargetX = null, int? TargetY = null,
+    int? PointSource = null)
+{
+    public string PointOrigin => PointSource switch { 0 => "combatLogLocation", 1 => "castPositionOrder", _ => "unknown" };
+}
 
 public enum EconomyResource
 {
@@ -67,6 +71,7 @@ public sealed record HealingBucket(int HeroId, int Seconds, int Received, int Do
 // One courier of a team over the match (sparse readings: alive, position).
 public sealed record CourierTrack(string Id, Team Team, IReadOnlyList<(int Seconds, bool Alive, int X, int Y)> Samples)
 {
+    public IReadOnlyList<CourierFlight>? Flight { get; init; }
     // Alive at the last reading up to `second`; null before the first.
     public bool? AliveAt(int second)
     {
@@ -85,6 +90,11 @@ public sealed record CourierTrack(string Id, Team Team, IReadOnlyList<(int Secon
     }
 }
 
+public sealed record CourierFlight(int Seconds, int? Raw)
+{
+    public bool? Flying => Raw switch { 0 => false, 1 => true, _ => null };
+}
+
 // A ping on the map by a player (raw type kept by the parser), at a point.
 public sealed record MapPing(int HeroId, Team Team, double Seconds, int X, int Y, int Type);
 
@@ -92,21 +102,67 @@ public sealed record MapPing(int HeroId, Team Team, double Seconds, int X, int Y
 public sealed record RuneOnMap(int Seconds, int RuneType, int X, int Y, bool Present);
 
 // An inventory slot of a hero that changed at a second of the game clock (read every 2 s); Item null = it emptied.
-// Slots: 0-5 the inventory, TeleportSlot and NeutralSlot.
+// Slots: 0-5 the inventory, 6-8 the backpack (carried, not usable; only in documents since DATA-D16), 9-14 the stash,
+// TeleportSlot, NeutralSlot (the neutral artifact) and EnhancementSlot (the neutral enhancement; only in documents with
+// neutral crafts, N2).
 public sealed record SlotChange(int HeroId, int Seconds, int Slot, string? Item)
 {
     public const int TeleportSlot = 15;
     public const int NeutralSlot = 16;
+    public const int EnhancementSlot = 17;
     public const int InventorySlots = 6;
+    public const int FirstBackpackSlot = 6;
+    public const int BackpackSlots = 3;
+    public const int FirstStashSlot = 9;
+    public const int StashSlots = 6;
+
+    public bool IsBackpack => Slot is >= FirstBackpackSlot and < FirstBackpackSlot + BackpackSlots;
+}
+
+// A neutral item a hero crafted with Madstones (7.38+): when, the artifact (item_ name) and its level, the tier (1-5),
+// and the enhancement crafted with it and its level (null when the replay does not say).
+public sealed record NeutralCraft(int HeroId, double Seconds, string Artifact, int? ArtifactLevel, int Tier, string? Enhancement,
+    int? EnhancementLevel);
+
+// A hero's Madstone counters, read every 2 s and kept only when one changes: in hand, acquired, found (neutral item
+// tokens) and the gold from neutral creeps, all since the match started.
+public sealed record MadstoneReading(int Seconds, int InHand, int Acquired, int Found, int NeutralGold);
+
+public sealed record MadstoneTrack(int HeroId, IReadOnlyList<MadstoneReading> Readings)
+{
+    // The last reading at or before this second (the present, never the future); null before the first.
+    public MadstoneReading? At(int seconds) => Readings.LastOrDefault(reading => reading.Seconds <= seconds);
+}
+
+// A hero's Madstones over the whole match (the last reading): acquired, found, still in hand at the end, and the gold
+// from neutral creeps. Kept with the analysis (the readings themselves are not).
+public sealed record NeutralProgress(int HeroId, int Acquired, int Found, int InHandAtEnd, int NeutralGold)
+{
+    public static NeutralProgress? From(MadstoneTrack track) =>
+        track.Readings.LastOrDefault() is { } last ? new(track.HeroId, last.Acquired, last.Found, last.InHand, last.NeutralGold) : null;
 }
 
 // A cooldown of a hero's item or ability that started at Seconds and ends at ReadyAt (the replay's own times).
 public sealed record CooldownStart(int HeroId, double Seconds, string Name, double ReadyAt)
 {
-    public bool ActiveAt(int second) => Seconds <= second && ReadyAt > second;
+    // Drops of this cooldown while it ran (resets, reductions: DATA-D15), in time order. Each only counts from its own
+    // moment on: before it, the cooldown still ran to ReadyAt as known then (never rewritten backwards).
+    public IReadOnlyList<CooldownCorrection> Corrections { get; init; } = [];
 
+    // Running at the second, by the ready time known then.
+    public bool ActiveAt(int second) => Seconds <= second && ReadyAtAsOf(second) > second;
+
+    // The ready time known at a second: the last correction made by then, else ReadyAt.
+    public double ReadyAtAsOf(double second) => Corrections.LastOrDefault(change => change.Seconds <= second)?.ReadyAt ?? ReadyAt;
+
+    // The length as it started (corrections do not change it).
     public double Length => ReadyAt - Seconds;
 }
+
+// A running cooldown of an item or ability that dropped (reset or reduction) at Seconds: ready at ReadyAt instead
+// (items.cooldownChanges / abilities.cooldownChanges, DATA-D15). Entity and Serial identify the item/ability entity in
+// the replay.
+public sealed record CooldownCorrection(int HeroId, double Seconds, string Name, int Entity, int Serial, double ReadyAt);
 
 // Something a team did at a moment: a scan, a glyph.
 public sealed record TeamAction(Team Team, double Seconds);
@@ -130,6 +186,7 @@ public sealed record CreepHeroHits(int Seconds, Lane Lane, Team CreepTeam, int T
 // A neutral camp (its spawner's position and type) and its living wild neutrals over the match (sparse readings).
 public sealed record NeutralCamp(string Id, int X, int Y, string? Type, IReadOnlyList<(int Seconds, int Alive)> Alive)
 {
+    public int? SpawnerType { get; init; }
     // The last reading up to `second` (sorted by time); null before the first.
     public int? AliveAt(int second)
     {
@@ -279,7 +336,7 @@ public sealed record BuildingHealth(
 }
 
 // A buyback of a hero.
-public sealed record BuybackUse(int HeroId, double Seconds);
+public sealed record BuybackUse(int HeroId, double Seconds, int? Cost = null);
 
 // A rune a hero picked up; RuneType is Valve's DOTA_RUNES number (replay-parser collect_vision.go).
 public sealed record RunePickup(int HeroId, Team Team, double Seconds, int RuneType)
@@ -336,8 +393,38 @@ public sealed record ReplayActivity
         IReadOnlyList<RuneOnMap>? runesOnMap = null,
         IReadOnlyList<TypedDamageBucket>? typedDamage = null,
         IReadOnlyList<HealingBucket>? healing = null,
-        IReadOnlyList<CourierTrack>? couriers = null)
+        IReadOnlyList<CourierTrack>? couriers = null,
+        IReadOnlyList<NeutralCraft>? neutralCrafts = null,
+        IReadOnlyList<MadstoneTrack>? madstones = null,
+        TreeTimeline? trees = null,
+        IReadOnlyList<VisionUnitsSample>? visionUnits = null,
+        IReadOnlyList<CooldownCorrection>? itemCooldownChanges = null,
+        IReadOnlyList<CooldownCorrection>? abilityCooldownChanges = null)
     {
+        // Each correction goes to the one cooldown of that hero and name running when it happened; with none or more
+        // than one running (two copies of an item: the legacy cooldowns have no entity), it is kept apart, unused.
+        ItemCooldownChanges = itemCooldownChanges?.OrderBy(change => change.Seconds).ToList();
+        AbilityCooldownChanges = abilityCooldownChanges?.OrderBy(change => change.Seconds).ToList();
+        itemCooldowns = WithCorrections(itemCooldowns, ItemCooldownChanges);
+        abilityCooldowns = WithCorrections(abilityCooldowns, AbilityCooldownChanges);
+
+        if (visionUnits?.Any(sample => sample is null || sample.Radiant is null || sample.Dire is null) == true)
+        {
+            throw new ArgumentException("Vision unit samples need both teams' lists.", nameof(visionUnits));
+        }
+
+        Trees = trees;
+        VisionUnits = visionUnits?.OrderBy(sample => sample.Seconds).ToList();
+
+        if (neutralCrafts?.Any(craft => craft is null || craft.HeroId <= 0 || craft.Tier is < 1 or > 5) == true
+            || madstones?.Any(track => track is null || track.HeroId <= 0) == true)
+        {
+            throw new ArgumentException("Neutral crafts and Madstones need a hero (and crafts a tier 1-5).");
+        }
+
+        NeutralCrafts = neutralCrafts?.OrderBy(craft => craft.Seconds).ToList();
+        Madstones = madstones?.Select(track => track with { Readings = track.Readings.OrderBy(reading => reading.Seconds).ToList() }).ToList();
+
         if (typedDamage?.Any(bucket => bucket is null || bucket.HeroId <= 0) == true
             || healing?.Any(bucket => bucket is null || bucket.HeroId <= 0) == true || couriers?.Any(courier => courier is null) == true)
         {
@@ -422,7 +509,7 @@ public sealed record ReplayActivity
         Glyphs = glyphs?.OrderBy(action => action.Seconds).ToList();
         Runes = runes?.OrderBy(rune => rune.Seconds).ToList();
         if (slotChanges is not null && slotChanges.Any(change => change is null || change.HeroId <= 0
-                || change.Slot is < 0 or > SlotChange.NeutralSlot))
+                || change.Slot is < 0 or > SlotChange.EnhancementSlot))
         {
             throw new ArgumentException("Slot changes need a hero and a known slot.", nameof(slotChanges));
         }
@@ -520,4 +607,59 @@ public sealed record ReplayActivity
     public IReadOnlyList<HealingBucket>? Healing { get; }
 
     public IReadOnlyList<CourierTrack>? Couriers { get; }
+
+    // Neutral crafts and Madstone counters (N2); null for documents from before them (unknown, not "none").
+    public IReadOnlyList<NeutralCraft>? NeutralCrafts { get; }
+
+    public IReadOnlyList<MadstoneTrack>? Madstones { get; }
+
+    // The map's trees (MP3) and each team's moving vision (MP4); null for documents from before them (unknown).
+    public TreeTimeline? Trees { get; }
+
+    public IReadOnlyList<VisionUnitsSample>? VisionUnits { get; }
+
+    // The cooldown drops read from the document (null for documents before DATA-D15), as read: those matched to a
+    // cooldown are also in its CooldownStart.Corrections.
+    public IReadOnlyList<CooldownCorrection>? ItemCooldownChanges { get; }
+
+    public IReadOnlyList<CooldownCorrection>? AbilityCooldownChanges { get; }
+
+    private static IReadOnlyList<CooldownStart>? WithCorrections(IReadOnlyList<CooldownStart>? cooldowns, IReadOnlyList<CooldownCorrection>? changes)
+    {
+        if (cooldowns is null || changes is not { Count: > 0 })
+        {
+            return cooldowns;
+        }
+
+        var corrected = cooldowns.ToList();
+        var byIndex = new Dictionary<int, List<CooldownCorrection>>();
+        foreach (var change in changes)
+        {
+            var running = Enumerable.Range(0, corrected.Count)
+                .Where(i => corrected[i].HeroId == change.HeroId && corrected[i].Name == change.Name && corrected[i].Seconds <= change.Seconds
+                    && ReadyAtWith(corrected[i], byIndex.GetValueOrDefault(i), change.Seconds) > change.Seconds)
+                .ToList();
+            if (running.Count != 1)
+            {
+                continue;
+            }
+
+            if (!byIndex.TryGetValue(running[0], out var list))
+            {
+                byIndex[running[0]] = list = [];
+            }
+
+            list.Add(change);
+        }
+
+        foreach (var (index, list) in byIndex)
+        {
+            corrected[index] = corrected[index] with { Corrections = list };
+        }
+
+        return corrected;
+    }
+
+    private static double ReadyAtWith(CooldownStart cooldown, List<CooldownCorrection>? changes, double second) =>
+        changes?.LastOrDefault(change => change.Seconds <= second)?.ReadyAt ?? cooldown.ReadyAt;
 }

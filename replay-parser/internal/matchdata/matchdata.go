@@ -88,6 +88,12 @@ const (
 
 // Info is the general information about the match.
 type Info struct {
+	// EngineBuild is the replay header's engine/client build, not a catalog commit.
+	EngineBuild *uint32 `json:"engineBuild,omitempty"`
+	// ProducerVersion is the executable's embedded VCS identity, when available.
+	ProducerVersion *string `json:"producerVersion,omitempty"`
+	// MatchEnded distinguishes a recorded game end from a truncated replay's last clock.
+	MatchEnded *bool `json:"matchEnded,omitempty"`
 	// MatchID is the match id, as text.
 	MatchID string `json:"matchId"`
 	// GameMode is Valve's game mode number (22 = All Pick, 23 = Turbo, 2 = Captains Mode...).
@@ -298,6 +304,10 @@ type GoldSpent struct {
 
 // Timelines is each player's numbers over time.
 type Timelines struct {
+	// GoldBalances is sampled independently of life/position; absent in older documents.
+	GoldBalances List[GoldBalance] `json:"goldBalances,omitempty"`
+	// Madstones is always present in new documents; absent in older documents.
+	Madstones List[PlayerMadstones] `json:"madstones"`
 	// Couriers preserves separate entity identities within each team; movement is sparse (>200 world units).
 	Couriers List[CourierTimeline] `json:"couriers,omitempty"`
 	// CreepHeroDamage counts logged hits, not current targets or distinct attacking creeps.
@@ -316,6 +326,13 @@ type Timelines struct {
 	// OffLaneCreeps is sparse; older documents may omit it. Means are world coordinates.
 	OffLaneCreeps List[OffLaneCreeps] `json:"offLaneCreeps"`
 	Waves         List[LaneWaves]     `json:"waves"`
+	// Trees is which of the map's trees stand (map_state.go). TempTrees is every temporary tree appearing or going.
+	// Added later (MP3): older documents have neither.
+	Trees     TreeTimeline   `json:"trees"`
+	TempTrees List[TempTree] `json:"tempTrees"`
+	// VisionUnits is the teams' moving vision (creeps, summons, illusions) every PositionIntervalSeconds (map_state.go).
+	// Added later (MP4): older documents have none.
+	VisionUnits List[VisionUnits] `json:"visionUnits"`
 }
 
 // LaneWaves is one lane's creep fronts over time.
@@ -376,6 +393,8 @@ type PlayerPositions struct {
 	Vitals List[Vitals] `json:"vitals"`
 	// Stats is parallel to Samples, with nullable combat attributes. Older documents have no "stats".
 	Stats List[CombatStats] `json:"stats"`
+	// CombatDetails is a nullable component tuple per sample, not effective HUD totals. Older documents omit it.
+	CombatDetails List[CombatDetails] `json:"combatDetails,omitempty"`
 	// Orders is parallel to Samples; omitted when order messages are absent (unknown).
 	Orders List[Orders] `json:"orders,omitempty"`
 }
@@ -448,6 +467,8 @@ type Combat struct {
 	// Economy is [bucketStart, player, resource, rawReason, amount], resource 0=gold, 1=XP.
 	// Buckets cover [t,t+2); null reason means the field was absent, not reason zero.
 	Economy List[EconomyBucket] `json:"economy,omitempty"`
+	// GoldEvents is every GOLD entry with its location, event by event (map_state.go). Added later (MP3).
+	GoldEvents List[GoldEvent] `json:"goldEvents"`
 	// Debuffs is enemy-applied modifiers on real heroes, sorted by start; [] means none, older documents omit it.
 	Debuffs List[Debuff] `json:"debuffs"`
 	// Buffs reuses the modifier tuple for self/ally applications on real heroes, sorted by start.
@@ -543,6 +564,9 @@ type PlayerCombatMinutes struct {
 
 // Items is what the players bought, used and ended with.
 type Items struct {
+	// NeutralCrafts records chosen artifacts/enhancements, never the unchosen options.
+	// Always present in new documents; older documents may omit it.
+	NeutralCrafts List[PlayerNeutralCrafts] `json:"neutralCrafts"`
 	// Purchases is one entry per player with every purchase, including the ones before the horn; recipes appear as
 	// items (item_recipe_wraith_band).
 	Purchases List[PlayerItems] `json:"purchases"`
@@ -550,11 +574,23 @@ type Items struct {
 	Uses List[PlayerItems] `json:"uses"`
 	// Final is one entry per player with the items at the end of the match.
 	Final List[FinalItems] `json:"final"`
-	// Slots is one entry per player with every change of inventory (0-5), stash (9-14), teleport (15) and neutral (16), read
+	// Slots is one entry per player with every change of inventory (0-5), backpack (6-8, since DATA-D16), stash (9-14),
+	// teleport (15), artifact (16) and enhancement (17), read
 	// every PositionIntervalSeconds. Added later (with Cooldowns): older documents have neither.
 	Slots List[PlayerSlotChanges] `json:"slots"`
 	// Cooldowns is one entry per player with every item cooldown that started.
 	Cooldowns List[PlayerCooldowns] `json:"cooldowns"`
+	// CooldownChanges is one entry per player with every item cooldown that dropped while running (reset, reduction):
+	// see CooldownChange. Added later (DATA-D15): older documents have none.
+	CooldownChanges List[PlayerCooldownChanges] `json:"cooldownChanges"`
+}
+
+// PlayerCooldownChanges is one player's cooldown corrections, in time order.
+type PlayerCooldownChanges struct {
+	// Player is the player index 0-9.
+	Player int `json:"player"`
+	// Changes is every CooldownChange of the player's items or abilities.
+	Changes List[CooldownChange] `json:"changes"`
 }
 
 // PlayerSlotChanges is one player's inventory changes, in time order.
@@ -609,6 +645,12 @@ type Abilities struct {
 	// Cooldowns is one entry per player with every ability cooldown that started (talents have none). Added later:
 	// older documents have no "cooldowns".
 	Cooldowns List[PlayerCooldowns] `json:"cooldowns"`
+	// CooldownChanges is one entry per player with every ability cooldown that dropped while running (CooldownChange).
+	// Added later (DATA-D15): older documents have none.
+	CooldownChanges List[PlayerCooldownChanges] `json:"cooldownChanges"`
+	// Stolen is one entry per player with the abilities it held stolen and their cooldowns (PlayerStolenAbilities; the
+	// cooldown tuples are [t, name, entity, serial, readyAt] of cooldowns that started). Added later (DATA-D17).
+	Stolen List[PlayerStolenAbilities] `json:"stolen"`
 }
 
 // PlayerAbilityLevels is one player's ability upgrades as [t, "ability", level] tuples.
@@ -646,6 +688,8 @@ type Vision struct {
 	Scans List[TeamEvent] `json:"scans"`
 	// Glyphs is every Glyph of Fortification used.
 	Glyphs List[TeamEvent] `json:"glyphs"`
+	// Lanterns is every Watcher activation (map_state.go). Added later (MP3): older documents have none.
+	Lanterns List[LanternUse] `json:"lanterns"`
 }
 
 // WardType is the kind of ward.
@@ -702,6 +746,10 @@ type TeamEvent struct {
 
 // Objectives is the map objectives taken.
 type Objectives struct {
+	// MapPickups is observed lotus/wisdom counter increments [t,player,kind]. Absent in older documents.
+	// Time is the replication tick; batched increments share a time. Omitted when empty or any series
+	// cannot be reconciled with final totals inside the match (absence means coverage unknown).
+	MapPickups List[MapPickup] `json:"mapPickups,omitempty"`
 	// OutpostCaptures adds the message's entity index without changing legacy Outposts.
 	OutpostCaptures List[OutpostCaptureEvent] `json:"outpostCaptures,omitempty"`
 	// TormentorStates keeps actual sites; side is unknown without a uniquely associated spawner.
@@ -712,6 +760,8 @@ type Objectives struct {
 	NeutralCamps List[NeutralCamp] `json:"neutralCamps,omitempty"`
 	// BuildingHealth is optional in older documents; sparse readings end at zero health.
 	BuildingHealth List[BuildingHealth] `json:"buildingHealth,omitempty"`
+	// BossTracks is Roshan's and the Tormentors' positions and lives (map_state.go). Added later (MP3).
+	BossTracks List[BossTrack] `json:"bossTracks"`
 
 	// Buildings is every tower, barracks, filler and Ancient destroyed or denied, in time order.
 	Buildings List[BuildingKill] `json:"buildings"`

@@ -325,3 +325,12 @@ func logSizes(t *testing.T, match matchdata.Match) {
 	}
 	t.Logf("JSON: items %d bytes, abilities %d bytes", len(items), len(abilities))
 }
+
+func TestEnhancementSlotTracked(t *testing.T) {
+	for _, slot := range trackedSlots {
+		if slot == enhancementSlot {
+			return
+		}
+	}
+	t.Fatal("enhancement slot 17 must be sampled with artifact slot 16")
+}

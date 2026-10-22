@@ -42,6 +42,35 @@ public class ReplayAnalysisRepositoryTests(PostgresFixture postgres) : IAsyncLif
     }
 
     [Fact]
+    public async Task SaveThenFind_KeepsNeutralCraftsAndMadstones()
+    {
+        var analysis = new ReplayAnalysis(Match, 540,
+            [new LaningStats(31, Team.Radiant, Lane.Bottom, lastHits: 12, denies: 9, netWorth: 2047, experience: 2609, deaths: 2)])
+        {
+            NeutralCrafts = [new NeutralCraft(31, 1207.5, "item_occult_bracelet", 1, 1, "item_enhancement_brawny", 1)],
+            NeutralProgress = [new NeutralProgress(31, 17, 9, 3, 300)],
+        };
+        var repository = CreateRepository();
+
+        await repository.SaveAsync(SavedReplayAnalysis.Ready(analysis, SavedAt), CancellationToken.None);
+        var found = (await repository.FindAsync(Match, CancellationToken.None))!.Analysis!;
+
+        Assert.Equal(analysis.NeutralCrafts, found.NeutralCrafts);
+        Assert.Equal(analysis.NeutralProgress, found.NeutralProgress);
+        // Rows saved before them read as unknown, not as "crafted nothing".
+        var older = (await RoundTrip(new ReplayAnalysis(Match, 540,
+            [new LaningStats(31, Team.Radiant, Lane.Bottom, lastHits: 0, denies: 0, netWorth: 0, experience: 0, deaths: 0)])))!;
+        Assert.Null(older.NeutralCrafts);
+        Assert.Null(older.NeutralProgress);
+
+        async Task<ReplayAnalysis?> RoundTrip(ReplayAnalysis value)
+        {
+            await repository.SaveAsync(SavedReplayAnalysis.Ready(value, SavedAt), CancellationToken.None);
+            return (await repository.FindAsync(Match, CancellationToken.None))?.Analysis;
+        }
+    }
+
+    [Fact]
     public async Task SaveThenFind_ReadyWithTimeline_KeepsTheTimeline()
     {
         var analysis = ReplayBuilder.Analysis(

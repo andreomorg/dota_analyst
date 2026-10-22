@@ -2,6 +2,7 @@ using DotaAnalyst.Application.Baseline;
 using DotaAnalyst.Application.Abstractions;
 using DotaAnalyst.Application.Matches;
 using DotaAnalyst.Domain.Analysis;
+using DotaAnalyst.Domain.Abilities;
 using DotaAnalyst.Domain.Heroes;
 using DotaAnalyst.Domain.Items;
 using DotaAnalyst.Domain.Matches;
@@ -604,6 +605,84 @@ public class GetMatchAnalysisHandlerTests
         Assert.Equal([new TimedItem(116, "Black King Bar", 1003, Assembled: true)], build.Items);
     }
 
+    [Theory]
+    [InlineData(100, 2250, true)]
+    [InlineData(2250, 100, false)]
+    public async Task ItemBuild_UsesHistoricalPrice_AndLoadsBuildOnce(int currentCost, int historicalCost, bool visible)
+    {
+        var players = new[] { ReplayBuilder.Hero(31, Team.Radiant, Lane.Bottom), ReplayBuilder.Hero(28, Team.Dire, Lane.Bottom) };
+        var replay = new ReplayAnalysis(MatchIdOf(10), 600, players, ReplayBuilder.Timeline(players), [], [],
+            purchases: [new ItemPurchase(31, 300, "blink")], objectives: [], metrics: [], heatmaps: [], abilityUpgrades: []);
+        var builds = new HistoricalBuilds(new GameCatalog(Items: new Dictionary<string, ItemDetails>
+        {
+            ["blink"] = new("blink", historicalCost, [], false),
+        }));
+        var handler = CreateHandler(new FakeReplayAnalyzer(UnparsedMatchWithMe()),
+            replays: new FakeReplayAnalysisRepository(SavedReplayAnalysis.Ready(replay, Now)),
+            items: new FakeItemCatalog(new Item(1, "Blink") { Details = new("blink", currentCost, [], false) }), builds: builds,
+            queue: new FakeReplayParseQueue { Result = ReplayEnqueueResult.Unavailable });
+
+        var result = (await handler.HandleAsync(MatchIdOf(10), Me, CancellationToken.None))!;
+
+        Assert.Equal(visible ? 1 : 0, result.ItemBuild!.Items.Count);
+        Assert.Equal(new CatalogProvenance("matchBuild", "historical", true, false), result.Catalog);
+        Assert.Equal(1, builds.Calls);
+    }
+
+    [Fact]
+    public async Task HistoricalRules_DoNotDependOnCurrentDisplayCatalog()
+    {
+        var rules = new Dictionary<string, ItemDetails>
+        {
+            ["removed"] = new("removed", 2400, [], false),
+            ["blink"] = new("blink", 2250, [], false),
+            ["assembled"] = new("assembled", 4000, ["blink"], false),
+        };
+        var profile = new HeroDetails(HeroAttribute.Strength, HeroAttackType.Melee, new HashSet<HeroRole>());
+        var builds = new HistoricalBuilds(new GameCatalog(Items: rules, Heroes: new Dictionary<int, HeroDetails> { [31] = profile }));
+        var replay = SupportDuel([new(31, 300, "removed"), new(31, 400, "blink"), new(31, 600, "assembled")]);
+        var handler = CreateHandler(new FakeReplayAnalyzer(UnparsedMatchWithMe()),
+            replays: new FakeReplayAnalysisRepository(SavedReplayAnalysis.Ready(replay, Now)),
+            heroes: new FakeHeroCatalog(), builds: builds,
+            items: new FakeItemCatalog(new Item(1, "Blink") { Details = new("blink", 3000, [], false) },
+                new Item(2, "Assembled") { Details = new("assembled", 4000, [], false) }));
+
+        var result = (await handler.HandleAsync(MatchIdOf(10), Me, CancellationToken.None))!;
+
+        Assert.Equal(300d, result.SmartStats!.Player.FirstBigItemSeconds!.Value);
+        Assert.Equal(new TimedItem(2, "Assembled", 600, true), Assert.Single(result.ItemBuild!.Items));
+        Assert.Equal(HeroAttackType.Melee, result.Draft!.Teams.SelectMany(team => team.Heroes).Single(hero => hero.HeroId == 31).AttackType);
+        Assert.Equal(1, builds.Calls);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task HistoricalMissingRules_DoNotReusePreviouslyCalculatedTiming(bool purchasesMissing)
+    {
+        var source = SupportDuel();
+        var replay = new ReplayAnalysis(source.MatchId, 600, source.Players, source.Timeline, [], [], purchases: purchasesMissing ? null : [], objectives: [],
+            metrics: source.Metrics!.Select(hero => hero with { FirstBigItemSeconds = 99 }).ToList(), heatmaps: [], abilityUpgrades: []);
+        var handler = CreateHandler(new FakeReplayAnalyzer(UnparsedMatchWithMe()), builds: new HistoricalBuilds(GameCatalog.Empty),
+            replays: new FakeReplayAnalysisRepository(SavedReplayAnalysis.Ready(replay, Now)),
+            queue: new FakeReplayParseQueue { Result = ReplayEnqueueResult.Unavailable });
+
+        var result = (await handler.HandleAsync(MatchIdOf(10), Me, CancellationToken.None))!;
+
+        Assert.Null(result.SmartStats!.Player.FirstBigItemSeconds);
+        Assert.False(result.Catalog!.ItemRulesAvailable);
+    }
+
+    private sealed class HistoricalBuilds(GameCatalog catalog) : IGameBuildCatalog
+    {
+        public int Calls { get; private set; }
+        public Task<(GameBuild Build, GameCatalog Catalog)?> ForMatchAsync(DateTimeOffset? startedAt, CancellationToken cancellationToken)
+        {
+            Calls++;
+            return Task.FromResult<(GameBuild, GameCatalog)?>((new GameBuild("historical", 1, DateTimeOffset.UnixEpoch), catalog));
+        }
+    }
+
     [Fact]
     public async Task Objectives_Ready_BothTeamsWithTheirSideAndHeroNames()
     {
@@ -1104,7 +1183,8 @@ public class GetMatchAnalysisHandlerTests
         FakeItemCatalog? items = null,
         FakeDistributions? baseline = null,
         IOpenDotaParseCoordinator? parsing = null,
-        FakeHeroCatalog? heroes = null) =>
+        FakeHeroCatalog? heroes = null,
+        IGameBuildCatalog? builds = null) =>
         new(
             analyzer,
             repository ?? new FakeMatchRepository(),
@@ -1115,7 +1195,7 @@ public class GetMatchAnalysisHandlerTests
             items ?? new FakeItemCatalog(new Item(1, "Blink Dagger"), new Item(2, "Trusty Shovel")),
             new DistributionBaselineProvider(baseline ?? new FakeDistributions(), NullLogger<DistributionBaselineProvider>.Instance),
             clock ?? new FixedTimeProvider(Now),
-            NullLogger<GetMatchAnalysisHandler>.Instance, parsing);
+            NullLogger<GetMatchAnalysisHandler>.Instance, parsing, builds);
 
     private static MatchDetails CreateMatch(Team? winningTeam, params MatchPlayer[] players) =>
         CreateMatch(winningTeam, isParsed: false, players);

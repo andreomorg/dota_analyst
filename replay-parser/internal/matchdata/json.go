@@ -23,6 +23,18 @@ func (l List[T]) MarshalJSON() ([]byte, error) {
 // the horn. It is written with at most one decimal place (0.1 s is finer than anything the replay measures reliably).
 type Seconds float64
 
+// MapPickup is a replicated map objective pickup: Kind is "lotus" or "wisdom".
+type MapPickup struct {
+	T      Seconds
+	Player int
+	Kind   string
+}
+
+// MarshalJSON writes [t, player, kind].
+func (p MapPickup) MarshalJSON() ([]byte, error) {
+	return json.Marshal([3]any{p.T, p.Player, p.Kind})
+}
+
 // MarshalJSON writes the value rounded to one decimal place (1725.53 -> 1725.5, 600 -> 600).
 func (s Seconds) MarshalJSON() ([]byte, error) {
 	rounded := math.Round(float64(s)*10) / 10
@@ -74,6 +86,19 @@ func (d DayNight) MarshalJSON() ([]byte, error) {
 // unverified); attributes use the replicated Total properties, including bonuses.
 type CombatStats struct {
 	Armor, MagicResist, MoveSpeed, DamageMin, DamageMax, Strength, Agility, Intellect *float64
+}
+
+// CombatDetails extends stats without changing its order or meaning. Values are replicated components, not a HUD
+// reconstruction. The final reserved slot is null in v1. Regen is from ThinkRegen properties, not combat HEAL totals.
+type CombatDetails struct {
+	StrengthBase, AgilityBase, IntellectBase, DamageBaseMin, DamageBaseMax, DamageBonus *float64
+	BaseAttackTime, AttackRange, AttackCapability, HealthThinkRegen, ManaThinkRegen     *float64
+}
+
+func (s CombatDetails) MarshalJSON() ([]byte, error) {
+	return json.Marshal([12]*float64{s.StrengthBase, s.AgilityBase, s.IntellectBase, s.DamageBaseMin,
+		s.DamageBaseMax, s.DamageBonus, s.BaseAttackTime, s.AttackRange, s.AttackCapability,
+		s.HealthThinkRegen, s.ManaThinkRegen, nil})
 }
 
 // MarshalJSON writes the eight combat attributes without changing the Vitals tuple.
@@ -156,8 +181,9 @@ func (c CreepKill) MarshalJSON() ([]byte, error) {
 	return json.Marshal([5]any{c.T, c.Player, c.Kind, c.X, c.Y})
 }
 
-// SlotChange is [t, slot, "item_name"|null], observed every two seconds: 0-5 inventory,
-// 15 teleport, 16 neutral. Backpack 6-8 and enhancement 17 are only in the final inventory.
+// SlotChange is [t, slot, "item_name"|null], observed every two seconds: 0-5 inventory, 6-8 backpack (since DATA-D16;
+// older documents have backpack changes only in the final inventory), 9-14 stash, 15 teleport, 16 artifact and 17
+// enhancement. Backpack items are carried, not usable: consumers must not count them as active.
 // Changes between samples may be missed; a null clears the observed slot, not the player's ownership.
 type SlotChange struct {
 	T, Slot int
@@ -291,4 +317,83 @@ type LaneCreepDeath struct {
 // MarshalJSON preserves null identity and position fields without borrowing killer coordinates.
 func (d LaneCreepDeath) MarshalJSON() ([]byte, error) {
 	return json.Marshal([7]any{d.T, d.Lane, d.CreepTeam, d.KillerKind, d.KillerPlayer, d.X, d.Y})
+}
+
+// CooldownChange is [t, "name", entity, serial, readyAt]: at t the time remaining of a running cooldown (m_fCooldown)
+// was more than 0.5 s below what the time passed since the last reading explains — a reset (Refresher, an ability's
+// own reset) or a reduction — so the item/ability is ready at the new readyAt (t itself when it reset to zero). Entity
+// and serial identify the item/ability entity (two copies with the same name stay apart). Rises are new cooldowns
+// (Cooldowns), never changes.
+type CooldownChange struct {
+	T              Seconds
+	Name           string
+	Entity, Serial int
+	ReadyAt        Seconds
+}
+
+// MarshalJSON writes [t, name, entity, serial, readyAt].
+func (c CooldownChange) MarshalJSON() ([]byte, error) {
+	return json.Marshal([5]any{c.T, c.Name, c.Entity, c.Serial, c.ReadyAt})
+}
+
+// PlayerStolenAbilities is one player's stolen abilities (Rubick's Spell Steal and the like, m_bStolen in the hero's
+// m_vecAbilities; DATA-D17): each held period and the cooldowns that started on them, kept apart from the hero's own
+// abilities (a stolen ability's cooldown is never the original hero's).
+type PlayerStolenAbilities struct {
+	Player    int                  `json:"player"`
+	Abilities List[StolenAbility]  `json:"abilities"`
+	Cooldowns List[CooldownChange] `json:"cooldowns"`
+}
+
+// StolenAbility is [from, to | null, "name", entity, serial, level, hidden]: held from `from` to `to` (null: still held
+// when the match ended), read every PositionIntervalSeconds; level is the ability's (the victim's), hidden a sub-ability
+// that came with it (Corrosive Haze with Slithereen Crush). Entity and serial identify the ability entity.
+type StolenAbility struct {
+	From           Seconds
+	To             *Seconds
+	Name           string
+	Entity, Serial int
+	Level          int
+	Hidden         bool
+}
+
+// MarshalJSON writes [from, to, name, entity, serial, level, hidden].
+func (s StolenAbility) MarshalJSON() ([]byte, error) {
+	return json.Marshal([7]any{s.From, s.To, s.Name, s.Entity, s.Serial, s.Level, s.Hidden})
+}
+
+// PlayerNeutralCrafts contains one player's crafts in game-clock order (including an empty list).
+type PlayerNeutralCrafts struct {
+	Player int                `json:"player"`
+	Crafts List[NeutralCraft] `json:"crafts"`
+}
+
+// NeutralCraft is [t, artifact, artifactLevel|null, tier 1-5, enhancement|null, enhancementLevel|null].
+// Names include item_; levels are unknown when not replicated. T is the purchase time or message time.
+type NeutralCraft struct {
+	T                Seconds
+	Artifact         string
+	ArtifactLevel    *int
+	Tier             int
+	Enhancement      *string
+	EnhancementLevel *int
+}
+
+// MarshalJSON preserves nullable levels and the compact neutral craft contract.
+func (n NeutralCraft) MarshalJSON() ([]byte, error) {
+	return json.Marshal([6]any{n.T, n.Artifact, n.ArtifactLevel, n.Tier, n.Enhancement, n.EnhancementLevel})
+}
+
+// PlayerMadstones contains sparse two-second readings; absence in old documents means unknown.
+type PlayerMadstones struct {
+	Player  int                  `json:"player"`
+	Samples List[MadstoneSample] `json:"samples"`
+}
+
+// MadstoneSample is [t, held, acquired, found, neutralGold], directly replicated counters.
+type MadstoneSample struct{ T, Held, Acquired, Found, NeutralGold int }
+
+// MarshalJSON preserves the five-number counter tuple.
+func (m MadstoneSample) MarshalJSON() ([]byte, error) {
+	return json.Marshal([5]int{m.T, m.Held, m.Acquired, m.Found, m.NeutralGold})
 }

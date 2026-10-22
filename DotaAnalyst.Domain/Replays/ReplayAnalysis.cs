@@ -96,6 +96,13 @@ public record ReplayAnalysis
         AbilityUpgrades = abilityUpgrades?.OrderBy(upgrade => upgrade.Seconds).ToList();
     }
 
+    // The neutral items crafted by every hero, in time order, and each hero's Madstone totals at the end (N2). Null for
+    // analyses made before they were read; NOT part of IsOutdated on purpose: re-reading every saved match for them
+    // would send each one through the parser again; the analysis just shows no neutral section until a new parse.
+    public IReadOnlyList<NeutralCraft>? NeutralCrafts { get; init; }
+
+    public IReadOnlyList<NeutralProgress>? NeutralProgress { get; init; }
+
     // Where each hero spent its time alive (every match with positions, Turbo included); null for analyses made
     // before heatmaps existed.
     public IReadOnlyList<HeroHeatmap>? Heatmaps { get; }

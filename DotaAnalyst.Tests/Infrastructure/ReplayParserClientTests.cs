@@ -342,13 +342,14 @@ public class ReplayParserClientTests
 
     // MatchJson plus the sections the prediction models read (20/10/2026): vitals next to the positions, waves, combat
     // buckets, inventory changes and cooldowns; 21/10/2026 also buffs, building health, off-lane creeps, lane creep
-    // deaths, creep hits on heroes, neutral camps, economy, runes on the map, couriers and typed damage.
+    // deaths, creep hits on heroes, neutral camps, economy, runes on the map, couriers and typed damage; and the neutral
+    // crafts and Madstones (N2).
     internal static string ModelJson() => MatchJson()
         .Replace("\"positions\": [] }", """
             "positions": [ { "player": 0, "samples": [[0, 0, 0]], "vitals": [[600, 600, 300, 300, 0, 0, 600]],
               "stats": [[1, 25, 300, 50, 54, 20, 18, 15]] } ], "waves": [], "dayNight": [[0, true]], "offLaneCreeps": [],
               "creepHeroDamage": [[26, "middle", "radiant", 0, 1]],
-              "couriers": [{ "id": "radiant:1", "team": "radiant", "samples": [[0, 1, -6841, -6841, false]] }] }
+              "couriers": [{ "id": "radiant:1", "team": "radiant", "samples": [[0, 1, -6841, -6841, false]] }], "madstones": [] }
             """)
         .Replace("\"combat\": { \"damage\": [],", """
             "combat": { "buckets": [{ "player": 0, "toHeroes": [], "fromHeroes": [], "byType": [], "healing": [] }],
@@ -356,7 +357,7 @@ public class ReplayParserClientTests
               "laneCreepDeaths": [[32.9, "middle", "radiant", "hero", 0, -847, -733]], "economy": [[-90, 0, 0, 0, 600]], "damage": [],
             """)
         .Replace("\"items\": { \"purchases\": [], \"uses\": [], \"final\": [] }",
-            "\"items\": { \"purchases\": [], \"uses\": [], \"final\": [], \"slots\": [], \"cooldowns\": [] }")
+            "\"items\": { \"purchases\": [], \"uses\": [], \"final\": [], \"slots\": [], \"cooldowns\": [], \"neutralCrafts\": [] }")
         .Replace("\"abilities\": { \"upgrades\": [", "\"abilities\": { \"cooldowns\": [], \"upgrades\": [")
         .Replace("\"objectives\": { \"buildings\": [],", """
             "objectives": {
@@ -450,6 +451,8 @@ public class ReplayParserClientTests
         { "no economy", ModelJson().Replace("\"economy\": [[-90, 0, 0, 0, 600]],", "") },
         { "no runes on the map", ModelJson().Replace("\"runesOnMap\": [[122, 7, -1640, 1112, 1]],", "") },
         { "no typed damage", ModelJson().Replace("\"byType\": [], ", "") },
+        { "no neutral crafts", ModelJson().Replace(", \"neutralCrafts\": []", "") },
+        { "no Madstones", ModelJson().Replace(", \"madstones\": []", "") },
     };
 
     [Theory]
@@ -712,6 +715,115 @@ public class ReplayParserClientTests
 
         await Assert.ThrowsAsync<ReplayUnreadableException>(() => client.ParseAsync(Match, ReplayUrl, CancellationToken.None));
         Assert.Empty(archive.Kept);
+    }
+
+    [Fact]
+    public async Task ArchivedReplay_PreservesThePositionsUsedByTheSharedMapping()
+    {
+        var document = MatchJson().Replace("\"positions\": []", "\"positions\": [{ \"player\": 0, \"samples\": [[100, 10, 20]] }]");
+        var response = ArchivedReplaySource.Read(document, Match);
+        var mapped = response.ToMappedReplay(Match);
+        var archived = (await new ArchivedReplaySource(new FakeArchive { Stored = document }).FindAsync(Match, CancellationToken.None))!;
+
+        Assert.Equal(new PositionSample(100, 10, 20), Assert.Single(Assert.Single(mapped.Positions).Samples));
+        Assert.Equal(mapped.Positions.Single().Samples, archived.Positions.Single().Samples);
+        Assert.Equal(mapped.Analysis.Heatmaps!.Select(map => map.HeroId), archived.Analysis.Heatmaps!.Select(map => map.HeroId));
+    }
+
+    public static TheoryData<string> InvalidMatchIdentities() => new()
+    {
+        "\"9034320025\"", // Another match, otherwise entirely usable.
+        "null",
+        "9034320024", // The v1 wire identity is a string.
+        "\"09034320024\"", // Noncanonical representation.
+        "\"not-a-match\"",
+    };
+
+    [Theory]
+    [MemberData(nameof(InvalidMatchIdentities))]
+    public async Task Parse_RejectsInvalidHttpMatchIdentity_WithoutArchiving(string identity)
+    {
+        var document = MatchJson().Replace("\"matchId\": \"9034320024\"", $"\"matchId\": {identity}");
+        var archive = new FakeArchive();
+        var parser = new FakeParser(Json(HttpStatusCode.OK, document, "application/json"));
+
+        await Assert.ThrowsAsync<ReplayUnreadableException>(() =>
+            CreateClient(parser, archive: archive).ParseAsync(Match, ReplayUrl, CancellationToken.None));
+
+        Assert.Single(parser.Requests);
+        Assert.Empty(archive.Kept);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Parse_RejectsMissingHttpMatchIdentity_WithoutArchiving(bool missingMatch)
+    {
+        var document = missingMatch
+            ? MatchJson().Replace("\"match\":", "\"otherMatch\":")
+            : MatchJson().Replace("\"matchId\":", "\"otherId\":");
+        var archive = new FakeArchive();
+        var parser = new FakeParser(Json(HttpStatusCode.OK, document, "application/json"));
+
+        await Assert.ThrowsAsync<ReplayUnreadableException>(() =>
+            CreateClient(parser, archive: archive).ParseAsync(Match, ReplayUrl, CancellationToken.None));
+
+        Assert.Empty(archive.Kept);
+    }
+
+    [Theory]
+    [MemberData(nameof(InvalidMatchIdentities))]
+    public async Task Parse_RejectsInvalidKeptMatchIdentity_AndUsesValidatedParserAnswer(string identity)
+    {
+        var archive = new FakeArchive
+        {
+            Stored = ModelJson().Replace("\"matchId\": \"9034320024\"", $"\"matchId\": {identity}"),
+        };
+        var parser = new FakeParser(Json(HttpStatusCode.OK, MatchJson(), "application/json"));
+
+        var result = await CreateClient(parser, archive: archive).ParseAsync(Match, ReplayUrl, CancellationToken.None);
+
+        Assert.Equal(Match, result.MatchId);
+        Assert.Single(parser.Requests);
+        Assert.Equal(MatchJson(), Assert.Single(archive.Kept).Document);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Parse_RejectsMissingKeptMatchIdentity_AndUsesValidatedParserAnswer(bool missingMatch)
+    {
+        var document = missingMatch
+            ? MatchJson().Replace("\"match\":", "\"otherMatch\":")
+            : MatchJson().Replace("\"matchId\":", "\"otherId\":");
+        var archive = new FakeArchive { Stored = document };
+        var parser = new FakeParser(Json(HttpStatusCode.OK, MatchJson(), "application/json"));
+
+        var result = await CreateClient(parser, archive: archive).ParseAsync(Match, ReplayUrl, CancellationToken.None);
+
+        Assert.Equal(Match, result.MatchId);
+        Assert.Single(parser.Requests);
+        Assert.Equal(MatchJson(), Assert.Single(archive.Kept).Document);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task FreshOperations_RejectAnotherMatchInKeptDocument(bool prefetch)
+    {
+        var archive = new FakeArchive { Stored = ModelJson().Replace("9034320024", "9034320025") };
+        var parser = new FakeParser(prefetch ? new HttpResponseMessage(HttpStatusCode.NoContent)
+            : Json(HttpStatusCode.OK, ModelJson(), "application/json"));
+        var client = CreateClient(parser, archive: archive);
+
+        if (prefetch)
+            await client.PrefetchAsync(Match, ReplayUrl, CancellationToken.None);
+        else
+            Assert.Equal(Match, (await client.ParseFreshAsync(Match, ReplayUrl, CancellationToken.None)).MatchId);
+
+        Assert.Single(parser.Requests);
+        if (prefetch) Assert.Empty(archive.Kept);
+        else Assert.Equal(ModelJson(), Assert.Single(archive.Kept).Document);
     }
 
     // Each case breaks one thing in an otherwise valid document.

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using DotaAnalyst.Application.Abstractions;
 using DotaAnalyst.Domain.Heroes;
 using DotaAnalyst.Infrastructure.Catalogs;
@@ -39,14 +40,19 @@ public class OpenDotaHeroCatalog(
 
     protected override string? DetailsOf(Hero hero) => hero.Details is { } details
         ? JsonSerializer.Serialize(new StoredHeroDetails(details.PrimaryAttribute, details.AttackType,
-            details.Roles.OrderBy(role => role).ToArray()), JsonOptions)
+            details.Roles.OrderBy(role => role).ToArray(), details.Profile is null ? null : JsonSerializer.SerializeToElement(details.Profile, JsonOptions),
+            details.Description is null ? null : JsonSerializer.SerializeToElement(details.Description, JsonOptions)), JsonOptions)
         : null;
 
     // A partial or unreadable profile must be refreshed too, even if the names were saved recently.
     protected override bool IsComplete(SavedCatalog saved) =>
         saved.Names.Keys.All(id => ReadDetails(saved.Details.GetValueOrDefault(id)) is not null);
 
-    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    // Enums as text, so reordering one never changes what a saved row means; rows saved with numbers still read.
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
+    {
+        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) },
+    };
 
     private static HeroDetails? ToDetails(OpenDotaHero hero)
     {
@@ -96,7 +102,7 @@ public class OpenDotaHeroCatalog(
         {
             return JsonSerializer.Deserialize<StoredHeroDetails>(json, JsonOptions) is
                 { PrimaryAttribute: { } attribute, AttackType: { } attack, Roles: { } roles }
-                ? new HeroDetails(attribute, attack, roles.ToHashSet())
+                ? new HeroDetails(attribute, attack, roles.ToHashSet()) { Profile = ReadProfile(json) }
                 : null;
         }
         catch (Exception ex) when (ex is JsonException or ArgumentException)
@@ -107,5 +113,16 @@ public class OpenDotaHeroCatalog(
     }
 
     private sealed record StoredHeroDetails(HeroAttribute? PrimaryAttribute, HeroAttackType? AttackType,
-        IReadOnlyList<HeroRole>? Roles);
+        IReadOnlyList<HeroRole>? Roles, JsonElement? Profile = null, JsonElement? Description = null);
+
+    private static HeroProfile? ReadProfile(string json)
+    {
+        try
+        {
+            var raw = JsonSerializer.Deserialize<StoredHeroDetails>(json, JsonOptions)?.Profile;
+            var profile = raw is { ValueKind: JsonValueKind.Object } p ? p.Deserialize<HeroProfile>(JsonOptions) : null;
+            return profile?.HasValidShape() == true ? profile : null;
+        }
+        catch (Exception ex) when (ex is JsonException or ArgumentException) { return null; }
+    }
 }

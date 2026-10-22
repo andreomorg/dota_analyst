@@ -22,7 +22,8 @@ public class GetMatchAnalysisHandler(
     IBaselineProvider baselineProvider,
     TimeProvider timeProvider,
     ILogger<GetMatchAnalysisHandler> logger,
-    IOpenDotaParseCoordinator? openDotaParsing = null)
+    IOpenDotaParseCoordinator? openDotaParsing = null,
+    IGameBuildCatalog? gameBuilds = null)
 {
     public const string UnknownHeroName = GetRecentMatchesHandler.UnknownHeroName;
     public const string UnknownItemName = "Unknown item";
@@ -51,6 +52,16 @@ public class GetMatchAnalysisHandler(
         }
 
         var names = new NameLookup(heroesTask.Result, itemsTask.Result);
+        var historical = gameBuilds is null ? null : await gameBuilds.ForMatchAsync(match.StartTime, cancellationToken);
+        IReadOnlyDictionary<string, ItemDetails>? itemRules = historical is { } rulesBuild
+            ? rulesBuild.Catalog.Items ?? new Dictionary<string, ItemDetails>() : null;
+        var calculationItems = historical is { } itemBuild
+            ? itemsTask.Result.ToDictionary(pair => pair.Key, pair => pair.Value with
+            {
+                Details = pair.Value.Details is { } details ? itemBuild.Catalog.Items?.GetValueOrDefault(details.Key) : null,
+            }) : itemsTask.Result;
+        var calculationHeroes = historical is { } heroBuild ? heroBuild.Catalog.Heroes
+            : heroesTask.Result.Values.Where(hero => hero.Details is not null).ToDictionary(hero => hero.Id, hero => hero.Details!);
         var currentPlayer = match.FindPlayer(accountId);
         var openDotaProcessing = openDotaParsing is null ? null
             : await openDotaParsing.EnsureAsync(match, cancellationToken);
@@ -63,8 +74,8 @@ public class GetMatchAnalysisHandler(
         var (replayStatus, replay) = await GetReplayAsync(match, cancellationToken);
         var playerDamage = replay?.Damage is { } damageRows && currentPlayer is not null
             ? ToDamage(damageRows, match, currentPlayer, names) : null;
-        var replayMetrics = replay?.Metrics is { } metrics && replay.Purchases is { } purchases
-            ? FirstBigItemMetric.AddTo(metrics, purchases, itemsTask.Result)
+        var replayMetrics = replay?.Metrics is { } metrics
+            ? FirstBigItemMetric.AddTo(metrics, replay.Purchases, calculationItems, itemRules)
             : replay?.Metrics;
 
         return new MatchAnalysis(
@@ -87,7 +98,7 @@ public class GetMatchAnalysisHandler(
             // Deaths read before the damage have no assists: no fights until the replay is read again.
             Fights: replay?.Deaths is { } fightDeaths && replay.Damage is not null ? ToFights(fightDeaths, match, currentPlayer) : null,
             ItemBuild: replay?.Purchases is { } itemPurchases && currentPlayer is not null
-                ? ToItemBuild(itemPurchases, currentPlayer, itemsTask.Result)
+                ? ToItemBuild(itemPurchases, currentPlayer, calculationItems, itemRules)
                 : null,
             Objectives: replay?.Objectives is { } objectives ? ToObjectives(objectives, currentPlayer, names) : null,
             SmartStats: replayMetrics is { } metricsForAnalysis && currentPlayer is not null
@@ -106,13 +117,41 @@ public class GetMatchAnalysisHandler(
             OpenDotaProcessing: openDotaProcessing,
             OpenDotaExtras: currentPlayer?.SupplementalStats is { } supplemental
                 ? ToSupplemental(supplemental, itemsTask.Result) : null,
-            Draft: currentPlayer is null ? null : ToDraft(match, currentPlayer, heroesTask.Result, names, replay, playerDamage));
+            Draft: currentPlayer is null ? null : ToDraft(match, currentPlayer, calculationHeroes, names, replay, playerDamage),
+            Neutrals: replay?.NeutralCrafts is { } crafts
+                ? ToNeutrals(crafts, replay, match, currentPlayer, calculationItems, names, historical?.Catalog.Neutrals)
+                : null,
+            Catalog: new CatalogProvenance(historical is null ? "currentFallback" : "matchBuild", historical?.Build.Id,
+                (itemRules?.Count ?? calculationItems.Values.Count(item => item.Details is not null)) > 0,
+                calculationHeroes?.Count > 0));
+    }
+
+    private static MatchNeutrals ToNeutrals(IReadOnlyList<NeutralCraft> crafts, ReplayAnalysis replay, MatchDetails match,
+        MatchPlayer? player, IReadOnlyDictionary<int, Item> items, NameLookup names, NeutralRules? rules)
+    {
+        var byKey = items.Values.Where(item => item.Details is not null).DistinctBy(item => item.Details!.Key)
+            .ToDictionary(item => item.Details!.Key);
+        Item? ItemOf(string? name) =>
+            name is null ? null : byKey.GetValueOrDefault(name.StartsWith("item_", StringComparison.Ordinal) ? name[5..] : name);
+        var heroes = match.Players.OrderByDescending(hero => ReferenceEquals(hero, player)).Select(hero => hero.HeroId).ToList();
+        var evaluated = NeutralItemEvaluator.Evaluate(heroes, crafts, replay.NeutralProgress, rules, (int)match.Duration.TotalSeconds);
+        return new MatchNeutrals(
+            rules?.Tiers.Select(tier => new NeutralTierInfo(tier.Tier, tier.OpensAtSeconds, tier.CraftCost)).ToList() ?? [],
+            evaluated.Select(hero => new HeroNeutralItems(
+                hero.HeroId, names.Hero(hero.HeroId), player?.HeroId == hero.HeroId,
+                hero.Crafts.Select(craft => new NeutralCraftInfo(craft.Craft.Seconds, craft.Craft.Tier,
+                    ItemOf(craft.Craft.Artifact)?.Id, ItemOf(craft.Craft.Artifact)?.Name ?? craft.Craft.Artifact,
+                    ItemOf(craft.Craft.Enhancement)?.Id,
+                    craft.Craft.Enhancement is null ? null : ItemOf(craft.Craft.Enhancement)?.Name ?? craft.Craft.Enhancement,
+                    craft.Craft.EnhancementLevel, craft.DelaySeconds)).ToList(),
+                hero.TiersSkipped, hero.AverageDelaySeconds, hero.Madstones?.Acquired, hero.Madstones?.Found,
+                hero.Madstones?.InHandAtEnd, hero.Madstones?.NeutralGold)).ToList());
     }
 
     private static MatchDraft? ToDraft(MatchDetails match, MatchPlayer player,
-        IReadOnlyDictionary<int, Hero> catalog, NameLookup names, ReplayAnalysis? replay, PlayerDamage? damage)
+        IReadOnlyDictionary<int, HeroDetails>? catalog, NameLookup names, ReplayAnalysis? replay, PlayerDamage? damage)
     {
-        HeroDetails? Profile(int id) => catalog.GetValueOrDefault(id)?.Details;
+        HeroDetails? Profile(int id) => catalog?.GetValueOrDefault(id);
         if (!match.Players.Any(hero => Profile(hero.HeroId) is not null))
         {
             return null;
@@ -426,7 +465,8 @@ public class GetMatchAnalysisHandler(
     // Null when the catalog has no details (an old saved copy with OpenDota down): without components there is no
     // assembly to redo.
     private static PlayerItemBuild? ToItemBuild(
-        IReadOnlyList<ItemPurchase> purchases, MatchPlayer player, IReadOnlyDictionary<int, Item> items)
+        IReadOnlyList<ItemPurchase> purchases, MatchPlayer player, IReadOnlyDictionary<int, Item> items,
+        IReadOnlyDictionary<string, ItemDetails>? rules = null)
     {
         var byKey = items.Values
             .Where(item => item.Details is not null)
@@ -439,7 +479,7 @@ public class GetMatchAnalysisHandler(
 
         var build = ItemBuildEvaluator.Evaluate(
             purchases.Where(purchase => purchase.HeroId == player.HeroId),
-            byKey.ToDictionary(pair => pair.Key, pair => pair.Value.Details!));
+            rules ?? byKey.ToDictionary(pair => pair.Key, pair => pair.Value.Details!));
 
         return new PlayerItemBuild(
             // An item from a newer patch than the catalog has no name to show: left out.
@@ -448,6 +488,7 @@ public class GetMatchAnalysisHandler(
                 .Select(item => new StartingItemCount(byKey[item.ItemKey].Id, byKey[item.ItemKey].Name, item.Count))
                 .ToList(),
             Items: build.Items
+                .Where(item => byKey.ContainsKey(item.ItemKey))
                 .Select(item => new TimedItem(byKey[item.ItemKey].Id, byKey[item.ItemKey].Name, item.Seconds, item.Assembled))
                 .ToList());
     }

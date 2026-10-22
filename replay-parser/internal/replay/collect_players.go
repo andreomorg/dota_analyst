@@ -151,6 +151,8 @@ func (c *playersCollector) samplePositions(second int) {
 			MoveSpeed: attribute("m_iMoveSpeed"), DamageMin: attribute("m_iDamageMin"), DamageMax: attribute("m_iDamageMax"),
 			Strength: attribute("m_flStrengthTotal"), Agility: attribute("m_flAgilityTotal"), Intellect: attribute("m_flIntellectTotal"),
 		})
+		c.positions[i].CombatDetails = append(c.positions[i].CombatDetails,
+			readHeroCombatDetails(func(name string) (float64, bool) { return number(hero, name) }))
 	}
 }
 

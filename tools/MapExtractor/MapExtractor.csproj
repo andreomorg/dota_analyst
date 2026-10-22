@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Reads the game's map file (game/dota/maps/dota.vpk) and writes the compact map of a patch used by the analysis
+       (DotaAnalyst.Infrastructure/GameData/Maps/). Not part of the solution nor of the Docker image: run it on the
+       owner's machine when a patch changes the map. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="ValvePak" Version="7.2.0.221" />
+    <PackageReference Include="ValveResourceFormat" Version="20.1.7467" />
+  </ItemGroup>
+
+</Project>

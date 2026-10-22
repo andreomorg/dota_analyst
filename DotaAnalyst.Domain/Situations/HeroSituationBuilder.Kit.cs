@@ -42,8 +42,8 @@ public sealed partial class HeroSituationBuilder
         return ready.Any(value => value is null) ? null : ready.Count(value => value == true);
     }
 
-    // A learned ability (an upgrade up to this second) or an item in the inventory with one of the effects and no cooldown
-    // running. Null without the abilities' data and the items' data (unknown).
+    // A learned ability (an upgrade up to this second) or an item in the inventory or the neutral slot with one of the
+    // effects and no cooldown running. Null without the abilities' data and the items' data (unknown).
     private bool? Ready(int heroId, int seconds, Func<AbilityEffect, bool> which)
     {
         bool? abilityReady = null;
@@ -59,7 +59,7 @@ public sealed partial class HeroSituationBuilder
         bool? itemReady = null;
         if (itemDetails is not null && ItemsAt(heroId, seconds) is { } items)
         {
-            itemReady = Inventory(items.Slots).Any(item => !items.Cooling.Contains(item)
+            itemReady = UsableItems(items.Slots).Any(item => !items.Cooling.Contains(item)
                 && itemDetails.TryGetValue(item.StartsWith(ItemPrefix, StringComparison.Ordinal) ? item[ItemPrefix.Length..] : item, out var details)
                 && details.HasActive && AbilityEffects.Of(details).Any(which));
         }

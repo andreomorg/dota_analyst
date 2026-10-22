@@ -34,7 +34,16 @@ public static class MatchMetricsCalculator
         IReadOnlyList<HeroPositions> positions,
         IReadOnlyDictionary<int, int>? roles,
         bool rolesInferred = false,
-        IReadOnlyList<HeroDamageMinutes>? damageMinutes = null)
+        IReadOnlyList<HeroDamageMinutes>? damageMinutes = null,
+        Maps.GameMap? map = null,
+        TreeTimeline? trees = null,
+        IReadOnlyList<MapObjective>? objectives = null,
+        IReadOnlyList<ObjectivePlace>? objectivePlaces = null,
+        IReadOnlyDictionary<int, MapObjectiveCounts>? objectiveCounts = null,
+        IReadOnlyList<(int HeroId, int Seconds)>? wisdomPickups = null,
+        IReadOnlyList<Buff>? buffs = null,
+        ReplayActivity? activity = null,
+        IReadOnlyDictionary<int, IReadOnlyCollection<string>>? kits = null)
     {
         if (roles is null || players.Any(player => roles.GetValueOrDefault(player.HeroId) is < 1 or > 5))
         {
@@ -46,6 +55,14 @@ public static class MatchMetricsCalculator
         var teamOf = players.DistinctBy(player => player.HeroId).ToDictionary(player => player.HeroId, player => player.Team);
         var fights = TeamfightDetector.Detect(deaths, teamOf);
         var damageOf = (damageMinutes ?? []).DistinctBy(hero => hero.HeroId).ToDictionary(hero => hero.HeroId);
+        // Each Wisdom Shrine taken, with the side of the shrine by where the hero stood (needs the patch's map).
+        var wisdom = map is null || wisdomPickups is null
+            ? null
+            : wisdomPickups.Where(pickup => teamOf.ContainsKey(pickup.HeroId)).Select(pickup => new WisdomTake(
+                pickup.HeroId, teamOf[pickup.HeroId], pickup.Seconds,
+                positionsOf.GetValueOrDefault(pickup.HeroId)?.At(pickup.Seconds, MapObjectiveMetricsCalculator.SampleTolerance) is { } at
+                    ? MapObjectiveMetricsCalculator.ShrineSideAt(map, at.X, at.Y)
+                    : null)).ToList();
 
         return players.Select(player =>
         {
@@ -132,7 +149,14 @@ public static class MatchMetricsCalculator
                 TeamObserverUptime: ObserverUptime(wards, player.Team, matchEnd),
                 LeadLostPerDeath: LeadLostPerDeath(heroDeaths, timeline, player.Team),
                 NetWorthGainByRegion: farm?.Gain,
-                MinutesByRegion: farm?.Minutes);
+                MinutesByRegion: farm?.Minutes,
+                Terrain: map is null ? null : TerrainMetricsCalculator.Calculate(map, player.Team, samples, heroDeaths, trees),
+                Vision: VisionMetricsCalculator.Calculate(player.HeroId, positionsOf, deaths, wards, map, trees),
+                Objectives: objectives is null ? null : MapObjectiveMetricsCalculator.Calculate(player.Team, heroPositions,
+                    objectives, objectivePlaces, objectiveCounts?.GetValueOrDefault(player.HeroId), wisdom, heroDeaths),
+                Teleports: TeleportMetricsCalculator.Calculate(player.HeroId, buffs, heroPositions, fights, heroDeaths),
+                Plays: activity is null ? null : PlayQualityMetricsCalculator.Calculate(player.HeroId, activity, teamOf, positionsOf,
+                    deaths, matchEnd, kits?.GetValueOrDefault(player.HeroId)));
         }).ToList();
     }
 

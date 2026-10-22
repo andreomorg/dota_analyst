@@ -42,6 +42,8 @@ func main() {
 	metrics := flag.String("metrics", "", "with -match: record Go memory samples in a new local JSON file")
 	extraction := flag.Bool("extraction", false, "print privacy-safe extraction diagnostics (no chat text)")
 	worldExtraction := flag.Bool("world-extraction", false, "inspect courier/stash/rotation/outpost/lotus/miniboss evidence without chat text")
+	heroStateEvidence := flag.Bool("hero-state-evidence", false, "inspect modifier component presence without player/account data")
+	heroTimelineEvidence := flag.Bool("hero-timeline-evidence", false, "inspect selected entity identity and raw hero properties at game-clock sample times")
 	flag.Parse()
 	if *metrics != "" && !*match {
 		log.Fatal("-metrics requires -match")
@@ -76,12 +78,22 @@ func main() {
 		return
 	}
 
+	if *heroTimelineEvidence {
+		if err := runHeroTimelineEvidence(replay, *out); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
 	parser, err := manta.NewStreamParser(replay)
 	if err != nil {
 		log.Fatal(err)
 	}
 	if *worldExtraction {
 		runWorldExtraction(parser)
+		return
+	}
+	if *heroStateEvidence {
+		runHeroStateEvidence(parser, *out)
 		return
 	}
 	if *extraction {

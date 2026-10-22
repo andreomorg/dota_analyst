@@ -5,6 +5,8 @@ using DotaAnalyst.Infrastructure.Baseline;
 using DotaAnalyst.Infrastructure.Caching;
 using DotaAnalyst.Infrastructure.Catalogs;
 using DotaAnalyst.Infrastructure.Coaching;
+using DotaAnalyst.Infrastructure.GameData;
+using DotaAnalyst.Infrastructure.Persistence.GameData;
 using DotaAnalyst.Infrastructure.OpenDota;
 using DotaAnalyst.Infrastructure.Persistence;
 using DotaAnalyst.Infrastructure.Persistence.Baseline;
@@ -37,9 +39,13 @@ public static class DependencyInjection
         AddOpenDotaParsing(services, configuration, hasDatabase);
         var parsesReplays = AddReplayParsing(services, configuration, hasDatabase);
         AddBaselineCollector(services, configuration, hasDatabase && parsesReplays);
+        AddGameData(services, configuration, hasDatabase);
         services.AddCoachMl(configuration);
         // Kept replays for the prediction models' samples (empty without kept documents: AddCoachMl registers the fallback).
         services.AddScoped<IArchivedReplaySource, ArchivedReplaySource>();
+        services.AddScoped<IReplayDocumentReader, ArchivedReplaySource>();
+        services.AddScoped<IHeroProfileStore, HeroProfileCatalogReader>();
+        services.AddScoped<HeroProfileCatalogWriter>();
 
         return services;
     }
@@ -153,10 +159,61 @@ public static class DependencyInjection
         }
 
         services.AddScoped<BaselineHistoryBackfill>();
+        services.AddScoped<BaselineReplayMetricsBackfill>();
         services.AddSingleton(new CollectorStorageLimits(Math.Max(0, options.MaxDatabaseBytes)));
         services.AddScoped<CollectorStorageBudget>();
         services.AddHostedService<BaselineCollectorService>();
         services.AddHostedService<BaselinePublisherService>();
+    }
+
+    // The game's own files by build (abilities, items, heroes, translation): read from the local database by every match
+    // that has a start time; synchronized from github.com/dotabuff/d2vpkr only with GameData:SyncEnabled (the owner's
+    // machine). Without a database the current catalogs (OpenDota) are used.
+    private static void AddGameData(IServiceCollection services, IConfiguration configuration, bool hasDatabase)
+    {
+        var section = configuration.GetSection(GameDataOptions.SectionName);
+        services.AddOptions<GameDataOptions>().Bind(section)
+            .Validate(options => options.SyncEvery > TimeSpan.Zero, "GameData:SyncEvery must be positive.")
+            .ValidateOnStart();
+        // The map files are embedded: no database needed.
+        services.AddSingleton<IGameMapCatalog, GameMapCatalog>();
+        // Valve's patch list: asked live only where the builds are synchronized; elsewhere the copy kept with the app.
+        if (section.GetValue<bool>(nameof(GameDataOptions.SyncEnabled)))
+        {
+            services.AddHttpClient<IGamePatchCatalog, ValvePatchCatalog>(client => client.Timeout = TimeSpan.FromSeconds(10));
+        }
+        else
+        {
+            services.AddSingleton<IGamePatchCatalog, EmbeddedPatchCatalog>();
+        }
+
+        if (!hasDatabase)
+        {
+            services.AddSingleton<IGameBuildCatalog, NoGameBuilds>();
+            return;
+        }
+
+        services.AddSingleton<IGameDataStore, GameDataStore>();
+        services.AddSingleton<IGameBuildCatalog, GameBuildCatalog>();
+        if (!section.GetValue<bool>(nameof(GameDataOptions.SyncEnabled)))
+        {
+            return;
+        }
+
+        services.AddHttpClient<D2vpkrClient>((provider, client) =>
+            {
+                // GitHub refuses API calls without a User-Agent; the token (optional, secret) raises the hourly limit.
+                client.DefaultRequestHeaders.UserAgent.ParseAdd("DotaAnalyst");
+                client.Timeout = TimeSpan.FromMinutes(1);
+                if (provider.GetRequiredService<IOptions<GameDataOptions>>().Value.GitHubToken is { Length: > 0 } token)
+                {
+                    client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+                }
+            })
+            // The token travels in a header.
+            .RemoveAllLoggers();
+        services.AddTransient<GameBuildSynchronizer>();
+        services.AddHostedService<GameBuildSyncService>();
     }
 
     // Absolute http(s), ending with '/': without it "v1/match" would replace the last segment of the path.

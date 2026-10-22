@@ -75,4 +75,17 @@ public record HeroMetrics(
     PerRegion<int>? MinutesByRegion = null,
     // Time when the first non-consumable, non-recipe build item worth at least 2000 gold was ready; null when none
     // was recorded or the item catalog was unavailable.
-    int? FirstBigItemSeconds = null);
+    int? FirstBigItemSeconds = null,
+    // Where the hero stood and died by the real terrain of the patch (MP8); null without the patch's map or for
+    // metrics computed before it (never makes an analysis outdated).
+    TerrainMetrics? Terrain = null,
+    // What the fog of war showed (seen by enemies, deaths tracked or from the fog); null without visibility in the
+    // positions or for metrics computed before it (never makes an analysis outdated).
+    VisionMetrics? Vision = null,
+    // The map's objectives (runes, shrines, lotuses, Watchers, outposts, Roshan/Tormentor/tower presence); null for
+    // metrics computed before them (never makes an analysis outdated).
+    MapObjectiveMetrics? Objectives = null,
+    // Teleports done, cancelled and into fights; null without the buffs (never makes an analysis outdated).
+    TeleportMetrics? Teleports = null,
+    // Skillshots hit, allies saved, disables dispelled (PlayQualityMetrics); null without the replay's activity.
+    PlayQualityMetrics? Plays = null);

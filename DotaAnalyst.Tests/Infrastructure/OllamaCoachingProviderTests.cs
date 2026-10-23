@@ -8,6 +8,8 @@ namespace DotaAnalyst.Tests.Infrastructure;
 
 public class OllamaCoachingProviderTests
 {
+    private static readonly string[] ExpectedEvidenceIds = ["e1", "e2"];
+
     private static readonly CoachingContext Context = WithFindings(new(2, "1", 1, new(5, "inferred", true),
         new(null, "unknown", null, false), 600, "omniscient-retrospective",
         [new("e1", "Deaths", 3, "count", 0, 600, "replay", "Not a verdict."),
@@ -48,7 +50,7 @@ public class OllamaCoachingProviderTests
         var advice = await new OllamaCoachingProvider(client, "test").GenerateAsync(Context, CancellationToken.None);
         var suggestion = Assert.Single(advice.Suggestions);
         Assert.Equal("review-isolated-deaths", suggestion.FindingId);
-        Assert.Equal(new[] { "e1", "e2" }, suggestion.EvidenceIds);
+        Assert.Equal(ExpectedEvidenceIds, suggestion.EvidenceIds);
     }
 
     [Fact]

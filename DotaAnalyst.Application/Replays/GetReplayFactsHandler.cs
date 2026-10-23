@@ -6,19 +6,6 @@ using DotaAnalyst.Domain.Replays;
 
 namespace DotaAnalyst.Application.Replays;
 
-public enum ReplayFactsStatus
-{
-    Found,
-
-    // No kept document for the match (or no storage on this machine).
-    NoDocument,
-
-    // The request does not fit the match (hero not in it, a second after the end, a final query not at the end).
-    Invalid,
-}
-
-public sealed record ReplayFactsResult(ReplayFactsStatus Status, ReplayFacts? Facts, string? Problem = null);
-
 // Use case: the facts of a kept replay around one hero at one second (work/data-flow-audit/contracts.md, D18), for the
 // internal consumers. One read of the document and one catalog load per request, shared by every family. Only what was
 // known by the anchor: the snapshot at the exact second, events in the closed window [max(0, seconds - windowSeconds),
@@ -104,7 +91,7 @@ public sealed class GetReplayFactsHandler(IArchivedReplaySource replays, GameCat
     }
 
     // Per family of the replay's additional facts: available, or unavailable (absent in the document, or malformed).
-    private static IReadOnlyDictionary<string, FactAvailability> Availability(ReplayAdditionalFacts? facts)
+    private static Dictionary<string, FactAvailability> Availability(ReplayAdditionalFacts? facts)
     {
         var families = new Dictionary<string, object?>
         {
@@ -126,43 +113,3 @@ public sealed class GetReplayFactsHandler(IArchivedReplaySource replays, GameCat
             family => family.Value is null ? FactAvailability.Unavailable : FactAvailability.Available);
     }
 }
-
-/// <summary>The facts of a kept replay around one hero at one second (internal). Seconds: the anchor; WindowStart and
-/// EventsEnd: the closed window of the events (EventsEnd is the real end of the match in a final query). Final is null
-/// unless the query asked for it at the end. Availability: per family of the document's additional facts. Hidden and
-/// omniscient parts (the fog of war, the enemy's state) are named so in their types; nothing here is a visible fact
-/// unless it says so. No account, player name, SteamID or free text.</summary>
-public sealed record ReplayFacts(
-    string MatchId, int HeroId, int Seconds, int WindowStart, int EventsEnd, ReplayFactsMetadata Metadata,
-    ReplayFactsSnapshot Snapshot, ReplayFactsEvents Events, ReplayFactsFinal? Final,
-    IReadOnlyDictionary<string, FactAvailability> Availability)
-{
-    public double ExactEventsEnd { get; init; } = EventsEnd;
-    public string ObservationScope => "omniscientReplay";
-    public IReadOnlyDictionary<string, FactSourceAvailability> AvailabilityDetails { get; init; }
-        = new Dictionary<string, FactSourceAvailability>();
-}
-
-public sealed record FactSourceAvailability(FactAvailability Status, string Source, string Reason);
-
-/// <summary>Where the document and the game data came from: the replay's duration and engine build, the parser's version
-/// when known, whether the match ended in the replay, and the game build (catalog) used for the hero's nominal data.</summary>
-public sealed record ReplayFactsMetadata(double DurationSeconds, uint? EngineBuild, string? ProducerVersion, bool? MatchEnded, string? CatalogBuild);
-
-/// <summary>The hero at the anchor: its state (each source apart), its items, and the stolen abilities it held then.</summary>
-public sealed record ReplayFactsSnapshot(HeroStateFacts Hero, InventoryAt Items, IReadOnlyList<StolenAbility>? StolenHeld,
-    IReadOnlyList<TormentorAtAnchor>? Tormentors);
-
-public sealed record TormentorAtAnchor(DotaAnalyst.Domain.Matches.Team? Side, int X, int Y,
-    AliveObservation? Observation, string? RawSide);
-
-/// <summary>What happened in the window: the hero's combat, signals and casts, the map's state around it, and the
-/// match's objective events (outposts captured, couriers killed) and the hero's stolen abilities' cooldowns.</summary>
-public sealed record ReplayFactsEvents(
-    CombatWindowFacts Combat, CommunicationWindowFacts Communication, MapWindowFacts Map,
-    IReadOnlyList<OutpostObservation>? Outposts, IReadOnlyList<CourierDeath>? CourierDeaths,
-    IReadOnlyList<StolenCooldown>? StolenCooldowns);
-
-/// <summary>Whole-match facts of the hero, only in a final query: the replay's own scoreboard, its items at the end and its
-/// healing over the match.</summary>
-public sealed record ReplayFactsFinal(FinalHeroStats? Stats, FinalInventory? Items, HealingFinalFacts Healing);

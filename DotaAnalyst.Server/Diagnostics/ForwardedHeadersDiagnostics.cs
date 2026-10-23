@@ -27,7 +27,7 @@ public static class ForwardedHeadersDiagnostics
         var logger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger(typeof(ForwardedHeadersDiagnostics));
         app.Use(async (context, next) =>
         {
-            if (context.Request.Path.StartsWithSegments("/api/v1"))
+            if (context.Request.Path.StartsWithSegments("/api/v1") && logger.IsEnabled(LogLevel.Information))
             {
                 var headers = string.Join("; ", HeaderNames
                     .Where(name => context.Request.Headers.ContainsKey(name))

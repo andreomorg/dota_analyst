@@ -96,7 +96,7 @@ public class GetRecentMatchesHandlerTests
         return accountId;
     }
 
-    private class FakeMatchProvider(params PlayerMatch[] matches) : IMatchProvider
+    private sealed class FakeMatchProvider(params PlayerMatch[] matches) : IMatchProvider
     {
         public bool Fail { get; init; }
 
@@ -107,13 +107,13 @@ public class GetRecentMatchesHandlerTests
                 : Task.FromResult<IReadOnlyList<PlayerMatch>>(matches);
     }
 
-    private class FakeHeroCatalog(params Hero[] heroes) : IHeroCatalog
+    private sealed class FakeHeroCatalog(params Hero[] heroes) : IHeroCatalog
     {
         public Task<IReadOnlyDictionary<int, Hero>> GetHeroesAsync(CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlyDictionary<int, Hero>>(heroes.ToDictionary(hero => hero.Id));
     }
 
-    private class FakePlayerSearchRepository : IPlayerSearchRepository
+    private sealed class FakePlayerSearchRepository : IPlayerSearchRepository
     {
         public List<(AccountId, DateTimeOffset)> Recorded { get; } = [];
 

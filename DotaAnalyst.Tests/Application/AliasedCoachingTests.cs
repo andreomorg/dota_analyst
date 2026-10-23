@@ -7,6 +7,9 @@ namespace DotaAnalyst.Tests.Application;
 
 public class AliasedCoachingTests
 {
+    private static readonly string[] RestoredEvidenceIds = ["outcome", "position-41", "position-100"];
+    private static readonly string[] OutcomeEvidenceIds = ["outcome"];
+
     private static CoachingDecisionContext Context(bool positions = true) => new(1, "secret-match", 41,
         new(1, "test", false), new(null, "unknown", null, false), "omniscient-retrospective", [],
         [new(new("death-41-40-1", CoachingEpisodeKind.Death, 41, 40, 25, 55, new(4, 0), null, null, false, null),
@@ -36,7 +39,7 @@ public class AliasedCoachingTests
         var source = Reflection("scene-a", "outcome", "anchor-viewer", "anchor-ally");
         var restored = Assert.Single(input.Restore(new(3, [source])).Reflections);
         Assert.Equal("death-41-40-1", restored.EpisodeId);
-        Assert.Equal(new[] { "outcome", "position-41", "position-100" }, restored.EvidenceIds);
+        Assert.Equal(RestoredEvidenceIds, restored.EvidenceIds);
         Assert.Equal(source.Hypothesis, restored.Hypothesis);
     }
 
@@ -51,7 +54,7 @@ public class AliasedCoachingTests
     public void MissingPositionsDoNotCreatePositionReferences()
     {
         var input = PrepareAliasedCoaching.Build(Context(false));
-        Assert.Equal(new[] { "outcome" }, Assert.Single(input.Request.Scenes).EvidenceIds);
+        Assert.Equal(OutcomeEvidenceIds, Assert.Single(input.Request.Scenes).EvidenceIds);
         Assert.Throws<InvalidDataException>(() => input.Restore(new(3, [Reflection("scene-a", "anchor-viewer")])));
     }
 

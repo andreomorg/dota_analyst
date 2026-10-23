@@ -8,6 +8,8 @@ namespace DotaAnalyst.Tests.Application;
 
 public class CoveredCoachingContextTests
 {
+    private static readonly string[] ExpectedEpisodeIds = ["f1"];
+
     private static CoachingEpisode Death(string id, bool? isolated) => new(id, CoachingEpisodeKind.Death,
         1, 330, 315, 345, new(4, isolated is null ? 0 : 4), isolated, null, false, null);
 
@@ -56,7 +58,7 @@ public class CoveredCoachingContextTests
         Assert.Empty(Context(Fight("f1", null), Fight("f2", null), Fight("f3", null)).Findings!);
         var context = Context(Fight("f1", false), Fight("f2", true), Fight("f3", null));
         var finding = Assert.Single(context.Findings!);
-        Assert.Equal(new[] { "f1" }, finding.EpisodeIds);
+        Assert.Equal(ExpectedEpisodeIds, finding.EpisodeIds);
         var suggestion = Assert.Single(RenderCoachingAdvice.Render(context,
             [new(finding.Id, finding.ExerciseIds.Single())]).Suggestions);
         Assert.Contains("em 1, a proximidade permaneceu desconhecida", suggestion.Interpretation);

@@ -319,7 +319,7 @@ public sealed class GameFileMappingsTests
             $"ultimates={catalog.Abilities.Values.Count(a => a.Profile!.IsUltimate == true)} innate={catalog.Abilities.Values.Count(a => a.IsInnate)}",
             $"talents with text={catalog.Kits.Values.SelectMany(k => k.Talents).Count(t => t.Name is not null)} of {catalog.Kits.Values.Sum(k => k.Talents.Count)}, unresolved={catalog.Kits.Values.SelectMany(k => k.Talents).Count(t => t.Name?.Contains("{s:") == true)}",
             $"scepter={catalog.Kits.Values.Count(k => k.Scepter is not null)} shard={catalog.Kits.Values.Count(k => k.Shard is not null)}",
-            $"descriptions with % left={catalog.Abilities.Values.Count(a => a.Description?.Contains("%") == true && System.Text.RegularExpressions.Regex.IsMatch(a.Description, "%[a-z_]+%"))}",
+            $"descriptions with % left={catalog.Abilities.Values.Count(a => a.Description?.Contains('%') == true && System.Text.RegularExpressions.Regex.IsMatch(a.Description, "%[a-z_]+%"))}",
             $"items with active={catalog.Items.Values.Count(i => i.HasActive)} with components={catalog.Items.Values.Count(i => i.Components.Count > 0)}",
             $"lion talents: {string.Join(" | ", catalog.Kits[26].Talents.Select(t => t.Name))}",
             $"lion shard: {catalog.Kits[26].Shard?.Description}",

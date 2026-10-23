@@ -9,6 +9,8 @@ namespace DotaAnalyst.Tests.Infrastructure;
 
 public sealed class GamePatchCatalogTests
 {
+    private static readonly string[] ExpectedPatchNames = ["7.41", "7.41a", "7.41b", "7.41c", "7.41d", "7.41e", "7.41f"];
+
     [Fact]
     public void Embedded_HasThe741SubPatchesInOrder()
     {
@@ -16,7 +18,7 @@ public sealed class GamePatchCatalogTests
 
         Assert.Equal("7.41", patches.Single(patch => patch.Name == "7.41").Major);
         Assert.Equal(DateTimeOffset.FromUnixTimeSeconds(1774335600), patches.Single(patch => patch.Name == "7.41").ReleasedAt);
-        Assert.Equal(new[] { "7.41", "7.41a", "7.41b", "7.41c", "7.41d", "7.41e", "7.41f" },
+        Assert.Equal(ExpectedPatchNames,
             patches.Where(patch => patch.Major == "7.41").Select(patch => patch.Name).ToArray());
         Assert.Equal(patches.OrderBy(patch => patch.ReleasedAt), patches);
     }

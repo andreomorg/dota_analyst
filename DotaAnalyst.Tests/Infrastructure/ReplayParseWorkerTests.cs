@@ -20,7 +20,7 @@ public sealed class ReplayParseWorkerTests : IAsyncLifetime
     private readonly FakeParser parser = new();
     private readonly InMemoryResults results = new();
     private readonly ServiceProvider services;
-    private readonly IHostedService worker;
+    private readonly ReplayParseWorker worker;
 
     public ReplayParseWorkerTests()
     {

@@ -71,6 +71,7 @@ public sealed class HeroProfileCatalogWriterTests
 
     private sealed class Store : ICatalogStore
     {
+        private static readonly System.Text.Json.JsonSerializerOptions IndentedOptions = new() { WriteIndented = true };
         public SavedCatalog? Saved;
         public int Writes;
         public Task<SavedCatalog?> LoadAsync(string catalog, CancellationToken ct) => Task.FromResult(Saved);
@@ -82,7 +83,7 @@ public sealed class HeroProfileCatalogWriterTests
             {
                 Details = details.ToDictionary(p => p.Key, p =>
                 System.Text.Json.JsonSerializer.Serialize(System.Text.Json.JsonDocument.Parse(p.Value).RootElement,
-                    new System.Text.Json.JsonSerializerOptions { WriteIndented = true }))
+                    IndentedOptions))
             };
             return Task.CompletedTask;
         }

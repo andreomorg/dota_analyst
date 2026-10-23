@@ -5,6 +5,8 @@ namespace DotaAnalyst.Tests.Domain;
 
 public class CoachingCanonicalSceneTests
 {
+    private static readonly string[] ExpectedPositionIds = ["position-1", "position-2"];
+
     private static CoachingDecisionScene Scene(params CoachingPositionSnapshot[] positions) => new(
         new("episode", CoachingEpisodeKind.Death, 1, 835, 820, 850, new(4, 0), null, null, false, null),
         new(825, positions, 10 - positions.Length, null, null, null, null));
@@ -24,7 +26,7 @@ public class CoachingCanonicalSceneTests
         Assert.Equal(823, result.NearestObservedAlly.AllySampleSeconds);
         Assert.Equal(5, result.NearestObservedAlly.Distance);
         Assert.Equal(2, result.NearestObservedAlly.ObservedAllies);
-        Assert.Equal(new[] { "position-1", "position-2" }, result.NearestObservedAlly.EvidenceIds);
+        Assert.Equal(ExpectedPositionIds, result.NearestObservedAlly.EvidenceIds);
     }
 
     [Fact]

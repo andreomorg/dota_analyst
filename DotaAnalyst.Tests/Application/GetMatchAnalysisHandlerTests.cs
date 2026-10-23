@@ -15,6 +15,8 @@ namespace DotaAnalyst.Tests.Application;
 
 public class GetMatchAnalysisHandlerTests
 {
+    private static readonly int[] EnemiesByKills = [28, 2];
+
     private static readonly AccountId Me = MatchPlayerBuilder.Account(99517715);
     private static readonly DateTimeOffset Now = new(2026, 10, 11, 12, 0, 0, TimeSpan.Zero);
 
@@ -82,7 +84,7 @@ public class GetMatchAnalysisHandlerTests
 
         var analysis = (await handler.HandleAsync(MatchIdOf(10), Me, CancellationToken.None))!;
 
-        Assert.Equal(extraKill ? new[] { 28, 2 } : [2, 28], analysis.Draft!.Enemies.Select(hero => hero.HeroId));
+        Assert.Equal(extraKill ? EnemiesByKills : [2, 28], analysis.Draft!.Enemies.Select(hero => hero.HeroId));
         Assert.Equal(new DraftEnemy(2, GetMatchAnalysisHandler.UnknownHeroName, 1, 0, 250, 0), analysis.Draft.Enemies.Single(hero => hero.HeroId == 2));
         Assert.Equal(new DraftEnemy(28, GetMatchAnalysisHandler.UnknownHeroName, extraKill ? 2 : 1, 1, 100, 300), analysis.Draft.Enemies.Single(hero => hero.HeroId == 28));
         Assert.Equal(analysis.Damage!.FromHeroes.Sum(row => row.Amount), analysis.Draft.Enemies.Sum(row => row.DamageToPlayer));
@@ -1211,7 +1213,7 @@ public class GetMatchAnalysisHandlerTests
         return matchId;
     }
 
-    private class FakeReplayAnalyzer(MatchDetails? match) : IReplayAnalyzer
+    private sealed class FakeReplayAnalyzer(MatchDetails? match) : IReplayAnalyzer
     {
         public bool Fail { get; init; }
 
@@ -1224,7 +1226,7 @@ public class GetMatchAnalysisHandlerTests
         }
     }
 
-    private class FakeMatchRepository(SavedMatch? saved = null) : IMatchRepository
+    private sealed class FakeMatchRepository(SavedMatch? saved = null) : IMatchRepository
     {
         public List<MatchDetails> Saved { get; } = [];
 
@@ -1245,7 +1247,7 @@ public class GetMatchAnalysisHandlerTests
         }
     }
 
-    private class FakeReplayAnalysisRepository(SavedReplayAnalysis? saved = null) : IReplayAnalysisRepository
+    private sealed class FakeReplayAnalysisRepository(SavedReplayAnalysis? saved = null) : IReplayAnalysisRepository
     {
         public bool Fail { get; init; }
 
@@ -1261,7 +1263,7 @@ public class GetMatchAnalysisHandlerTests
             throw new InvalidOperationException("The analysis never saves replay results.");
     }
 
-    private class FakeReplayParseQueue : IReplayParseQueue
+    private sealed class FakeReplayParseQueue : IReplayParseQueue
     {
         public ReplayEnqueueResult Result { get; init; } = ReplayEnqueueResult.Enqueued;
 
@@ -1278,20 +1280,20 @@ public class GetMatchAnalysisHandlerTests
         public bool IsQueued(MatchId matchId) => Queued.Contains(matchId.Value);
     }
 
-    private class FakeHeroCatalog(params Hero[] heroes) : IHeroCatalog
+    private sealed class FakeHeroCatalog(params Hero[] heroes) : IHeroCatalog
     {
         public Task<IReadOnlyDictionary<int, Hero>> GetHeroesAsync(CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlyDictionary<int, Hero>>(heroes.ToDictionary(hero => hero.Id));
     }
 
-    private class FakeItemCatalog(params Item[] items) : IItemCatalog
+    private sealed class FakeItemCatalog(params Item[] items) : IItemCatalog
     {
         public Task<IReadOnlyDictionary<int, Item>> GetItemsAsync(CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlyDictionary<int, Item>>(items.ToDictionary(item => item.Id));
     }
 
     // The finished comparison base: these distributions for any hero/role of the given source.
-    private class FakeDistributions(BaselineSource? source = null, int matches = 0, IReadOnlyList<MetricDistribution>? distributions = null)
+    private sealed class FakeDistributions(BaselineSource? source = null, int matches = 0, IReadOnlyList<MetricDistribution>? distributions = null)
         : IBaselineDistributionStore
     {
         public bool Fail { get; init; }

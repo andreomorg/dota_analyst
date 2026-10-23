@@ -7,6 +7,8 @@ namespace DotaAnalyst.Tests.Domain;
 
 public class CoachingEpisodeBuilderTests
 {
+    private static readonly int[] LastHitValues = [0, 5, 7];
+
     private static HeroDeath Death(int hero, int second, bool reincarnated = false) =>
         new(hero, second, 0, 0, KillerKind.Other, null, reincarnated);
 
@@ -17,7 +19,7 @@ public class CoachingEpisodeBuilderTests
             hero <= 5 ? Team.Radiant : Team.Dire, Lane.Middle, 0, 0, 0, 0, 0)).ToArray();
         var timeline = new MatchTimeline([0, 60, 120],
             [new HeroTimeline(1, Team.Radiant, [100, 200, 150], [0, 0, 0],
-                new Dictionary<StatKey, IReadOnlyList<int>> { [StatKey.LastHits] = new[] { 0, 5, 7 } })]);
+                new Dictionary<StatKey, IReadOnlyList<int>> { [StatKey.LastHits] = LastHitValues })]);
         return new(id, 120, players, timeline, deaths: deaths);
     }
 

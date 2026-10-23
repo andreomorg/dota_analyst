@@ -19,6 +19,7 @@ public enum ReplayEnqueueResult
 // Replays waiting to be parsed in the background (implemented in Infrastructure, with the worker that empties
 // it and calls ParseReplayHandler). It is also the only place that knows whether replay parsing is available
 // right now: the analysis asks by trying to enqueue, so a feature that is off or down simply answers Unavailable.
+[System.Diagnostics.CodeAnalysis.SuppressMessage("Naming", "CA1711", Justification = "Existing public queue contract; renaming would break consumers.")]
 public interface IReplayParseQueue
 {
     // Never waits: answers at once whether the match was added.

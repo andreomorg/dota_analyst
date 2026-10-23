@@ -41,7 +41,7 @@ public static class MapFacts
             from, to, standing, appeared, bosses, lanterns,
             gold?.Where(change => change.Amount > 0).Sum(change => change.Amount),
             gold?.Where(change => change.Amount < 0).Sum(change => -change.Amount),
-            gold?.GroupBy(change => change.Reason?.ToString() ?? "unknown").ToDictionary(group => group.Key, group => group.Sum(change => change.Amount)),
+            gold?.GroupBy(change => change.Reason?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "unknown").ToDictionary(group => group.Key, group => group.Sum(change => change.Amount)),
             gold?.Count(change => change.X is null || change.Y is null));
     }
 

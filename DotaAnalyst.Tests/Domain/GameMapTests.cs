@@ -6,6 +6,9 @@ namespace DotaAnalyst.Tests.Domain;
 
 public class GameMapTests
 {
+    private static readonly int[] NearbyTreeIds = [1, 2];
+    private static readonly int[] RemainingTreeIds = [2];
+
     // A 4 x 2 grid of 100-unit cells from (0, 0): bottom row walkable river and low ground, then a cliff and outside;
     // top row high ground, fountain, no floor, Tormentor area.
     private static GameMap Map(IReadOnlyList<MapPoint>? trees = null, IReadOnlyList<MapArea>? pits = null,
@@ -51,8 +54,8 @@ public class GameMapTests
     {
         var map = Map(trees: [new MapPoint(100, 100), new MapPoint(1000, 1000), new MapPoint(1100, 1000)]);
 
-        Assert.Equal(new[] { 1, 2 }, map.TreesWithin(1050, 1000, 100).Order());
-        Assert.Equal(new[] { 2 }, map.TreesWithin(1050, 1000, 100, new HashSet<int> { 1 }));
+        Assert.Equal(NearbyTreeIds, map.TreesWithin(1050, 1000, 100).Order());
+        Assert.Equal(RemainingTreeIds, map.TreesWithin(1050, 1000, 100, new HashSet<int> { 1 }));
         Assert.True(map.IsTreeAt(160, 40));
         Assert.False(map.IsTreeAt(170, 100));
         Assert.False(map.IsTreeAt(100, 100, new HashSet<int> { 0 }));

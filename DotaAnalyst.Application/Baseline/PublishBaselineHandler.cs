@@ -51,8 +51,11 @@ public class PublishBaselineHandler(
             await mirror.ReplaceAllAsync(sets, now, cancellationToken);
         }
 
-        logger.LogInformation(
-            "Published the comparison base: {Sets} hero/role/source sets{Mirror}", sets.Count, mirror.IsConfigured ? " (and the mirror)" : "");
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation(
+                "Published the comparison base: {Sets} hero/role/source sets{Mirror}", sets.Count, mirror.IsConfigured ? " (and the mirror)" : "");
+        }
         return sets.Count;
     }
 

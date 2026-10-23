@@ -5,6 +5,8 @@ namespace DotaAnalyst.Tests.Application;
 
 public class CoachingFindingsRegressionTests
 {
+    private static readonly string[] FightEvidenceIds = ["fights", "nearby"];
+
     private static CoachingContext Context(int role = 3, double nearby = 1)
     {
         var context = new CoachingContext(2, "1", 38, new(role, "inferred", true), new(null, "unknown", null, false),
@@ -23,7 +25,7 @@ public class CoachingFindingsRegressionTests
     {
         var context = Context();
         var finding = context.Findings!.Single(f => f.Kind == CoachingFindingKind.FightProximityReview);
-        Assert.Equal(new[] { "fights", "nearby" }, finding.EvidenceIds);
+        Assert.Equal(FightEvidenceIds, finding.EvidenceIds);
         var advice = RenderCoachingAdvice.Render(context, [new(finding.Id, finding.ExerciseIds.Single())]);
         var text = Assert.Single(advice.Suggestions);
         Assert.Contains("6 lutas na partida", text.Interpretation);

@@ -128,8 +128,11 @@ public class CollectBaselineHandler(
             }
 
             await SaveAsync(candidate, details, BaselineMatchStatus.Collected, metrics, now, cancellationToken, histories);
-            logger.LogInformation(
-                "Collected {Source} match {MatchId} for the comparison base", candidate.Source, candidate.MatchId.Value);
+            if (logger.IsEnabled(LogLevel.Information))
+            {
+                logger.LogInformation(
+                    "Collected {Source} match {MatchId} for the comparison base", candidate.Source, candidate.MatchId.Value);
+            }
         }
         catch (ReplayExpiredException)
         {
@@ -143,7 +146,10 @@ public class CollectBaselineHandler(
         catch (Exception ex) when (ex is ReplayParserBusyException or ReplayParserUnavailableException)
         {
             // Not saved: tried again when the parser is back.
-            logger.LogInformation("Replay parser unavailable for the comparison base: {Reason}", ex.Message);
+            if (logger.IsEnabled(LogLevel.Information))
+            {
+                logger.LogInformation("Replay parser unavailable for the comparison base: {Reason}", ex.Message);
+            }
             return CollectResult.SourceUnavailable;
         }
 

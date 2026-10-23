@@ -4,14 +4,17 @@ namespace DotaAnalyst.Tests.Domain;
 
 public class TreeTimelineTests
 {
+    private static readonly int[] InitiallyDownTreeIds = [3];
+    private static readonly int[] LaterDownTreeIds = [10];
+
     [Fact]
     public void DownAt_StartThenCutsAndRegrowth()
     {
         var trees = new TreeTimeline([3], [new TreeChange(120, 10, false), new TreeChange(60, 3, true), new TreeChange(400, 10, true)]);
 
-        Assert.Equal(new[] { 3 }, trees.DownAt(0).Order());
+        Assert.Equal(InitiallyDownTreeIds, trees.DownAt(0).Order());
         Assert.Empty(trees.DownAt(60));
-        Assert.Equal(new[] { 10 }, trees.DownAt(120).Order());
+        Assert.Equal(LaterDownTreeIds, trees.DownAt(120).Order());
         Assert.Empty(trees.DownAt(400));
     }
 

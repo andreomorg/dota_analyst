@@ -38,7 +38,10 @@ public class ParseReplayHandler(
         }
         catch (ReplayExpiredException)
         {
-            logger.LogInformation("The replay of match {MatchId} is no longer available at Valve", matchId);
+            if (logger.IsEnabled(LogLevel.Information))
+            {
+                logger.LogInformation("The replay of match {MatchId} is no longer available at Valve", matchId);
+            }
             result = SavedReplayAnalysis.Expired(matchId, timeProvider.GetUtcNow());
         }
         catch (ReplayUnreadableException ex)
@@ -50,7 +53,10 @@ public class ParseReplayHandler(
         }
         catch (ReplayParserBusyException ex)
         {
-            logger.LogInformation(ex, "The replay parser is busy; match {MatchId} was not parsed this time", matchId);
+            if (logger.IsEnabled(LogLevel.Information))
+            {
+                logger.LogInformation(ex, "The replay parser is busy; match {MatchId} was not parsed this time", matchId);
+            }
             return ParseReplayResult.ParserBusy;
         }
         catch (ReplayParserUnavailableException ex)

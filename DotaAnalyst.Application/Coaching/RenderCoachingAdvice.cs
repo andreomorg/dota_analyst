@@ -31,11 +31,11 @@ public static class RenderCoachingAdvice
                 _ => throw new InvalidDataException("Unsupported finding.")
             };
             var (action, exercise) = Exercise(finding.Kind, finding.Role);
-            IReadOnlyList<CoachingEpisode>? episodes = null;
+            CoachingEpisode[]? episodes = null;
             if (context.SchemaVersion >= 3)
             {
                 episodes = (finding.EpisodeIds ?? []).Select(id => context.Episodes!.Single(e => e.Id == id)).ToArray();
-                observation += episodes.Count == 0
+                observation += episodes.Length == 0
                     ? " Este achado tem apenas o resumo agregado nesta versão."
                     : " Trechos localizados a partir das amostras: " + string.Join("; ", episodes.Select(e =>
                         $"{Clock(e.FromSeconds)}–{Clock(e.ToSeconds)} (evento em {Clock(e.EventSeconds)}{(e.Reincarnated ? "; reincarnação" : "")})")) + ".";

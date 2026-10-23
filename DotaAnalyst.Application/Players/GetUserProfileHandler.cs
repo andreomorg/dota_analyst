@@ -22,7 +22,7 @@ public class GetUserProfileHandler(ISteamProfileProvider steamProfiles, ILogger<
 
         return new UserProfile(
             AccountId: accountId.Value,
-            SteamId64: accountId.SteamId64.ToString(),
+            SteamId64: accountId.SteamId64.ToString(System.Globalization.CultureInfo.InvariantCulture),
             PersonaName: profile?.PersonaName,
             AvatarUrl: profile?.AvatarUrl);
     }

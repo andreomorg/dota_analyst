@@ -47,6 +47,7 @@ public sealed class PostgresFixture : IAsyncLifetime
 }
 
 [CollectionDefinition(Name)]
+[System.Diagnostics.CodeAnalysis.SuppressMessage("Naming", "CA1711", Justification = "Existing public xUnit collection fixture contract.")]
 public sealed class PostgresCollection : ICollectionFixture<PostgresFixture>
 {
     public const string Name = "Postgres";

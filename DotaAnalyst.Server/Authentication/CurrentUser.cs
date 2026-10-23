@@ -29,7 +29,7 @@ public static partial class CurrentUser
 
     // What goes into the session cookie: only the account ID (the SteamID64 can be computed back from it).
     public static ClaimsPrincipal CreatePrincipal(AccountId accountId, string authenticationType) =>
-        new(new ClaimsIdentity([new Claim(AccountIdClaim, accountId.Value.ToString())], authenticationType));
+        new(new ClaimsIdentity([new Claim(AccountIdClaim, accountId.Value.ToString(System.Globalization.CultureInfo.InvariantCulture))], authenticationType));
 
     public static bool TryGetAccountId(ClaimsPrincipal user, out AccountId accountId)
     {

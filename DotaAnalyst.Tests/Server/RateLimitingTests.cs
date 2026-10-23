@@ -87,7 +87,7 @@ public class RateLimitingTests
     private static ApiFactory CreateFactory(int permitLimit, bool forwardedHeaders = false, string? clientIpHeader = null) =>
         new(new Dictionary<string, string?>
         {
-            ["RateLimiting:PermitLimit"] = permitLimit.ToString(),
+            ["RateLimiting:PermitLimit"] = permitLimit.ToString(System.Globalization.CultureInfo.InvariantCulture),
             ["RateLimiting:Window"] = "00:10:00",
             ["ForwardedHeaders:Enabled"] = forwardedHeaders.ToString(),
             ["ForwardedHeaders:ForwardedForHeaderName"] = clientIpHeader ?? "X-Forwarded-For",

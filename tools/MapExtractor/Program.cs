@@ -50,7 +50,7 @@ foreach (var entry in package.Entries!["vents_c"])
 
 // A vector (origin) comes as an array of numbers: joined with spaces, like the game's own text form.
 string? Text(KVObject entity, string key) => entity.TryGetValue(key, out var value)
-    ? value.IsArray ? string.Join(' ', value.Values.Select(item => item.ToString())) : value.ToString()
+    ? value.IsArray ? string.Join(' ', value.Values.Select(item => item.ToString(System.Globalization.CultureInfo.InvariantCulture))) : value.ToString(System.Globalization.CultureInfo.InvariantCulture)
     : null;
 Vector3 Origin(KVObject entity) => Text(entity, "origin") is { } text && text.Split(' ') is [var x, var y, var z]
     ? new Vector3(float.Parse(x, System.Globalization.CultureInfo.InvariantCulture), float.Parse(y, System.Globalization.CultureInfo.InvariantCulture),

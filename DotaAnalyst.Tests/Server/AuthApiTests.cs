@@ -45,7 +45,7 @@ public class AuthApiTests
         // Back on the page where the login started, with the session cookie.
         Assert.Equal(HttpStatusCode.Found, afterLogin.StatusCode);
         Assert.Equal("/matches/1", afterLogin.Headers.Location!.OriginalString);
-        var sessionCookie = Assert.Single(afterLogin.Headers.GetValues("Set-Cookie"), c => c.StartsWith(SteamAuthentication.CookieName));
+        var sessionCookie = Assert.Single(afterLogin.Headers.GetValues("Set-Cookie"), c => c.StartsWith(SteamAuthentication.CookieName, StringComparison.Ordinal));
         Assert.Contains("httponly", sessionCookie, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("samesite=lax", sessionCookie, StringComparison.OrdinalIgnoreCase);
         // Persistent: survives closing the browser (a cookie without expires dies with the browser session).

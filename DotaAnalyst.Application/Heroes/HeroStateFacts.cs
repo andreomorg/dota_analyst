@@ -17,6 +17,7 @@ public sealed record HeroStateFacts(
     bool? HiddenSeenByEnemies)
 {
     // Effective defensive values are never derived from these parts (no bonus is added twice, none invented).
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "Instance property is part of the serialized JSON contract.")]
     public bool EffectiveDefenseKnown => false;
 
     public static HeroStateFacts From(HeroStateResult result)

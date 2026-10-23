@@ -6,6 +6,8 @@ namespace DotaAnalyst.Tests.Domain;
 
 public class PositionEstimatorTests
 {
+    private static readonly int[] HeroIds = [1, 2, 3, 4, 5];
+
     private static PositionEvidence Hero(int id, (double Safe, double Middle, double Off) lanes, int lastHits, int netWorth = 1500,
         int wards = 0, params string[] startingItems) =>
         new(id, lanes.Safe, lanes.Middle, lanes.Off, startingItems, lastHits, netWorth, wards, Profile: null);
@@ -22,7 +24,7 @@ public class PositionEstimatorTests
             Hero(5, (0.8, 0, 0), lastHits: 2, wards: 3, startingItems: "ward_observer"),
         ]);
 
-        Assert.Equal([1, 2, 3, 4, 5], new[] { 1, 2, 3, 4, 5 }.Select(id => estimates[id].Position));
+        Assert.Equal([1, 2, 3, 4, 5], HeroIds.Select(id => estimates[id].Position));
         Assert.All(estimates.Values, estimate => Assert.True(estimate.Confidence > 0));
     }
 

@@ -108,43 +108,16 @@ internal static partial class MatchAnalysisMapper
         new(values.OwnBase, values.EnemyBase, values.TopLane, values.MiddleLane, values.BottomLane, values.River,
             values.OwnJungle, values.EnemyJungle);
 
-    // TODO(M3): to the Domain
     // Null when any hero lacks the regions (metrics computed before them).
-    internal static RegionValues? AverageByRegion(IEnumerable<PerRegion<double>?> heroes)
-    {
-        var all = heroes.ToList();
-        if (all.Count == 0 || all.Any(hero => hero is null))
-        {
-            return null;
-        }
+    internal static RegionValues? AverageByRegion(IEnumerable<PerRegion<double>?> heroes) =>
+        PerRegionAverages.OfAll(heroes) is { } average ? ToRegionValues(average) : null;
 
-        return ToRegionValues(PerRegion<double>.Of(region => all.Average(hero => hero![region])));
-    }
-
-    // TODO(M3): to the Domain
-    internal static RegionValues? AverageKnownByRegion(IEnumerable<PerRegion<double>?> heroes)
-    {
-        var known = heroes.OfType<PerRegion<double>>().ToList();
-        return known.Count == 0
-            ? null
-            : ToRegionValues(PerRegion<double>.Of(region => known.Average(hero => hero[region])));
-    }
+    internal static RegionValues? AverageKnownByRegion(IEnumerable<PerRegion<double>?> heroes) =>
+        PerRegionAverages.OfKnown(heroes) is { } average ? ToRegionValues(average) : null;
 
     internal static RegionPhaseValues ToRegionPhaseValues(PerGamePhase<PerRegion<double>> values) =>
         new(ToRegionValues(values.EarlyGame), ToRegionValues(values.MidGame), ToRegionValues(values.LateGame));
 
-    // TODO(M3): to the Domain
-    internal static RegionPhaseValues? AverageByPhase(IEnumerable<PerGamePhase<PerRegion<double>>?> heroes)
-    {
-        var all = heroes.ToList();
-        if (all.Count == 0 || all.Any(hero => hero is null))
-        {
-            return null;
-        }
-
-        return new(
-            AverageByRegion(all.Select(hero => hero!.EarlyGame))!,
-            AverageByRegion(all.Select(hero => hero!.MidGame))!,
-            AverageByRegion(all.Select(hero => hero!.LateGame))!);
-    }
+    internal static RegionPhaseValues? AverageByPhase(IEnumerable<PerGamePhase<PerRegion<double>>?> heroes) =>
+        PerRegionAverages.ByPhaseOfAll(heroes) is { } average ? ToRegionPhaseValues(average) : null;
 }

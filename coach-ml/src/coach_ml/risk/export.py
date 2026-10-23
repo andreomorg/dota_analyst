@@ -26,6 +26,7 @@ _HIDDEN_V1 = ['hiddenNearestEnemyDistance', 'hiddenEnemiesNear', 'hiddenEnemiesW
 # been exported by 22/10/2026 (only v1 exports and models-v1 exist), so the ultimate-from-catalog (DATA-D03) and the
 # readiness with cooldown resets (DATA-D15) meaning changes stay in v2; once a v2 export is saved, changes bump it.
 # GOLD5 before the first v2 export: buyback readiness uses replicated cooldown evidence, never an assumed /12 price.
+# P4a-c (23/10/2026), still before any v2 export: terrain, mobile vision and living flying couriers.
 SITUATION_BY_VERSION = {
     1: _SITUATION_V1 + _HIDDEN_V1,
     2: _SITUATION_V1 + ['activityKnown', 'ownSmokeSecondsAgo', 'teleportSecondsAgo', 'escapeItemSecondsAgo',
@@ -86,7 +87,11 @@ SITUATION_BY_VERSION = {
                         'enemyKitDisableMaxRange', 'enemyKitUndispellableDisables', 'enemyKitImmunityPiercingDisables',
                         'neutralTierOpen', 'secondsToNextNeutralTier', 'myNeutralArtifactTier', 'myNeutralTiersBehind',
                         'myNeutralActiveReady', 'myNeutralEnhancementLevel', 'myMadstones', 'canCraftNeutralNow',
-                        'secondsSinceNeutralCraft']
+                        'secondsSinceNeutralCraft', 'terrainLevel', 'nearestSeenEnemyTerrainLevel', 'terrainHeightAdvantage',
+                        'onEnemyHighGround', 'standingTreesWithin300', 'standingTreesWithin600', 'treeLineDistance',
+                        'terrainOpenness', 'inNoWardZone', 'activeRoshanPitDistance', 'roshanAlive', 'nearMapObjective',
+                        'nearCurrent', 'teamWatchersActive', 'teamLocalVisionCoverage', 'teamMobileVisionSourcesNear',
+                        'ownCourierAliveFlying']
        + _HIDDEN_V1 + ['hiddenEnemySmokeSecondsAgo', 'hiddenEnemiesHealthShare', 'hiddenEnemyScanSecondsAgo',
                        'hiddenEnemyPowerRuneSecondsAgo', 'hiddenEnemyWaveAhead', 'hiddenEnemyWaveCreepsAtFront',
                        'hiddenWaveHealthBalanceAtFront', 'hiddenEnemyWaveStacked', 'hiddenEnemyCampsStacked',
@@ -100,7 +105,8 @@ SITUATION_BY_VERSION = {
                        'hiddenEnemiesReadySpellDamageNear', 'hiddenEnemiesReadySpellHealingNear',
                        'hiddenEnemyReadySpellsReachingMe', 'hiddenEnemyReadyDisablesReachingMe',
                        'hiddenEnemyReadyDamageReachingMe', 'hiddenEnemyNeutralActivesReadyNear', 'hiddenEnemyMadstones',
-                       'hiddenEnemyNeutralTiersBehind'],
+                       'hiddenEnemyNeutralTiersBehind', 'hiddenInEnemyHeroVision', 'hiddenEnemyObserversCovering',
+                       'hiddenInEnemyMobileVisionRange', 'hiddenEnemyCourierAliveFlying', 'hiddenRoshanAlive'],
 }
 # Each model's label columns, after the situation; and the API route of its samples.
 LABELS = {'death-risk': ['diesSoon', 'diedAtSeconds'], 'next-region': ['regionLater']}

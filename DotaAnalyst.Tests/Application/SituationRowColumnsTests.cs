@@ -38,6 +38,26 @@ public partial class SituationRowColumnsTests
         return match.Groups["body"].Value;
     }
 
+    [Fact]
+    public void PythonData_KeepsTerrainFeaturesInSchemaOrder_AndEnemyVisionHidden()
+    {
+        var source = File.ReadAllText(Path.Combine(RepositoryRoot(), "coach-ml", "src", "coach_ml", "risk", "data.py"));
+        var columns = typeof(SituationRow).GetConstructors().Single().GetParameters()
+            .Select(parameter => JsonNamingPolicy.CamelCase.ConvertName(parameter.Name!)).ToList();
+        var terrain = Names(ListOf(source, "TERRAIN"));
+        Assert.Equal(columns.SkipWhile(name => name != "terrainLevel").Take(terrain.Count), terrain);
+        Assert.Contains("+ TERRAIN + MOBILE_VISION + COURIER_FLIGHT}", source, StringComparison.Ordinal);
+        var mobile = Names(ListOf(source, "MOBILE_VISION"));
+        Assert.Equal(columns.SkipWhile(name => name != "teamLocalVisionCoverage").Take(mobile.Count), mobile);
+        Assert.Equal("ownCourierAliveFlying", Assert.Single(Names(ListOf(source, "COURIER_FLIGHT"))));
+        var hidden = source[source.IndexOf("HIDDEN_BY_VERSION =", StringComparison.Ordinal)..];
+        Assert.Contains("'hiddenInEnemyHeroVision'", hidden, StringComparison.Ordinal);
+        Assert.Contains("'hiddenEnemyObserversCovering'", hidden, StringComparison.Ordinal);
+        Assert.Contains("'hiddenInEnemyMobileVisionRange'", hidden, StringComparison.Ordinal);
+        Assert.Contains("'hiddenEnemyCourierAliveFlying'", hidden, StringComparison.Ordinal);
+        Assert.DoesNotContain(terrain.Concat(mobile), name => name.StartsWith("hidden", StringComparison.Ordinal));
+    }
+
     private static List<string> Names(string body) => Token().Matches(body).Select(token => token.Groups["name"].Value).ToList();
 
     // The folder with the solution file, above the test's bin folder.

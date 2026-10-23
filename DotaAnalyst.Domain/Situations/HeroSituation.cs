@@ -88,4 +88,9 @@ public sealed record HeroSituation(
     LaneOpponent Lane,
     // What the player could not see through the fog of war: only to measure how much the visible part explains,
     // never to word a tip.
-    HiddenEnemies Hidden);
+    HiddenEnemies Hidden)
+{
+    public SituationCourierFlight CourierFlight { get; init; } = new();
+    public SituationMobileVision MobileVision { get; init; } = new();
+    public SituationTerrain Terrain { get; init; } = new();
+}

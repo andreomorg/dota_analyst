@@ -111,9 +111,16 @@ SURROUNDINGS = ['moveSpeedNow', 'advanceSpeed', 'buybackReady', 'underSmoke', 'a
                 'neutralTierOpen', 'secondsToNextNeutralTier', 'myNeutralArtifactTier', 'myNeutralTiersBehind',
                 'myNeutralActiveReady', 'myNeutralEnhancementLevel', 'myMadstones', 'canCraftNeutralNow',
                 'secondsSinceNeutralCraft']
+# Patch terrain: absent map or tree history remains NaN; vision columns describe known geometric sources.
+TERRAIN = ['terrainLevel', 'nearestSeenEnemyTerrainLevel', 'terrainHeightAdvantage', 'onEnemyHighGround',
+           'standingTreesWithin300', 'standingTreesWithin600', 'treeLineDistance', 'terrainOpenness', 'inNoWardZone',
+           'activeRoshanPitDistance', 'roshanAlive', 'nearMapObjective', 'nearCurrent', 'teamWatchersActive']
+MOBILE_VISION = ['teamLocalVisionCoverage', 'teamMobileVisionSourcesNear']
+COURIER_FLIGHT = ['ownCourierAliveFlying']
 VISIBLE_BY_VERSION = {1: _VISIBLE_V1,
                       2: _VISIBLE_V1 + ACTIVITY + READINESS + MAP_STATE + CONDITION + WAVES + BODY_FIGHT_FARM + INTENT
-                      + MISSING + AFFLICTIONS + BOONS + BUILDINGS + THREAT + LANE_OPPONENT + SURROUNDINGS}
+                      + MISSING + AFFLICTIONS + BOONS + BUILDINGS + THREAT + LANE_OPPONENT + SURROUNDINGS
+                      + TERRAIN + MOBILE_VISION + COURIER_FLIGHT}
 # Fog of war: only to measure how much the visible part explains, never for tips.
 _HIDDEN_V1 = ['hiddenNearestEnemyDistance', 'hiddenEnemiesNear', 'hiddenEnemiesWithinFightRange']
 HIDDEN_BY_VERSION = {1: _HIDDEN_V1, 2: _HIDDEN_V1 + ['hiddenEnemySmokeSecondsAgo', 'hiddenEnemiesHealthShare',
@@ -136,7 +143,9 @@ HIDDEN_BY_VERSION = {1: _HIDDEN_V1, 2: _HIDDEN_V1 + ['hiddenEnemySmokeSecondsAgo
                                                      'hiddenEnemyReadyDisablesReachingMe',
                                                      'hiddenEnemyReadyDamageReachingMe',
                                                      'hiddenEnemyNeutralActivesReadyNear', 'hiddenEnemyMadstones',
-                                                     'hiddenEnemyNeutralTiersBehind']}
+                                                     'hiddenEnemyNeutralTiersBehind', 'hiddenInEnemyHeroVision',
+                                                     'hiddenEnemyObserversCovering', 'hiddenInEnemyMobileVisionRange',
+                                                     'hiddenEnemyCourierAliveFlying', 'hiddenRoshanAlive']}
 # The simple model to beat: three numbers anyone would look at first.
 SIMPLE = ['nearestAllyDistance', 'onEnemySide', 'seconds']
 CATEGORICAL = ['region']

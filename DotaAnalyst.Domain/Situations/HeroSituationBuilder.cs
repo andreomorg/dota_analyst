@@ -46,8 +46,10 @@ public sealed partial class HeroSituationBuilder
 
     private HeroSituationBuilder(
         ReplayAnalysis replay, MatchStatTimeline stats, IReadOnlyList<HeroPositions> positions, ReplayActivity? activity,
-        GameCatalog catalog)
+        GameCatalog catalog, ReplayAdditionalFacts? facts)
     {
+        terrainMap = catalog.Map;
+        mapFacts = facts;
         itemDetails = catalog.Items;
         heroDetails = catalog.Heroes;
         kits = catalog.Kits;
@@ -68,7 +70,8 @@ public sealed partial class HeroSituationBuilder
     // catalog: the current patch's game data (hero profiles, items, abilities, kits); missing parts leave what depends on
     // them unknown.
     public static HeroSituationBuilder? From(
-        ReplayAnalysis replay, IReadOnlyList<HeroPositions> positions, ReplayActivity? activity = null, GameCatalog? catalog = null)
+        ReplayAnalysis replay, IReadOnlyList<HeroPositions> positions, ReplayActivity? activity = null,
+        GameCatalog? catalog = null, ReplayAdditionalFacts? facts = null)
     {
         ArgumentNullException.ThrowIfNull(replay);
         ArgumentNullException.ThrowIfNull(positions);
@@ -78,7 +81,7 @@ public sealed partial class HeroSituationBuilder
             return null;
         }
 
-        return new HeroSituationBuilder(replay, stats, positions, activity, catalog ?? GameCatalog.Empty);
+        return new HeroSituationBuilder(replay, stats, positions, activity, catalog ?? GameCatalog.Empty, facts);
     }
 
     // Whether the replay's activity was read: without it, RecentActivity is Unknown (not "nothing was used").
@@ -192,7 +195,12 @@ public sealed partial class HeroSituationBuilder
                 EnemiesWithDisableReadyNear: EnemiesWithDisableReadyNear(team, self, seconds),
                 EnemiesUltimateReadyNear: enemyCooldowns.UltimatesReady,
                 EnemiesBlackKingBarReadyNear: enemyCooldowns.BlackKingBarsReady,
-                SeenByEnemies: self.Vitals?.VisibleToEnemies));
+                SeenByEnemies: self.Vitals?.VisibleToEnemies))
+        {
+            CourierFlight = CourierFlightOf(team, seconds),
+            MobileVision = MobileVisionOf(team, self, seconds),
+            Terrain = TerrainOf(team, self, seconds),
+        };
     }
 
     // Only the sample at this second or just before: HeroPositions.At would also look 1 s ahead (the future).

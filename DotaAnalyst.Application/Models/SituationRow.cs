@@ -284,6 +284,23 @@ public sealed record SituationRow(
     int? MyMadstones,
     bool? CanCraftNeutralNow,
     int? SecondsSinceNeutralCraft,
+    int? TerrainLevel,
+    int? NearestSeenEnemyTerrainLevel,
+    int? TerrainHeightAdvantage,
+    bool? OnEnemyHighGround,
+    int? StandingTreesWithin300,
+    int? StandingTreesWithin600,
+    double? TreeLineDistance,
+    double? TerrainOpenness,
+    bool? InNoWardZone,
+    double? ActiveRoshanPitDistance,
+    bool? RoshanAlive,
+    bool? NearMapObjective,
+    bool? NearCurrent,
+    int? TeamWatchersActive,
+    double? TeamLocalVisionCoverage,
+    int? TeamMobileVisionSourcesNear,
+    bool? OwnCourierAliveFlying,
     int? HiddenNearestEnemyDistance,
     int HiddenEnemiesNear,
     int HiddenEnemiesWithinFightRange,
@@ -318,7 +335,12 @@ public sealed record SituationRow(
     int? HiddenEnemyReadyDamageReachingMe,
     int? HiddenEnemyNeutralActivesReadyNear,
     int? HiddenEnemyMadstones,
-    double? HiddenEnemyNeutralTiersBehind)
+    double? HiddenEnemyNeutralTiersBehind,
+    bool? HiddenInEnemyHeroVision,
+    int? HiddenEnemyObserversCovering,
+    bool? HiddenInEnemyMobileVisionRange,
+    bool? HiddenEnemyCourierAliveFlying,
+    bool? HiddenRoshanAlive)
 {
     // Bumped whenever a column is added, removed or changes meaning: the trainer refuses mixed versions.
     // 1: the situation (death risk only, flat rows). 2: recent activity, readiness, Roshan/Aegis and towers per lane,
@@ -328,6 +350,7 @@ public sealed record SituationRow(
     // ultimate from the catalog (UltimateReady, DATA-D03) and readiness honoring observed cooldown resets/reductions
     // (DATA-D15; documents without items/abilities.cooldownChanges read exactly as before). Once a v2 export is saved,
     // any further change bumps the version.
+    // P4a-c (23/10/2026), before any v2 export: patch terrain, local mobile vision and living flying couriers.
     public const int FeatureVersion = 2;
     // GOLD5 before the first v2 export: BuybackReady uses replicated cooldown evidence; no assumed /12 price.
 
@@ -402,6 +425,12 @@ public sealed record SituationRow(
             s.Neutrals.TierOpen, s.Neutrals.SecondsToNextTier, s.Neutrals.MyArtifactTier, s.Neutrals.MyTiersBehind,
             s.Neutrals.MyArtifactActiveReady, s.Neutrals.MyEnhancementLevel, s.Neutrals.MyMadstones, s.Neutrals.CanCraftNow,
             s.Neutrals.SecondsSinceLastCraft,
+            s.Terrain.Level, s.Terrain.NearestSeenEnemyLevel, s.Terrain.HeightAdvantage, s.Terrain.OnEnemyHighGround,
+            s.Terrain.TreesWithin300, s.Terrain.TreesWithin600, Round(s.Terrain.TreeLineDistance),
+            Share(s.Terrain.Openness), s.Terrain.InNoWardZone, Round(s.Terrain.ActiveRoshanPitDistance),
+            s.Terrain.RoshanAlive, s.Terrain.NearObjective, s.Terrain.NearCurrent, s.Terrain.TeamWatchersActive,
+            Share(s.MobileVision.TeamCoverage), s.MobileVision.TeamSourcesNear,
+            s.CourierFlight.OwnAliveFlying,
             s.Hidden.NearestEnemyDistance, s.Hidden.EnemiesNear, s.Hidden.EnemiesWithinFightRange,
             s.Hidden.EnemySmokeSecondsAgo, Share(s.Hidden.EnemiesHealthShare), s.Hidden.EnemyScanSecondsAgo,
             s.Hidden.EnemyPowerRuneSecondsAgo, s.Hidden.EnemyWaveAhead, s.Hidden.EnemyCreepsAtFront, s.Hidden.WaveHealthBalanceAtFront, s.Hidden.EnemyWaveStacked, s.Hidden.EnemyCampsStacked, s.Hidden.EnemyBuildingsUnderAttack,
@@ -411,7 +440,9 @@ public sealed record SituationRow(
             s.Lane.HiddenNetWorthLead, s.Hidden.SeenByEnemies,
             s.Spells.HiddenEnemiesReadyDamageNear, s.Spells.HiddenEnemiesReadyHealingNear,
             s.Spells.HiddenEnemyReadySpellsReachingMe, s.Spells.HiddenEnemyReadyDisablesReachingMe, s.Spells.HiddenEnemyReadyDamageReachingMe,
-            s.Neutrals.HiddenEnemyArtifactActivesReadyNear, s.Neutrals.HiddenEnemyMadstones, s.Neutrals.HiddenEnemyTiersBehind);
+            s.Neutrals.HiddenEnemyArtifactActivesReadyNear, s.Neutrals.HiddenEnemyMadstones, s.Neutrals.HiddenEnemyTiersBehind,
+            s.Terrain.HiddenInEnemyHeroVision, s.Terrain.HiddenEnemyObserversCovering,
+            s.MobileVision.HiddenInEnemyMobileRange, s.CourierFlight.HiddenEnemyAliveFlying, s.Terrain.HiddenRoshanAlive);
     }
 
     // Three decimals are finer than anything the model can use, and keep the export small.

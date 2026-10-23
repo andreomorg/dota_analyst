@@ -1125,6 +1125,214 @@ public class HeroSituationBuilderTests
         Assert.Null(HeroSituationBuilder.From(withoutObjectives, []));
     }
 
+    private static DotaAnalyst.Domain.Maps.GameMap TerrainMap()
+    {
+        var floors = Enumerable.Range(0, 32 * 32).Select(index => (short)(index % 32 >= 20 ? 256 : 128)).ToArray();
+        return new DotaAnalyst.Domain.Maps.GameMap("test",
+            new DotaAnalyst.Domain.Maps.MapGrid(64, 32, 32, -1024, -1024,
+                Enumerable.Repeat((byte)1, 32 * 32).ToArray(), floors),
+            [new(160, 32), new(480, 32)], [], [new("noWard", 0, 0, 0, -64, -64, 64, 64)],
+            [new("pit", -600, -600, 0, -100, -100, 100, 100)], [], [], [],
+            [new(DotaAnalyst.Domain.Maps.LandmarkKind.LotusPool, "lotus", null, 0, 64)], currents: [new(0, 0)]);
+    }
+
+    [Fact]
+    public void Terrain_UsesPatchMapAndTreeChangesOnlyUpToTheAnchor()
+    {
+        var catalog = new GameCatalog(Map: TerrainMap());
+        var activity = new ReplayActivity([], [], [], trees: new TreeTimeline([], [new(101, 0, false)]));
+        var positions = new[] { Path(1, (100, 0, 0), (101, 0, 0)),
+            new HeroPositions(6, [new(100, 320, 0, new HeroVitals(1, 1, 1, 1, VisibleToEnemies: true))]) };
+        var builder = Builder(positions, activity: activity, catalog: catalog);
+        var now = builder.At(1, 100)!.Terrain;
+        Assert.Equal((1, 2, -1), (now.Level, now.NearestSeenEnemyLevel, now.HeightAdvantage));
+        Assert.Equal((1, 2), (now.TreesWithin300, now.TreesWithin600));
+        Assert.Equal(Math.Sqrt(160 * 160 + 32 * 32), now.TreeLineDistance);
+        Assert.True(now.InNoWardZone);
+        Assert.True(now.NearObjective);
+        Assert.True(now.NearCurrent);
+        Assert.NotNull(now.Openness);
+        Assert.Null(now.TeamWatchersActive);
+        Assert.Null(now.ActiveRoshanPitDistance);
+        Assert.Equal(0, builder.At(1, 101)!.Terrain.TreesWithin300);
+    }
+
+    [Fact]
+    public void Terrain_AbsentMapOrTreesRemainsUnknown_AndUnseenEnemyHeightIsHidden()
+    {
+        Assert.Equal(new SituationTerrain(), Builder([Path(1, 100)]).At(1, 100)!.Terrain);
+        var withoutTrees = Builder([Path(1, 100), Path(6, (100, 320, 0))], catalog: new GameCatalog(Map: TerrainMap())).At(1, 100)!.Terrain;
+        Assert.Equal(1, withoutTrees.Level);
+        Assert.Null(withoutTrees.TreesWithin300);
+        Assert.Null(withoutTrees.TreesWithin600);
+        Assert.Null(withoutTrees.TreeLineDistance);
+        Assert.Null(withoutTrees.Openness);
+        Assert.Null(withoutTrees.HiddenEnemyObserversCovering);
+        Assert.Null(withoutTrees.NearestSeenEnemyLevel);
+        Assert.Null(withoutTrees.HeightAdvantage);
+    }
+
+    [Fact]
+    public void Terrain_ObserverCoverageUsesOcclusionAndStandingTrees()
+    {
+        var wards = new[] { new WardPlacement(WardKind.Observer, Team.Dire, 6, 800, 32, 1, null, false, null) };
+        var positions = new[] { Path(1, (100, 0, 32), (101, 0, 32)) };
+        var activity = new ReplayActivity([], [], [], trees: new TreeTimeline([], [new(101, 0, false), new(101, 1, false)]));
+        var builder = Builder(positions, wards: wards, activity: activity, catalog: new GameCatalog(Map: TerrainMap()));
+        Assert.Equal(0, builder.At(1, 100)!.Terrain.HiddenEnemyObserversCovering);
+        Assert.Equal(1, builder.At(1, 101)!.Terrain.HiddenEnemyObserversCovering);
+    }
+
+    [Fact]
+    public void Terrain_RoshanUsesLastObservedBossWithoutReadingFutureSamples()
+    {
+        var facts = new ReplayAdditionalFacts { BossTracks = [new("roshan", [new(0, -600, -600, true), new(101, 600, 600, false)])] };
+        var builder = HeroSituationBuilder.From(new ReplayAnalysis(Match(), 180, Players, Timeline, [], [], objectives: []),
+            [Path(1, 100)], catalog: new GameCatalog(Map: TerrainMap()), facts: facts)!;
+        Assert.True(builder.At(1, 100)!.Terrain.HiddenRoshanAlive);
+        Assert.Equal(Math.Sqrt(600 * 600 * 2), builder.At(1, 100)!.Terrain.ActiveRoshanPitDistance);
+    }
+
+    [Fact]
+    public void Terrain_VisibleRoshanStateComesOnlyFromTheKillAnnouncement()
+    {
+        // The track says Roshan is back at 540 s, but the player only knows the kill at 50 s and the 8-11 min respawn.
+        var facts = new ReplayAdditionalFacts
+        {
+            BossTracks = [new("roshan", [new(0, -600, -600, true), new(50, -600, -600, false), new(540, -600, -600, true)])],
+        };
+        var kill = new MapObjective(ObjectiveKind.Roshan, 50, Team.Radiant, killerHeroId: 1);
+        var builder = HeroSituationBuilder.From(new ReplayAnalysis(Match(), 600, Players, Timeline, [], [], objectives: [kill]),
+            [Path(1, 40, 300, 560)], catalog: new GameCatalog(Map: TerrainMap()), facts: facts)!;
+
+        Assert.True(builder.At(1, 40)!.Terrain.RoshanAlive);
+        Assert.False(builder.At(1, 300)!.Terrain.RoshanAlive);
+        Assert.False(builder.At(1, 300)!.Terrain.HiddenRoshanAlive);
+        Assert.Null(builder.At(1, 560)!.Terrain.RoshanAlive);
+        Assert.True(builder.At(1, 560)!.Terrain.HiddenRoshanAlive);
+    }
+
+    [Fact]
+    public void Terrain_HeroVisionUsesCatalogNightRangeAndOcclusion()
+    {
+        var details = new HeroDetails(HeroAttribute.Strength, HeroAttackType.Melee, new HashSet<HeroRole>())
+        {
+            Profile = new HeroProfile("test", true, new(null, null, null, null, null, null),
+                new(null, null, null, null, null, null, null, null, null), new(null, null), new(null, null, null, null),
+                new(null, null, new(1000, HeroValueOrigin.HeroFile), new(100, HeroValueOrigin.HeroFile))),
+        };
+        var catalog = new GameCatalog(Heroes: new Dictionary<int, HeroDetails> { [6] = details }, Map: TerrainMap());
+        var activity = new ReplayActivity([], [], [], dayNight: [new(0, true), new(101, false)],
+            trees: new TreeTimeline([0, 1], []));
+        var positions = new[] { Path(1, (100, 0, 32), (101, 0, 32)), Path(6, (100, -500, 32), (101, -500, 32)) };
+        var builder = Builder(positions, activity: activity, catalog: catalog);
+        Assert.True(builder.At(1, 100)!.Terrain.HiddenInEnemyHeroVision);
+        Assert.False(builder.At(1, 101)!.Terrain.HiddenInEnemyHeroVision);
+    }
+
+    private static HeroDetails VisionHero(double day, double night) =>
+        new(HeroAttribute.Strength, HeroAttackType.Melee, new HashSet<HeroRole>())
+        {
+            Profile = new HeroProfile("test", true, new(null, null, null, null, null, null),
+                new(null, null, null, null, null, null, null, null, null), new(null, null), new(null, null, null, null),
+                new(null, null, new(day, HeroValueOrigin.HeroFile), new(night, HeroValueOrigin.HeroFile))),
+        };
+
+    [Fact]
+    public void MobileVision_UsesRecentPastFrameAndReplicatedDayNightRanges()
+    {
+        var activity = new ReplayActivity([], [], [], dayNight: [new(0, true), new(101, false)], visionUnits:
+        [
+            new(100, [new(500, 0, 700, 50), new(10000, 0, 100, 100)], [new(500, 0, 600, 100)]),
+            new(104, [], [new(0, 0, 600, 600)]),
+        ]);
+        var builder = Builder([Path(1, 99, 100, 101, 102)], activity: activity);
+        Assert.Equal(new SituationMobileVision(), builder.At(1, 99)!.MobileVision);
+        Assert.Equal(1, builder.At(1, 100)!.MobileVision.TeamSourcesNear);
+        Assert.True(builder.At(1, 100)!.MobileVision.HiddenInEnemyMobileRange);
+        Assert.False(builder.At(1, 101)!.MobileVision.HiddenInEnemyMobileRange);
+        Assert.Equal(new SituationMobileVision(), builder.At(1, 102)!.MobileVision);
+        Assert.Null(builder.At(1, 100)!.MobileVision.TeamCoverage);
+    }
+
+    [Fact]
+    public void MobileVision_KnownEmptyIsZero_AbsentAndUnknownClockStayUnknown()
+    {
+        var positions = new[] { Path(1, 100) };
+        Assert.Equal(new SituationMobileVision(), Builder(positions).At(1, 100)!.MobileVision);
+        var empty = new ReplayActivity([], [], [], visionUnits: [new(100, [], [])], dayNight: [new(0, true)]);
+        var known = Builder(positions, activity: empty).At(1, 100)!.MobileVision;
+        Assert.Equal(0, known.TeamSourcesNear);
+        Assert.False(known.HiddenInEnemyMobileRange);
+        var clockMissing = Builder(positions, activity: new ReplayActivity([], [], [], visionUnits: [new(100, [], [])])).At(1, 100)!.MobileVision;
+        Assert.Equal(0, clockMissing.TeamSourcesNear);
+        Assert.Null(clockMissing.HiddenInEnemyMobileRange);
+    }
+
+    [Fact]
+    public void MobileVision_LocalCoverageCombinesHeroesWardsAndMovingSources()
+    {
+        var positions = new[] { Path(1, 100) };
+        var catalog = new GameCatalog(Heroes: new Dictionary<int, HeroDetails> { [1] = VisionHero(0, 0) }, Map: TerrainMap());
+        var activity = new ReplayActivity([], [], [], visionUnits: [new(100, [], [])],
+            dayNight: [new(0, true)], trees: new TreeTimeline([0, 1], []));
+        var baseline = Builder(positions, activity: activity, catalog: catalog).At(1, 100)!.MobileVision.TeamCoverage;
+        Assert.NotNull(baseline);
+        Assert.InRange(baseline.Value, 0, 0.1);
+        var moving = new ReplayActivity([], [], [], visionUnits: [new(100, [new(800, 0, 3000, 3000)], [])],
+            dayNight: [new(0, true)], trees: new TreeTimeline([0, 1], []));
+        Assert.Equal(1, Builder(positions, activity: moving, catalog: catalog).At(1, 100)!.MobileVision.TeamCoverage);
+        var ward = new WardPlacement(WardKind.Observer, Team.Radiant, 1, 800, 0, 99, null, false, null);
+        Assert.True(Builder(positions, wards: [ward], activity: activity, catalog: catalog).At(1, 100)!.MobileVision.TeamCoverage > baseline);
+        var heroCatalog = catalog with { Heroes = new Dictionary<int, HeroDetails> { [1] = VisionHero(3000, 3000) } };
+        Assert.True(Builder(positions, activity: activity, catalog: heroCatalog).At(1, 100)!.MobileVision.TeamCoverage > baseline);
+        Assert.Null(Builder(positions, activity: activity, catalog: catalog with { Heroes = null }).At(1, 100)!.MobileVision.TeamCoverage);
+    }
+
+    [Fact]
+    public void CourierFlight_RequiresAliveAndFlying_AndNeverReadsFutureChanges()
+    {
+        var activity = new ReplayActivity([], [], [], couriers:
+        [
+            new("own", Team.Radiant, [(0, true, 0, 0), (102, false, 0, 0), (104, true, 0, 0)])
+                { Flight = [new(104, 0), new(101, 1), new(0, 0)] },
+            new("enemy", Team.Dire, [(0, true, 0, 0)]) { Flight = [new(0, 1), new(101, 0)] },
+        ]);
+        var builder = Builder([Path(1, 100, 101, 102, 104)], activity: activity);
+        Assert.Equal(new SituationCourierFlight(false, true), builder.At(1, 100)!.CourierFlight);
+        Assert.Equal(new SituationCourierFlight(true, false), builder.At(1, 101)!.CourierFlight);
+        Assert.False(builder.At(1, 102)!.CourierFlight.OwnAliveFlying);
+        Assert.False(builder.At(1, 104)!.CourierFlight.OwnAliveFlying);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData(9)]
+    public void CourierFlight_AbsentOrUnrecognizedFlightIsUnknown(int? raw)
+    {
+        var courier = new CourierTrack("own", Team.Radiant, [(0, true, 0, 0)]) { Flight = [new(0, raw)] };
+        var positions = new[] { Path(1, 100) };
+        Assert.Null(Builder(positions, activity: new ReplayActivity([], [], [], couriers: [courier])).At(1, 100)!.CourierFlight.OwnAliveFlying);
+        Assert.Null(Builder(positions, activity: new ReplayActivity([], [], [], couriers: [courier with { Flight = null }])).At(1, 100)!.CourierFlight.OwnAliveFlying);
+        Assert.Equal(new SituationCourierFlight(), Builder(positions).At(1, 100)!.CourierFlight);
+    }
+
+    [Fact]
+    public void CourierFlight_AggregatesWithoutTurningUnknownIntoFalse()
+    {
+        var unknown = new CourierTrack("unknown", Team.Radiant, [(0, true, 0, 0)]);
+        var flying = new CourierTrack("flying", Team.Radiant, [(0, true, 0, 0)]) { Flight = [new(0, 1)] };
+        var dead = new CourierTrack("dead", Team.Radiant, [(0, false, 0, 0)]);
+        var positions = new[] { Path(1, 100) };
+        bool? Own(params CourierTrack[] tracks) => Builder(positions, activity: new ReplayActivity([], [], [], couriers: tracks)).At(1, 100)!.CourierFlight.OwnAliveFlying;
+        Assert.Null(Own(unknown, dead));
+        Assert.True(Own(unknown, flying));
+        Assert.False(Own(dead));
+        Assert.False(Own());
+        Assert.Null(Own(flying with { Samples = [(101, true, 0, 0)] }));
+        Assert.Null(Own(flying with { Flight = [new(101, 1)] }));
+    }
+
     private static HeroSituationBuilder Builder(
         IReadOnlyList<HeroPositions> positions,
         IReadOnlyList<WardPlacement>? wards = null,

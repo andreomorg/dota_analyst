@@ -29,7 +29,7 @@ public sealed class GetModelSamplesHandler(IArchivedReplaySource replays, GameCa
 {
     public Task<ModelSamplesResult<DeathRiskSampleRow>> DeathRiskAsync(MatchId matchId, CancellationToken cancellationToken) =>
         HandleAsync(matchId, DeathRiskSampleBuilder.SampleEverySeconds, DeathRiskSampleBuilder.HorizonSeconds,
-            (replay, catalog) => DeathRiskSampleBuilder.Build(replay.Analysis, replay.Positions, replay.Activity, catalog)?
+            (replay, catalog) => DeathRiskSampleBuilder.Build(replay.Analysis, replay.Positions, replay.Activity, catalog, replay.Facts)?
                 .Select(sample => new DeathRiskSampleRow(
                     SituationRow.From(sample.Situation, replay.Activity is not null), sample.DiesSoon, sample.DiedAtSeconds))
                 .ToList(),
@@ -37,7 +37,7 @@ public sealed class GetModelSamplesHandler(IArchivedReplaySource replays, GameCa
 
     public Task<ModelSamplesResult<NextRegionSampleRow>> NextRegionAsync(MatchId matchId, CancellationToken cancellationToken) =>
         HandleAsync(matchId, NextRegionSampleBuilder.SampleEverySeconds, NextRegionSampleBuilder.HorizonSeconds,
-            (replay, catalog) => NextRegionSampleBuilder.Build(replay.Analysis, replay.Positions, replay.Activity, catalog)?
+            (replay, catalog) => NextRegionSampleBuilder.Build(replay.Analysis, replay.Positions, replay.Activity, catalog, replay.Facts)?
                 .Select(sample => new NextRegionSampleRow(
                     SituationRow.From(sample.Situation, replay.Activity is not null), sample.RegionLater))
                 .ToList(),

@@ -171,7 +171,7 @@ public sealed partial class HeroSituationBuilder
     // The living enemies in the hero's lane at this second (the region of each one's position now: no lane guess from
     // the first minutes, no future); with seenOnly, only those the team sees. Null outside a lane, or without
     // visibility when seenOnly.
-    private int? EnemiesInLane(Team team, PositionSample self, List<PositionSample> enemies, bool seenOnly)
+    private static int? EnemiesInLane(Team team, PositionSample self, List<PositionSample> enemies, bool seenOnly)
     {
         if (LaneOf(team, self) is not { } lane || (seenOnly && enemies.Any(enemy => enemy.Vitals?.VisibleToEnemies is null)))
         {

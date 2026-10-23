@@ -108,7 +108,7 @@ public static partial class GameFileMappings
                 Integer(tier.Text("trinket_options")) ?? 0,
                 Integer(tier.Text("enhancement_options")) ?? 0,
                 Integer(tier.Text("craft_cost")) ?? 0,
-                Levels(tier.Text("xp_bonus")).FirstOrDefault(),
+                Levels(tier.Text("xp_bonus")) is [var xpBonus, ..] ? xpBonus : 0,
                 (tier["items"]?.Children ?? []).Where(child => !child.IsBlock).Select(child => Key(child.Key)).ToList(),
                 Enhancements(enhancements?["global"]),
                 byAttribute));
@@ -436,7 +436,7 @@ public static partial class GameFileMappings
         string LevelsOf(string name)
         {
             var value = values.FirstOrDefault(value => value.Key.Equals(name, StringComparison.OrdinalIgnoreCase));
-            var levels = value?.Levels is { Count: > 0 } own ? own : value?.Rules?.Bonuses.FirstOrDefault()?.Amount.Select(Math.Abs).ToList();
+            var levels = value?.Levels is { Count: > 0 } own ? own : value?.Rules?.Bonuses is [var bonus, ..] ? bonus.Amount.Select(Math.Abs).ToList() : null;
             return levels is { Count: > 0 }
                 ? string.Join(" / ", levels.Distinct().Count() == 1 ? [Number(levels[0])] : levels.Select(Number))
                 : name;

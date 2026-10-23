@@ -103,7 +103,7 @@ public static class TerrainMetricsCalculator
         private readonly HashSet<int> down = [.. trees.DeadAtStart];
         private int next;
 
-        public IReadOnlySet<int> At(int second)
+        public HashSet<int> At(int second)
         {
             for (; next < trees.Changes.Count && trees.Changes[next].Seconds <= second; next++)
             {

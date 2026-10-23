@@ -29,7 +29,7 @@ public class SteamProfileProvider(HttpClient httpClient, IOptions<SteamOptions> 
             return cached.Profile;
         }
 
-        var steamId64 = accountId.SteamId64.ToString();
+        var steamId64 = accountId.SteamId64.ToString(System.Globalization.CultureInfo.InvariantCulture);
         var key = Uri.EscapeDataString(options.Value.ApiKey ?? "");
         SteamPlayerSummariesResponse? response;
         try

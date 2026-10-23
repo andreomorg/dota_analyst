@@ -90,7 +90,7 @@ public static class MatchMetricsCalculator
             var phaseDeathCounts = CountRegionsByPhase(heroDeaths.Select(death =>
                 (death.Seconds, death.X, death.Y)), player.Team);
             // Samples alive in each phase, counted once (not once per region).
-            var phaseTotals = new[] { 0, 1, 2 }.Select(phase => samples.Count(sample => IsInPhase(sample.Seconds, phase))).ToArray();
+            var phaseTotals = Enumerable.Range(0, 3).Select(phase => samples.Count(sample => IsInPhase(sample.Seconds, phase))).ToArray();
             var phaseTimeShares = new PerGamePhase<PerRegion<double>>(
                 TimeShares(phaseTimeCounts.EarlyGame, 0),
                 TimeShares(phaseTimeCounts.MidGame, 1),

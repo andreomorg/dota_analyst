@@ -29,7 +29,7 @@ public static class PlayQualityMetricsCalculator
     // Short, deliberately debuff-observable list: directed Hook pulls/stuns, directed Sacred Arrow stuns.
     // Five seconds allows projectile travel; it is an attribution tolerance, not a patch-specific duration.
     // Powershot/Shockwave are excluded: damage rows lack time, damage buckets and HeroHit lack inflictor.
-    private static readonly IReadOnlyDictionary<string, string> Skillshots = new Dictionary<string, string>
+    private static readonly Dictionary<string, string> Skillshots = new()
     {
         ["pudge_meat_hook"] = "modifier_pudge_meat_hook",
         ["mirana_arrow"] = "modifier_mirana_arrow",

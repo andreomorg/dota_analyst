@@ -94,7 +94,10 @@ public class BaselineReplayMetricsBackfill(
 
         if (filled > 0)
         {
-            logger.LogInformation("Filled the terrain, vision and objective metrics of {Matches} comparison base matches from their kept documents", filled);
+            if (logger.IsEnabled(LogLevel.Information))
+            {
+                logger.LogInformation("Filled the terrain, vision and objective metrics of {Matches} comparison base matches from their kept documents", filled);
+            }
         }
 
         return filled;

@@ -28,7 +28,7 @@ public sealed partial class HeroSituationBuilder
     private readonly ReplayActivity? activity;
     // Wave fronts by lane and second (null without waves in the document).
     private readonly Dictionary<(Lane Lane, int Seconds), WaveFront>? wavesAt;
-    private readonly IReadOnlyDictionary<int, HeroPositions> positionsOf;
+    private readonly Dictionary<int, HeroPositions> positionsOf;
     private readonly IReadOnlyDictionary<int, Team> teamOf;
     private readonly IReadOnlyDictionary<int, HeroMetrics> metricsOf;
     // The heroes' catalog profile (roles, attack type); null when the catalog was not given.

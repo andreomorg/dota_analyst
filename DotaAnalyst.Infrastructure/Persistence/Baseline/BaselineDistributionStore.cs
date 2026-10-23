@@ -17,7 +17,7 @@ public class BaselineDistributionStore(IDbContextFactory<AppDbContext> dbContext
     private sealed record StoredTimedDistribution(StatKey Stat, int Second, IReadOnlyList<double> Quantiles, int SampleSize);
 
     // Two decimals are plenty for a comparison and keep the mirror small (percentiles interpolate: 1234.5666...).
-    private static IReadOnlyList<double> Rounded(IReadOnlyList<double> quantiles) =>
+    private static List<double> Rounded(IReadOnlyList<double> quantiles) =>
         quantiles.Select(value => Math.Round(value, 2)).ToList();
 
     public Task<BaselineDistributionSet?> FindAsync(int heroId, int role, BaselineSource source, CancellationToken cancellationToken) =>

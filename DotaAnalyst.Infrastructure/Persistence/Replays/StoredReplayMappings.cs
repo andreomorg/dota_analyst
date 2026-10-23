@@ -222,7 +222,7 @@ internal static class StoredReplayMappings
     private static List<int> ToFlat(IReadOnlyList<HeatCell> cells) =>
         cells.SelectMany(cell => new[] { cell.Column, cell.Row, cell.Samples }).ToList();
 
-    private static IReadOnlyList<HeatCell> ToCells(IReadOnlyList<int>? flat)
+    private static List<HeatCell> ToCells(IReadOnlyList<int>? flat)
     {
         if (flat is null || flat.Count % 3 != 0)
         {

@@ -9,7 +9,7 @@ namespace DotaAnalyst.Infrastructure.OpenDota;
 public static class OpenDotaMappings
 {
     // OpenDota benchmark names -> domain metrics. Names not listed here are ignored.
-    private static readonly IReadOnlyDictionary<string, BenchmarkMetric> BenchmarkMetrics =
+    private static readonly Dictionary<string, BenchmarkMetric> BenchmarkMetrics =
         new Dictionary<string, BenchmarkMetric>
         {
             ["gold_per_min"] = BenchmarkMetric.GoldPerMinute,
@@ -90,7 +90,7 @@ public static class OpenDotaMappings
                     player.GoldReasons?.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal),
                     player.XpReasons?.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal)));
 
-    private static IReadOnlyDictionary<string, int>? Clean(IReadOnlyDictionary<string, int>? rows) =>
+    private static Dictionary<string, int>? Clean(IReadOnlyDictionary<string, int>? rows) =>
         rows?.Where(pair => pair.Value >= 0).ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
 
     // Joins the two item constants (ID -> key and key -> data) into ID -> item, with the item's details.

@@ -53,7 +53,10 @@ public sealed class ReplayParseWorker(
     {
         if (circuitBreaker.IsOpen)
         {
-            logger.LogDebug("The replay parser is unavailable; match {MatchId} was dropped from the queue", request.MatchId);
+            if (logger.IsEnabled(LogLevel.Debug))
+            {
+                logger.LogDebug("The replay parser is unavailable; match {MatchId} was dropped from the queue", request.MatchId);
+            }
             return false;
         }
 

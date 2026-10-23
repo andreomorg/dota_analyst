@@ -18,6 +18,7 @@ public sealed record ReplayParseRequest(MatchId MatchId, Uri ReplayUrl);
 //   saving the result failed, where the page's polling would otherwise parse the same replay every few seconds.
 // - Lost on restart (e.g. Render putting the API to sleep): nothing was saved for those matches, so the next
 //   visit simply queues them again.
+[System.Diagnostics.CodeAnalysis.SuppressMessage("Naming", "CA1711", Justification = "It is a queue; the name matches IReplayParseQueue.")]
 public sealed class ReplayParseQueue(ReplayParserCircuitBreaker circuitBreaker, TimeProvider timeProvider) : IReplayParseQueue
 {
     public const int Capacity = 20;

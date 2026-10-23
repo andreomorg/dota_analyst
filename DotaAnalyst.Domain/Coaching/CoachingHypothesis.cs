@@ -21,7 +21,7 @@ public static class CoachingSceneEvidenceBuilder
                 FormattableString.Invariant($"Hero {p.HeroId}, team {p.Team}, position ({p.X},{p.Y}); visibility unknown.")));
         if (facts.Economy is { } economy)
             evidence.Add(new("economy", "earlier-snapshot", economy.SampleSeconds,
-                $"Net worth {economy.NetWorth}; last hits {economy.LastHits?.ToString() ?? "unknown"}. Not gold carried or causal gain."));
+                $"Net worth {economy.NetWorth}; last hits {economy.LastHits?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "unknown"}. Not gold carried or causal gain."));
         foreach (var (purchase, index) in (facts.RecentPurchases ?? []).TakeLast(3).Select((p, i) => (p, i)))
             evidence.Add(new($"purchase-{index}", "purchase", purchase.Seconds,
                 $"Hero {purchase.HeroId} purchase {purchase.ItemKey}; delivery, inventory and readiness unknown."));

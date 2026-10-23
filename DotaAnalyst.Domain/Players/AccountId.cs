@@ -30,5 +30,5 @@ public readonly record struct AccountId
         return false;
     }
 
-    public override string ToString() => Value.ToString();
+    public override string ToString() => Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
 }

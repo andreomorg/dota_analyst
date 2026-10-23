@@ -34,6 +34,7 @@ public sealed record HeroMovement(HeroNumber? Speed, HeroNumber? TurnRate, HeroN
 public sealed record HeroProfile(string Key, bool? Enabled, HeroAttributes Attributes, HeroAttack Attack,
     HeroDefense Defense, HeroBaseVitals Vitals, HeroMovement Movement)
 {
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "Instance property is part of the serialized JSON contract.")]
     public int SchemaVersion => 1;
 
     public bool HasValidShape() => !string.IsNullOrWhiteSpace(Key) && Attributes is not null && Attack is not null

@@ -5,6 +5,7 @@ namespace DotaAnalyst.Domain.Matches;
 public record PerRegion<T>(
     T OwnBase, T EnemyBase, T TopLane, T MiddleLane, T BottomLane, T River, T OwnJungle, T EnemyJungle)
 {
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1000", Justification = "The factory reads naturally as PerRegion<int>.Of(...); used all over the analysis.")]
     public static PerRegion<T> Of(Func<MapRegion, T> valueOf) => new(
         valueOf(MapRegion.OwnBase), valueOf(MapRegion.EnemyBase), valueOf(MapRegion.TopLane),
         valueOf(MapRegion.MiddleLane), valueOf(MapRegion.BottomLane), valueOf(MapRegion.River),

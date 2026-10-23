@@ -55,7 +55,10 @@ public sealed class OpenDotaRateLimitHandler(
     // reason phrase), and while paused every request would add one more warning. The pause itself is logged once.
     private HttpResponseMessage Refused(HttpRequestMessage request)
     {
-        logger.LogDebug("OpenDota call to {Path} refused by the local rate limit.", request.RequestUri?.AbsolutePath);
+        if (logger.IsEnabled(LogLevel.Debug))
+        {
+            logger.LogDebug("OpenDota call to {Path} refused by the local rate limit.", request.RequestUri?.AbsolutePath);
+        }
         return new HttpResponseMessage(HttpStatusCode.TooManyRequests)
         {
             ReasonPhrase = LocalLimitReason,

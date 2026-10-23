@@ -62,5 +62,5 @@ public sealed record MadstoneTrack(int HeroId, IReadOnlyList<MadstoneReading> Re
 public sealed record NeutralProgress(int HeroId, int Acquired, int Found, int InHandAtEnd, int NeutralGold)
 {
     public static NeutralProgress? From(MadstoneTrack track) =>
-        track.Readings.LastOrDefault() is { } last ? new(track.HeroId, last.Acquired, last.Found, last.InHand, last.NeutralGold) : null;
+        track.Readings is [.., var last] ? new(track.HeroId, last.Acquired, last.Found, last.InHand, last.NeutralGold) : null;
 }

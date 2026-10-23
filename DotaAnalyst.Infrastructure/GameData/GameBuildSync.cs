@@ -39,8 +39,11 @@ public sealed class GameBuildSynchronizer(D2vpkrClient client, IGameDataStore st
 
             await store.KeepBuildAsync(new StoredGameBuild(new GameBuild(commit.Sha, commit.ClientVersion, commit.Date), files), cancellationToken);
             added++;
-            logger.LogInformation("Kept game build {Build} (Client {Client}, {ReleasedAt:u}): {Files} files",
-                commit.Sha[..8], commit.ClientVersion, commit.Date, files.Count);
+            if (logger.IsEnabled(LogLevel.Information))
+            {
+                logger.LogInformation("Kept game build {Build} (Client {Client}, {ReleasedAt:u}): {Files} files",
+                    commit.Sha[..8], commit.ClientVersion, commit.Date, files.Count);
+            }
         }
 
         return added;
@@ -62,12 +65,18 @@ public sealed class GameBuildSyncService(GameBuildSynchronizer synchronizer, IOp
             try
             {
                 var added = await synchronizer.SyncAsync(stoppingToken);
-                logger.LogInformation("Game builds synchronized: {Added} new", added);
+                if (logger.IsEnabled(LogLevel.Information))
+                {
+                    logger.LogInformation("Game builds synchronized: {Added} new", added);
+                }
             }
             catch (GitHubRateLimitedException ex)
             {
                 wait = ex.ResetAt - timeProvider.GetUtcNow() + TimeSpan.FromMinutes(1);
-                logger.LogInformation("GitHub rate limit reached; game builds resume at {ResetAt:u}", ex.ResetAt);
+                if (logger.IsEnabled(LogLevel.Information))
+                {
+                    logger.LogInformation("GitHub rate limit reached; game builds resume at {ResetAt:u}", ex.ResetAt);
+                }
             }
             catch (Exception ex) when (ex is HttpRequestException or StorageUnavailableException or TaskCanceledException
                 && !stoppingToken.IsCancellationRequested)

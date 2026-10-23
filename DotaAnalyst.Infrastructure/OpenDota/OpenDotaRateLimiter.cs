@@ -37,7 +37,7 @@ public sealed class OpenDotaRateLimiter(
     {
         var now = timeProvider.GetUtcNow().UtcTicks;
         var permits = options.Value.PermitsPerMinute;
-        if (cost <= 0) throw new ArgumentOutOfRangeException(nameof(cost));
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(cost);
         if (cost > permits) return null;
 
         lock (gate)

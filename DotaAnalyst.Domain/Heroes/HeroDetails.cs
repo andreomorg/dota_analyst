@@ -2,6 +2,8 @@ using System.Collections.Frozen;
 
 namespace DotaAnalyst.Domain.Heroes;
 
+// A hero's primary attribute (Dota's own word): not a .NET attribute class, whatever its suffix says.
+[System.Diagnostics.CodeAnalysis.SuppressMessage("Naming", "CA1711", Justification = "Dota's own term; renaming would change the public JSON.")]
 public enum HeroAttribute { Strength, Agility, Intelligence, Universal }
 
 public enum HeroAttackType { Melee, Ranged }

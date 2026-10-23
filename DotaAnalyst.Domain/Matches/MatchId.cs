@@ -19,5 +19,5 @@ public readonly record struct MatchId
         return false;
     }
 
-    public override string ToString() => Value.ToString();
+    public override string ToString() => Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
 }

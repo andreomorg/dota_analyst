@@ -102,7 +102,10 @@ public class ReplayParserClient(
                 wait = BusyWait(response);
             }
 
-            logger.LogDebug("The replay parser is busy; match {MatchId} is tried again in {Wait}", matchId, wait);
+            if (logger.IsEnabled(LogLevel.Debug))
+            {
+                logger.LogDebug("The replay parser is busy; match {MatchId} is tried again in {Wait}", matchId, wait);
+            }
             // Through the app's clock, so tests don't really wait. Cancelled when the app stops.
             await Task.Delay(wait, timeProvider, cancellationToken);
         }
@@ -130,7 +133,10 @@ public class ReplayParserClient(
             var analysis = response.ToReplayAnalysis(matchId);
             if (analysis is { IsOutdated: false })
             {
-                logger.LogInformation("Match {MatchId} was read again from its kept replay document", matchId);
+                if (logger.IsEnabled(LogLevel.Information))
+                {
+                    logger.LogInformation("Match {MatchId} was read again from its kept replay document", matchId);
+                }
                 return analysis;
             }
         }

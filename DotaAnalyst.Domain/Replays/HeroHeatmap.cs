@@ -29,7 +29,7 @@ public sealed class HeroHeatmap
         ArgumentNullException.ThrowIfNull(phases);
 
         HeroId = heroId;
-        Phases = phases.Select(cells => Validated(cells));
+        Phases = phases.Select(cells => (IReadOnlyList<HeatCell>)Validated(cells));
         if (proximity is not null)
         {
             foreach (var (counts, cells) in new[]
@@ -63,7 +63,7 @@ public sealed class HeroHeatmap
 
     private static int Clamp(int index) => Math.Clamp(index, 0, GridSize - 1);
 
-    private static IReadOnlyList<HeatCell> Validated(IReadOnlyList<HeatCell> cells)
+    private static List<HeatCell> Validated(IReadOnlyList<HeatCell> cells)
     {
         ArgumentNullException.ThrowIfNull(cells);
         foreach (var cell in cells)

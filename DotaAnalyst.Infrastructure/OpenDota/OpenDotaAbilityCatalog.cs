@@ -48,7 +48,7 @@ public sealed class OpenDotaAbilityCatalog(OpenDotaClient client, IMemoryCache c
             if (hero.Name is { } name && source.TryGetValue(name, out var data) && data is not null)
                 kits[hero.Id] = data.ToKit(hero.Id, talentNames, aghanim.GetValueOrDefault(hero.Id));
         }
-        if (abilities.Count == 0 || kits.Count == 0 || (await patchesTask).LastOrDefault()?.Name is not { Length: > 0 } patch)
+        if (abilities.Count == 0 || kits.Count == 0 || (await patchesTask) is not [.., { Name: { Length: > 0 } patch }])
             return new Dictionary<int, Snapshot>();
         return new Dictionary<int, Snapshot> { [1] = new(Version, patch, abilities, kits) };
     }

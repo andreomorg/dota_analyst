@@ -16,6 +16,7 @@ public sealed class NoReplayParser : IReplayParser
         throw new ReplayParserUnavailableException("Replay parsing is not configured.");
 }
 
+[System.Diagnostics.CodeAnalysis.SuppressMessage("Naming", "CA1711", Justification = "It is a queue; the name matches IReplayParseQueue.")]
 public sealed class DisabledReplayParseQueue : IReplayParseQueue
 {
     public ReplayEnqueueResult TryEnqueue(MatchId matchId, Uri replayUrl) => ReplayEnqueueResult.Unavailable;

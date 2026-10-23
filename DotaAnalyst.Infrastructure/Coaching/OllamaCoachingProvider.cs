@@ -16,6 +16,8 @@ public sealed class OllamaCoachingProvider(HttpClient client, string model) : IC
     {
         UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow
     };
+    // The fields every selection must have (the JSON schema's "required").
+    private static readonly string[] SelectionFields = ["findingId", "exerciseId"];
     public const string PromptVersion = "coach-v4-covered-episodes";
     public const string Instructions = """
         Selecione oportunidades de revisão de Dota 2 entre os candidatos fornecidos.
@@ -44,7 +46,7 @@ public sealed class OllamaCoachingProvider(HttpClient client, string model) : IC
         {
             type = "object",
             additionalProperties = false,
-            required = new[] { "findingId", "exerciseId" },
+            required = SelectionFields,
             properties = new
             {
                 findingId = new { type = "string", @enum = new[] { f.Id } },

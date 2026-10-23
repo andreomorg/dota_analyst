@@ -109,7 +109,10 @@ public abstract class LayeredCatalog<T>(
                 throw new DataSourceUnavailableException($"OpenDota returned an empty {CatalogName} list.");
             }
 
-            logger.LogInformation("Loaded {Count} {Catalog} from OpenDota", loaded.Count, CatalogName);
+            if (logger.IsEnabled(LogLevel.Information))
+            {
+                logger.LogInformation("Loaded {Count} {Catalog} from OpenDota", loaded.Count, CatalogName);
+            }
             await TrySaveAsync(loaded, now, cancellationToken);
             return (loaded, FreshFor);
         }

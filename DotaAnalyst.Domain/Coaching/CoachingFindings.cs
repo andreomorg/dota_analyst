@@ -46,10 +46,10 @@ public static class CoachingFindingSelector
                     _ => false
                 })).OrderBy(e => e.EventSeconds).ThenBy(e => e.Id, StringComparer.Ordinal)
                 .Take(3).Select(e => e.Id).ToArray() ?? [] : null;
-            findings.Add(new(id, kind, context.SchemaVersion == 4 ? "3" : context.SchemaVersion == 3 ? "2" : "1", context.Role.Position, 0, context.DurationSeconds,
+            findings.Add(new(id, kind, context.SchemaVersion is (4 or 5) ? "3" : context.SchemaVersion == 3 ? "2" : "1", context.Role.Position, 0, context.DurationSeconds,
                 evidence.Select(e => e.Id).ToArray(), [$"{id}-role-{context.Role.Position}"], episodes));
         }
-        if (context.SchemaVersion == 4)
+        if (context.SchemaVersion is (4 or 5))
         {
             if (!CoachingEpisodeValidator.IsValid(context) || !CoachingEpisodeFacts.Matches(context)) return [];
             var scopedDeaths = Fact("ReviewedDeaths")!;
@@ -85,9 +85,9 @@ public static class CoachingFindingSelector
 
     public static IReadOnlyList<string> ValidateChoices(CoachingContext context, IReadOnlyList<CoachingChoice>? choices)
     {
-        if (context.SchemaVersion is not (2 or 3 or 4) || context.Findings is null || context.Evidence is null
+        if (context.SchemaVersion is not (2 or 3 or 4 or 5) || context.Findings is null || context.Evidence is null
             || context.Role is null || context.Role.Position is < 1 or > 5)
-            return ["Expected coaching context v2, v3 or v4."];
+            return ["Expected coaching context v2, v3, v4 or v5."];
         if (context.SchemaVersion >= 3 && !CoachingEpisodeValidator.IsValid(context))
             return ["Malformed coaching episodes or coverage."];
         if (context.Evidence.Any(e => e is null || string.IsNullOrWhiteSpace(e.Id))
@@ -97,7 +97,7 @@ public static class CoachingFindingSelector
             || context.Findings.Select(f => f.Id).Distinct().Count() != context.Findings.Count)
             return ["Malformed evidence or findings."];
         if (choices is null || choices.Count > 3) return ["Expected zero to three choices."];
-        if (context.SchemaVersion == 4 && !CoachingEpisodeFacts.Matches(context))
+        if (context.SchemaVersion is (4 or 5) && !CoachingEpisodeFacts.Matches(context))
             return ["Episode counts do not match the bounded evidence."];
         // Recompute eligibility from the evidence. A stale or forged candidate cannot bypass the domain rules.
         var eligible = Select(context).ToDictionary(f => f.Id, StringComparer.Ordinal);

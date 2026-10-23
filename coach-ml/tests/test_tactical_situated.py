@@ -5,7 +5,7 @@ from coach_ml.core.validation import AuditError
 from coach_ml.tactical.pipeline import SYSTEM
 from coach_ml.tactical.projection import project_scene
 from coach_ml.tactical.prompt_v5 import SYSTEM_V5
-from coach_ml.tactical.situated import FIELDS, project_situated_scene
+from coach_ml.tactical.situated import FIELDS, V51_FIELDS, project_situated_scene
 
 
 def fixture():
@@ -39,9 +39,31 @@ lowestAllyHealthShare alliesWithTeleportReady region onEnemySide onEnemyHighGrou
 terrainOpenness inOwnObserverVision teamLocalVisionCoverage nearestOwnTowerDistance nearestEnemyTowerDistance
 aheadOfOwnWave waveClashPoint waveClashPastOwnTower ownBuildingsUnderAttack teamNetWorthLead teamExperienceLead
 isNight secondsSinceRoshanKill roshanAlive hasAegis enemyHasAegis recentDeaths enemyKillsLastMinute
-damageFromHeroesLast6Seconds enemiesHittingMe enemySpellsOnMeLast10 underSmoke'''.split()
+damageFromHeroesLast6Seconds enemiesHittingMe enemySpellsOnMeLast10 underSmoke
+intentMoves intentAttacks intentCasts intentDestinationDistance intentDestinationAdvance intentDestinationOnEnemySide
+allyPingsNearLast10 ownPingsLast10'''.split()
         self.assertEqual(list(FIELDS), expected)
-        self.assertEqual(len(FIELDS), 54)
+        self.assertEqual(len(FIELDS), 62)
+
+    def test_v51_intent_answers_the_intent_unknown_and_kit_effects_reach_the_roster(self):
+        context = fixture()
+        context['situations'][0]['situation']['intentMoves'] = 3
+        context['heroes'][0]['kitEffects'] = ['escape', 'stun']
+        request = project_situated_scene(context, 0)
+        self.assertNotIn('intent', request['unknowns'])
+        self.assertEqual(request['facts'][-2]['value']['intenção']['intentMoves'], 3)
+        self.assertEqual(request['facts'][-1]['value'][0]['kitEffects'], ['escape', 'stun'])
+        self.assertNotIn('kitEffects', request['facts'][-1]['value'][1])
+
+    def test_context_without_v51_fields_projects_exactly_as_before(self):
+        context = fixture()
+        situation = context['situations'][0]['situation']
+        for field in V51_FIELDS:
+            del situation[field]
+        request = project_situated_scene(context, 0)
+        self.assertNotIn('intenção', request['facts'][-2]['value'])
+        self.assertNotIn('comunicação', request['facts'][-2]['value'])
+        self.assertIn('intent', request['unknowns'])
 
     def test_hidden_rejected_at_every_depth(self):
         for path in ('root', 'decision', 'situation', 'nested', 'roles'):

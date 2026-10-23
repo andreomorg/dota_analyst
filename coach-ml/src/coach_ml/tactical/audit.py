@@ -44,11 +44,12 @@ def _validate_v5(request):
     _validate_request(legacy)
     value = by_id['situation']['value']
     situation = None if value is None else {
-        field: value[group][field] for field, (group, _, _) in FIELDS.items()}
+        field: value[group][field] for field, (group, _, _) in FIELDS.items() if field in value.get(group, {})}
     roster = by_id['roster']['value']
     require(all(h['team'] in ('aliado', 'inimigo') for h in roster), 'Invalid roster relation')
     heroes = [{'heroId': h['heroId'], 'name': h['name'], 'roles': h['roles'],
-               'team': 'radiant' if h['team'] == 'aliado' else 'dire'} for h in roster]
+               'team': 'radiant' if h['team'] == 'aliado' else 'dire',
+               **({'kitEffects': h['kitEffects']} if 'kitEffects' in h else {})} for h in roster]
     expected = project_situated_scene({
         'schemaVersion': 5, 'decision': {**legacy, 'scenes': [{'atOrBeforeAnchor': source}]},
         'heroes': heroes, 'situations': [{'anchorSeconds': request['anchorSeconds'],

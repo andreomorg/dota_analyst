@@ -60,7 +60,23 @@ FIELDS = {
     'enemiesHittingMe': ('agora', 'contagem', 'inimigos atacando você'),
     'enemySpellsOnMeLast10': ('agora', 'contagem', 'magias inimigas sobre você nos últimos 10 segundos'),
     'underSmoke': ('agora', 'sim/não', 'sob efeito de fumaça'),
+    # v5.1: the player's own orders in the last 10 s and the team's pings (the observable intent and communication).
+    'intentMoves': ('intenção', 'contagem', 'ordens de movimento nos últimos 10 s'),
+    'intentAttacks': ('intenção', 'contagem', 'ordens de ataque nos últimos 10 s'),
+    'intentCasts': ('intenção', 'contagem', 'ordens de magia/item nos últimos 10 s'),
+    'intentDestinationDistance': ('intenção', 'unidades do mapa', 'distância até o último destino clicado'),
+    'intentDestinationAdvance': ('intenção', 'unidades do mapa', 'quanto o destino avança rumo à base inimiga'),
+    'intentDestinationOnEnemySide': ('intenção', 'sim/não', 'destino no lado inimigo'),
+    'allyPingsNearLast10': ('comunicação', 'contagem', 'pings de aliados perto de você nos últimos 10 s'),
+    'ownPingsLast10': ('comunicação', 'contagem', 'seus pings nos últimos 10 s'),
 }
+V51_FIELDS = frozenset(('intentMoves', 'intentAttacks', 'intentCasts', 'intentDestinationDistance',
+                        'intentDestinationAdvance', 'intentDestinationOnEnemySide', 'allyPingsNearLast10',
+                        'ownPingsLast10'))
+# Facts whose presence removes a default unknown: a group with any non-null value answers it.
+UNKNOWN_SOURCES = {'visibility': 'inimigos vistos', 'health-mana': 'você', 'cooldowns': 'prontidão',
+                   'inventory-readiness': 'prontidão', 'creep-waves': 'rota', 'intent': 'intenção'}
+HERO_KEYS = ('heroId', 'name', 'team', 'roles', 'kitEffects')
 
 
 def _reject_hidden(value):
@@ -103,21 +119,23 @@ def project_situated_scene(context, index):
         # Values only: units and meanings cost tokens on every example; the names and the prompt's legend carry them.
         groups = {}
         for field, (group, _, _) in FIELDS.items():
+            # v5.1 fields only when the context has them: older contexts project exactly as before.
+            if field in V51_FIELDS and field not in situation:
+                continue
             groups.setdefault(group, {})[field] = situation.get(field)
         # A group is available even when its recorded value is false or zero.
         available = {group for field, (group, _, _) in FIELDS.items()
                      if situation.get(field) is not None}
-        sources = {'visibility': 'inimigos vistos', 'health-mana': 'você',
-                   'cooldowns': 'prontidão', 'inventory-readiness': 'prontidão',
-                   'creep-waves': 'rota'}
         request['unknowns'] = [item for item in request['unknowns']
-                               if sources.get(item) not in available]
+                               if UNKNOWN_SOURCES.get(item) not in available]
 
     heroes = context['heroes']
     require(type(heroes) is list and len(heroes) in (0, 10), 'Expected ten heroes or unavailable catalog')
     ids = set()
     for hero in heroes:
-        _keys(hero, ('heroId', 'name', 'team', 'roles'))
+        _keys(hero, HERO_KEYS)
+        kit = hero.get('kitEffects')
+        require(kit is None or type(kit) is list and all(type(effect) is str for effect in kit), 'Invalid kit effects')
         require(type(hero['heroId']) is int and hero['heroId'] > 0 and hero['heroId'] not in ids,
                 'Duplicate or invalid roster hero')
         ids.add(hero['heroId'])
@@ -126,9 +144,12 @@ def project_situated_scene(context, index):
                 and all(type(role) is str for role in hero['roles']), 'Invalid catalog entry')
     viewer = next((hero for hero in heroes if hero['heroId'] == decision['heroId']), None)
     require(not heroes or viewer is not None, 'Player missing from roster')
+    # kitEffects only when the context carries it: contexts from before v5.1 project exactly as they did.
     roster = [{'heroId': hero['heroId'], 'name': hero['name'],
                'team': 'aliado' if hero['team'] == viewer['team'] else 'inimigo',
-               'roles': copy.deepcopy(hero['roles'])} for hero in heroes]
+               'roles': copy.deepcopy(hero['roles']),
+               **({'kitEffects': copy.deepcopy(hero['kitEffects'])} if 'kitEffects' in hero else {})}
+              for hero in heroes]
     request['facts'].extend([
         {'id': 'situation', 'kind': 'anchor-situation', 'sampleSeconds': anchor,
          'value': groups, 'source': 'situated-decision-document:situation',

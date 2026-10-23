@@ -2,7 +2,7 @@
 from ..core.json import digest
 from ..core.validation import require
 from .contracts import validate_candidate
-from .situated import FIELDS
+from .situated import FIELDS, V51_FIELDS
 
 
 def target_for(request):
@@ -92,7 +92,10 @@ def target_for(request):
         candidate['exercise']['completionCriterion'] = (
             'Registrar uma condição verificável que separa A de B, sem escolher por resultado posterior.')
     else:
-        missing_fields = [field for field in FIELDS if get(field) is None]
+        # Only fields the scene has (a v5.1 field absent from an older context is not a gap of that scene).
+        present = ({field for values in situation.values() for field in values} if situation
+                   else set(FIELDS) - V51_FIELDS)
+        missing_fields = [field for field in FIELDS if field in present and get(field) is None]
         gap = ', '.join(missing_fields[:5]) if missing_fields else 'condições que distinguem as ações'
         candidate['opportunity'] = f'{opening} quais dados faltam para comparar duas ações na âncora.'
         candidate['exercise']['steps'] = [

@@ -13,6 +13,9 @@ namespace DotaAnalyst.Server.Controllers.Internal;
 public sealed class CoachingController(ReviewCoachingHandler handler, GetSituatedDecisionsHandler situated,
     IOptions<CoachMlOptions> settings) : ControllerBase
 {
+    private static readonly System.Text.Json.JsonSerializerOptions V1DecisionJson =
+        new(System.Text.Json.JsonSerializerDefaults.Web);
+
     /// <summary>The v5 decision context (v1 scenes + the team-visible situation at each anchor) of one hero in a kept
     /// replay, for the local coach corpus.</summary>
     [HttpGet("situated-decisions/{matchId}/{heroId}")]
@@ -26,7 +29,16 @@ public sealed class CoachingController(ReviewCoachingHandler handler, GetSituate
         try
         {
             var result = await situated.HandleAsync(id, heroId, cancellationToken);
-            return result is null ? NotFound() : Ok(result);
+            if (result is null) return NotFound();
+            // The decision block stays byte-compatible with the v1 decision documents (numeric enums), which the
+            // existing projection reads; heroes and situations follow the API's text enums (v5 contract).
+            return Ok(new
+            {
+                result.SchemaVersion,
+                Decision = System.Text.Json.JsonSerializer.SerializeToElement(result.Decision, V1DecisionJson),
+                result.Heroes,
+                result.Situations,
+            });
         }
         catch (Exception ex) when (ex is InvalidOperationException or InvalidDataException or System.Text.Json.JsonException
             or NotSupportedException)

@@ -41,9 +41,25 @@ aheadOfOwnWave waveClashPoint waveClashPastOwnTower ownBuildingsUnderAttack team
 isNight secondsSinceRoshanKill roshanAlive hasAegis enemyHasAegis recentDeaths enemyKillsLastMinute
 damageFromHeroesLast6Seconds enemiesHittingMe enemySpellsOnMeLast10 underSmoke
 intentMoves intentAttacks intentCasts intentDestinationDistance intentDestinationAdvance intentDestinationOnEnemySide
-allyPingsNearLast10 ownPingsLast10'''.split()
+allyPingsNearLast10 ownPingsLast10 towerPathLength towerStraightDistance towerDetour towerSeenShare
+towerNearestSeenEnemy allyPathLength allyStraightDistance allyDetour allySeenShare allyNearestSeenEnemy'''.split()
         self.assertEqual(list(FIELDS), expected)
-        self.assertEqual(len(FIELDS), 62)
+        self.assertEqual(len(FIELDS), 72)
+
+    def test_escape_routes_answer_safe_path_and_survive_the_audit_round_trip(self):
+        from coach_ml.tactical.audit import validate_request
+        context = fixture()
+        route = {'pathLength': 1356, 'straightDistance': 1242, 'detour': 1.09, 'seenShare': 1,
+                 'nearestSeenEnemyToPath': None}
+        context['situations'][0]['escape'] = {'toTower': route, 'toAlly': None}
+        request = project_situated_scene(context, 0)
+        self.assertNotIn('safe-path', request['unknowns'])
+        routes = request['facts'][-2]['value']['rotas']
+        self.assertEqual((routes['towerPathLength'], routes['allyPathLength']), (1356, None))
+        self.assertIs(validate_request(request, 'tactical-review-v5'), request)
+        context['situations'][0]['escape']['toAlly'] = {'pathLength': 5}
+        with self.assertRaises(AuditError):
+            project_situated_scene(context, 0)
 
     def test_v51_intent_answers_the_intent_unknown_and_kit_effects_reach_the_roster(self):
         context = fixture()

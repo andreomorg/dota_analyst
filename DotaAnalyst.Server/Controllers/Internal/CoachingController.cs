@@ -10,8 +10,32 @@ namespace DotaAnalyst.Server.Controllers.Internal;
 [ApiController]
 [ApiExplorerSettings(IgnoreApi = true)]
 [Route("api/internal/coach")]
-public sealed class CoachingController(ReviewCoachingHandler handler, IOptions<CoachMlOptions> settings) : ControllerBase
+public sealed class CoachingController(ReviewCoachingHandler handler, GetSituatedDecisionsHandler situated,
+    IOptions<CoachMlOptions> settings) : ControllerBase
 {
+    /// <summary>The v5 decision context (v1 scenes + the team-visible situation at each anchor) of one hero in a kept
+    /// replay, for the local coach corpus.</summary>
+    [HttpGet("situated-decisions/{matchId}/{heroId}")]
+    public async Task<IActionResult> SituatedDecisions(long matchId, int heroId, CancellationToken cancellationToken)
+    {
+        var options = settings.Value;
+        if (!options.Enabled) return NotFound();
+        if (!MachineKey.IsValid(Request, options.ApiKey)) return Unauthorized();
+        if (!MatchId.TryCreate(matchId, out var id) || heroId <= 0)
+            return Problem(statusCode: 400, title: "Invalid match or hero ID.");
+        try
+        {
+            var result = await situated.HandleAsync(id, heroId, cancellationToken);
+            return result is null ? NotFound() : Ok(result);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or InvalidDataException or System.Text.Json.JsonException
+            or NotSupportedException)
+        {
+            // No metrics/role/timeline for the hero, or an unreadable document: the context cannot be built.
+            return Problem(statusCode: 422, title: "The kept replay lacks what the coaching context needs.");
+        }
+    }
+
     /// <summary>Provides bounded evidence from an already stored replay to the Python worker.</summary>
     [HttpGet("contexts/{matchId}/{heroId}")]
     public Task<IActionResult> Context(long matchId, int heroId, CancellationToken cancellationToken)

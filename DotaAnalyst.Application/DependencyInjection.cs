@@ -23,6 +23,7 @@ public static class DependencyInjection
         services.AddScoped<DotaAnalyst.Application.Catalogs.GetItemHandler>();
         services.AddScoped<GetRecentMatchesHandler>();
         services.AddScoped<ReviewCoachingHandler>();
+        services.AddScoped<GetSituatedDecisionsHandler>();
         services.AddScoped<GameCatalogLoader>();
         services.AddScoped<GetModelSamplesHandler>();
         services.AddScoped<GetPositionEstimatesHandler>();

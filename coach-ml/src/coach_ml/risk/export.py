@@ -7,6 +7,8 @@ import json
 import os
 import sys
 import time
+from collections import deque
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import HTTPRedirectHandler, Request, build_opener
@@ -215,8 +217,31 @@ def cell(value):
     return str(value)
 
 
+def fetched(chosen, fetch, sleep, interval, workers):
+    """(index, match, body) in manifest order. With workers > 1, up to that many requests run at once (the API
+    computes one match per request on one core); requests still start at least `interval` apart."""
+    if workers == 1:
+        for index, match in enumerate(chosen):
+            yield index, match, fetch_with_retry(fetch, match['matchId'], sleep)
+            if index + 1 < len(chosen):
+                sleep(interval)
+        return
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        running = deque()
+        for index, match in enumerate(chosen):
+            running.append((index, match, pool.submit(fetch_with_retry, fetch, match['matchId'], sleep)))
+            if len(running) == workers:
+                done_index, done_match, future = running.popleft()
+                yield done_index, done_match, future.result()
+            if index + 1 < len(chosen):
+                sleep(interval)
+        while running:
+            done_index, done_match, future = running.popleft()
+            yield done_index, done_match, future.result()
+
+
 def export(matches, fetch, output, partitions=None, limit=None, interval=1.05, sleep=time.sleep, log=print,
-           kind='death-risk'):
+           kind='death-risk', workers=1):
     """Fetch every match of the chosen partitions and write <partition>.csv.gz plus export-manifest.json (last)."""
     require(kind in LABELS, f'Unknown kind {kind}')
     columns = columns_of(FEATURE_VERSION, kind)
@@ -228,14 +253,14 @@ def export(matches, fetch, output, partitions=None, limit=None, interval=1.05, s
               and (partitions is None or match['split'] in partitions)]
     chosen = chosen[:limit] if limit else chosen
     require(chosen, 'No matches to export')
+    require(type(workers) is int and workers >= 1, 'Workers must be a positive integer')
     output.mkdir(parents=True)
 
     writers, files, stats = {}, {}, {}
     skipped = {'noDocument': [], 'outdated': []}
     try:
-        for index, match in enumerate(chosen):
+        for index, match, body in fetched(chosen, fetch, sleep, interval, workers):
             match_id, split = match['matchId'], match['split']
-            body = fetch_with_retry(fetch, match_id, sleep)
             if isinstance(body, str):
                 skipped[body].append(match_id)
             else:
@@ -253,8 +278,6 @@ def export(matches, fetch, output, partitions=None, limit=None, interval=1.05, s
                     stats[split]['labels'][label] = stats[split]['labels'].get(label, 0) + count
             if (index + 1) % 50 == 0:
                 log(json.dumps({'exported': index + 1, 'of': len(chosen)}))
-            if index + 1 < len(chosen):
-                sleep(interval)
     finally:
         for stream in files.values():
             stream.close()
@@ -309,10 +332,13 @@ def main(argv=None):
     parser.add_argument('--partition', action='append', help='Only these partitions (repeatable)')
     parser.add_argument('--limit', type=int, help='Only the first N matches (smoke run)')
     parser.add_argument('--kind', choices=sorted(LABELS), default='death-risk', help='Which model the samples are for')
+    parser.add_argument('--workers', type=int, default=1,
+                        help='Requests at once (the API computes each match on one core); rows keep the manifest order')
     args = parser.parse_args(argv)
     try:
         fetch = HttpFetcher(args.api_url, os.environ.get(args.key_env, ''), args.kind)
-        summary = export(read_manifest(args.manifest), fetch, args.output, args.partition, args.limit, kind=args.kind)
+        summary = export(read_manifest(args.manifest), fetch, args.output, args.partition, args.limit, kind=args.kind,
+                         workers=args.workers)
     except (AuditError, OSError) as exc:
         print(json.dumps({'error': str(exc)}), file=sys.stderr)
         return 2

@@ -88,6 +88,21 @@ class RiskExportTests(unittest.TestCase):
         export(MATCHES, api, self.output, sleep=lambda _s: None, log=lambda _m: None)
         self.assertEqual(api.calls, ['1', '2', '3', '4'])
 
+    def test_parallel_workers_write_the_same_files_in_manifest_order(self):
+        def answers():
+            return FakeApi({'1': (200, sample_set('1', [row(0, False), row(10, True)]), None),
+                            '2': (404, None, None),
+                            '3': (200, sample_set('3', [row(0, False)]), None),
+                            '4': (200, sample_set('4', [row(20, False)]), None)})
+        one = self.run_export(answers())
+        many_output = Path(self.folder.name) / 'parallel'
+        many = export(MATCHES, answers(), many_output, partitions=['train', 'validation-new'], sleep=lambda _s: None,
+                      log=lambda _m: None, workers=3)
+        self.assertEqual(many, one)
+        with self.assertRaises(AuditError):
+            export(MATCHES, answers(), Path(self.folder.name) / 'zero', sleep=lambda _s: None, log=lambda _m: None,
+                   workers=0)
+
     def test_existing_output_is_refused(self):
         self.output.mkdir()
         with self.assertRaises(AuditError):

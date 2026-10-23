@@ -26,7 +26,7 @@ public sealed class CoachingController(ReviewCoachingHandler handler, IOptions<C
     {
         var options = settings.Value;
         if (!options.Enabled) return NotFound();
-        if (!MachineKey.IsValid(Request, options)) return Unauthorized();
+        if (!MachineKey.IsValid(Request, options.ApiKey)) return Unauthorized();
         if (!MatchId.TryCreate(matchId, out var id) || heroId <= 0)
             return Problem(statusCode: 400, title: "Invalid match or hero ID.");
         try

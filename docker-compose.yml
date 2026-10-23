@@ -25,11 +25,14 @@ services:
       # GitHub's limit from 60 to 5,000 calls an hour.
       GameData__SyncEnabled: "${GAME_DATA_SYNC:-true}"
       GameData__GitHubToken: "${GITHUB_TOKEN:-}"
+      Maintenance__Enabled: "${MAINTENANCE_ENABLED:-false}"
+      Maintenance__ApiKey: "${MAINTENANCE_API_KEY:-}"
       CoachMl__Enabled: "${COACH_ML_ENABLED:-false}"
       CoachMl__BaseUrl: "http://coach-ml:8090/"
       CoachMl__ApiKey: "${COACH_ML_API_KEY:-}"
-    # No depends_on replay-parser on purpose: the API must work without it (the laning phase just shows as
-    # unavailable), and waiting for its health check would let a broken parser keep the whole site down.
+    # No depends_on replay-parser on purpose: the API must work without it (replay-derived analysis is
+    # unavailable). The parser supplies whole-match laning, timeline, maps, metrics and comparison-base data;
+    # waiting for its health check would let a broken parser keep the whole site down.
     depends_on:
       # Waits for PostgreSQL to accept connections (its health check), not just for its container to start.
       db:
@@ -73,6 +76,28 @@ services:
       replay-parser:
         condition: service_healthy
     restart: unless-stopped
+  # Explicit batch: docker compose run --rm refresh. Inputs and resumable output live under work/.
+  refresh:
+    image: python:3.12.15-slim
+    profiles: [refresh]
+    command: ["python", "-B", "/tools/replay-refresh/refresh.py"]
+    environment:
+      MAINTENANCE_API_KEY: "${MAINTENANCE_API_KEY:-}"
+      COACH_ML_API_KEY: "${COACH_ML_API_KEY:-}"
+      MATCH_IDS: "${MATCH_IDS:-/work/replay-refresh/match-ids.txt}"
+      LOG: "${REPLAY_REFRESH_LOG:-/work/replay-refresh/refresh-log.jsonl}"
+      WORKERS: "${REFRESH_WORKERS:-1}"
+      PREFETCH_WORKERS: "${PREFETCH_WORKERS:-0}"
+      PREFETCH_AHEAD: "${PREFETCH_AHEAD:-12}"
+    volumes:
+      - ./tools/replay-refresh:/tools/replay-refresh:ro
+      - ./work:/work
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: "no"
+
+
   coach-ml:
     build:
       context: ./coach-ml
@@ -110,7 +135,8 @@ services:
       retries: 10
     restart: unless-stopped
 
-  # Go service that reads the laning phase from a replay (replay-parser/). Called only by the API (and, in production,
+  # Go service that reads the whole replay: laning, timeline, maps, metrics and comparison-base data (replay-parser/).
+  # Called only by the API (and, in production,
   # through the ngrok tunnel below), never by the browser.
   replay-parser:
     build: ./replay-parser

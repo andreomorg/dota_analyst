@@ -10,7 +10,8 @@ namespace DotaAnalyst.Server.Controllers.Internal;
 [ApiController]
 [ApiExplorerSettings(IgnoreApi = true)]
 [Route("api/internal/gold-facts")]
-public sealed class GoldFactsController(IArchivedReplaySource replays, IOptions<CoachMlOptions> settings) : ControllerBase
+public sealed class GoldFactsController(IArchivedReplaySource replays, IOptions<CoachMlOptions> settings,
+    IOptions<MaintenanceOptions> maintenanceSettings) : ControllerBase
 {
     // The handler has only the archive dependency; constructing it here avoids changing the shared DI registry.
     private readonly GetGoldFactsHandler handler = new(replays);
@@ -20,8 +21,10 @@ public sealed class GoldFactsController(IArchivedReplaySource replays, IOptions<
         [FromQuery] int windowSeconds = 30, CancellationToken cancellationToken = default)
     {
         var options = settings.Value;
-        if (!options.Enabled) return NotFound();
-        if (string.IsNullOrWhiteSpace(options.ApiKey) || !MachineKey.IsValid(Request, options)) return Unauthorized();
+        var maintenance = maintenanceSettings.Value;
+        if (!options.Enabled && !maintenance.Enabled) return NotFound();
+        if (!(options.Enabled && MachineKey.IsValid(Request, options.ApiKey)) &&
+            !(maintenance.Enabled && MachineKey.IsValid(Request, maintenance.ApiKey))) return Unauthorized();
         if (!MatchId.TryCreate(matchId, out var id)) return Problem(statusCode: 400, title: "Invalid match ID.");
         try
         {

@@ -14,7 +14,7 @@ namespace DotaAnalyst.Server.Controllers.Internal;
 [ApiExplorerSettings(IgnoreApi = true)]
 [Route("api/internal")]
 public sealed class ModelSamplesController(
-    GetModelSamplesHandler samples, RefreshReplayHandler refresh, GetPositionEstimatesHandler positions,
+    GetModelSamplesHandler samples, GetPositionEstimatesHandler positions,
     MeasureVisionHandler vision, IReplayDocumentReader documents, IOptions<CoachMlOptions> settings) : ControllerBase
 {
     /// <summary>The vision model against the real fog of war of a replay document handed in (a fresh parse of the
@@ -25,7 +25,7 @@ public sealed class ModelSamplesController(
     {
         var options = settings.Value;
         if (!options.Enabled) return NotFound();
-        if (!MachineKey.IsValid(Request, options)) return Unauthorized();
+        if (!MachineKey.IsValid(Request, options.ApiKey)) return Unauthorized();
         using var reader = new StreamReader(Request.Body);
         var document = await reader.ReadToEndAsync(cancellationToken);
         try
@@ -59,35 +59,6 @@ public sealed class ModelSamplesController(
             return (result.Status, result.Estimates);
         });
 
-    /// <summary>Parses a match's replay again so its kept document has the newest sections (never downgrades a saved
-    /// analysis: a gone replay changes nothing).</summary>
-    [HttpPost("replays/{matchId}/refresh")]
-    public Task<IActionResult> Refresh(long matchId, CancellationToken cancellationToken) =>
-        Replay(matchId, id => refresh.HandleAsync(id, cancellationToken));
-
-    /// <summary>Downloads a match's replay into the parser's cache ahead of a refresh (a batch keeps the parse slots
-    /// parsing instead of waiting on Valve). Saves nothing.</summary>
-    [HttpPost("replays/{matchId}/prefetch")]
-    public Task<IActionResult> Prefetch(long matchId, CancellationToken cancellationToken) =>
-        Replay(matchId, id => refresh.PrefetchAsync(id, cancellationToken));
-
-    private async Task<IActionResult> Replay(long matchId, Func<MatchId, Task<RefreshReplayResult>> handle)
-    {
-        var options = settings.Value;
-        if (!options.Enabled) return NotFound();
-        if (!MachineKey.IsValid(Request, options)) return Unauthorized();
-        if (!MatchId.TryCreate(matchId, out var id)) return Problem(statusCode: 400, title: "Invalid match ID.");
-        try
-        {
-            var result = await handle(id);
-            return Ok(new { status = result });
-        }
-        catch (DotaAnalyst.Application.Abstractions.StorageUnavailableException)
-        {
-            return Problem(statusCode: 503, title: "The database is unavailable.");
-        }
-    }
-
     /// <summary>The death-risk examples of one kept replay.</summary>
     [HttpGet("death-risk/samples/{matchId}")]
     public Task<IActionResult> DeathRisk(long matchId, CancellationToken cancellationToken) =>
@@ -109,7 +80,7 @@ public sealed class ModelSamplesController(
     {
         var options = settings.Value;
         if (!options.Enabled) return NotFound();
-        if (!MachineKey.IsValid(Request, options)) return Unauthorized();
+        if (!MachineKey.IsValid(Request, options.ApiKey)) return Unauthorized();
         if (!MatchId.TryCreate(matchId, out var id)) return Problem(statusCode: 400, title: "Invalid match ID.");
         try
         {

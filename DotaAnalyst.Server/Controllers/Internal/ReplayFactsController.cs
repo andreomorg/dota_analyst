@@ -11,7 +11,8 @@ namespace DotaAnalyst.Server.Controllers.Internal;
 [ApiController]
 [ApiExplorerSettings(IgnoreApi = true)]
 [Route("api/internal/replay-facts")]
-public sealed class ReplayFactsController(GetReplayFactsHandler facts, IOptions<CoachMlOptions> settings) : ControllerBase
+public sealed class ReplayFactsController(GetReplayFactsHandler facts, IOptions<CoachMlOptions> settings,
+    IOptions<MaintenanceOptions> maintenanceSettings) : ControllerBase
 {
     /// <summary>The hero's state at the second, the events of the window before it and, with includeFinal at the end of
     /// the match, its whole-match facts.</summary>
@@ -20,8 +21,10 @@ public sealed class ReplayFactsController(GetReplayFactsHandler facts, IOptions<
         [FromQuery] int windowSeconds = 30, [FromQuery] bool includeFinal = false, CancellationToken cancellationToken = default)
     {
         var options = settings.Value;
-        if (!options.Enabled) return NotFound();
-        if (!MachineKey.IsValid(Request, options)) return Unauthorized();
+        var maintenance = maintenanceSettings.Value;
+        if (!options.Enabled && !maintenance.Enabled) return NotFound();
+        if (!(options.Enabled && MachineKey.IsValid(Request, options.ApiKey)) &&
+            !(maintenance.Enabled && MachineKey.IsValid(Request, maintenance.ApiKey))) return Unauthorized();
         if (!MatchId.TryCreate(matchId, out var id)) return Problem(statusCode: 400, title: "Invalid match ID.");
         try
         {

@@ -63,6 +63,11 @@ if (forwardedHeadersEnabled)
     });
 }
 
+builder.Services.AddOptions<DotaAnalyst.Server.MaintenanceOptions>()
+    .Bind(builder.Configuration.GetSection("Maintenance"))
+    .Validate(options => !options.Enabled || (!string.IsNullOrWhiteSpace(options.ApiKey) && options.ApiKey.Length >= 16),
+        "Maintenance:ApiKey must contain at least 16 characters when enabled.")
+    .ValidateOnStart();
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 

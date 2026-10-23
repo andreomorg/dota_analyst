@@ -24,7 +24,7 @@ def validate_request(request, profile=None):
 
 
 def _validate_v5(request):
-    from .situated import FIELDS, _reject_hidden, project_situated_scene
+    from .situated import FIELDS, _reject_hidden, project_situated_scene, unflatten_escape
     _reject_hidden(request)
     facts = request['facts']
     by_id = {f['id']: f for f in facts}
@@ -44,15 +44,20 @@ def _validate_v5(request):
     _validate_request(legacy)
     value = by_id['situation']['value']
     situation = None if value is None else {
-        field: value[group][field] for field, (group, _, _) in FIELDS.items()}
+        field: value[group][field] for field, (group, _, _) in FIELDS.items() if field in value.get(group, {})}
+    snapshot = {'anchorSeconds': request['anchorSeconds'], 'situation': situation}
+    if value is not None and 'rotas' in value:
+        # The routes travel as their own snapshot; flattened into the 'rotas' group by the projection.
+        snapshot['escape'] = unflatten_escape(value['rotas'])
+        snapshot['situation'] = {k: v for k, v in situation.items() if FIELDS[k][0] != 'rotas'}
     roster = by_id['roster']['value']
     require(all(h['team'] in ('aliado', 'inimigo') for h in roster), 'Invalid roster relation')
     heroes = [{'heroId': h['heroId'], 'name': h['name'], 'roles': h['roles'],
-               'team': 'radiant' if h['team'] == 'aliado' else 'dire'} for h in roster]
+               'team': 'radiant' if h['team'] == 'aliado' else 'dire',
+               **({'kitEffects': h['kitEffects']} if 'kitEffects' in h else {})} for h in roster]
     expected = project_situated_scene({
         'schemaVersion': 5, 'decision': {**legacy, 'scenes': [{'atOrBeforeAnchor': source}]},
-        'heroes': heroes, 'situations': [{'anchorSeconds': request['anchorSeconds'],
-                                          'situation': situation}]}, 0)
+        'heroes': heroes, 'situations': [snapshot]}, 0)
     require(canonical(expected) == canonical(request), 'Noncanonical situated request')
     return request
 

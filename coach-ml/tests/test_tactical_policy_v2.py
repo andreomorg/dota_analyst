@@ -34,6 +34,12 @@ CASES = [
     ({'ownBuildingsUnderAttack': 2, 'teleportReady': True}, ['2']),
     ({'ultimateReady': True, 'visibleEnemiesWithinFightRange': 2}, ['2']),
     ({'roshanAlive': True, 'teamNetWorthLead': 3456, 'hasAegis': False}, ['3456']),
+    # v5.1: orders, escape routes, pings.
+    ({'intentDestinationOnEnemySide': True, 'intentDestinationAdvance': 1800, 'missingEnemies': 3,
+      'towerSeenShare': .25}, ['1800', '3', '25%']),
+    ({'healthShare': .45, 'towerPathLength': 2400, 'towerNearestSeenEnemy': 700, 'allyPathLength': 900},
+     ['45%', '2400', '700', '900']),
+    ({'allyPingsNearLast10': 3, 'nearestAllyDistance': 2100}, ['3', '2100']),
 ]
 
 
@@ -63,7 +69,9 @@ class PolicyTests(unittest.TestCase):
     def test_null_required_fields_do_not_trigger(self):
         required = [list(CASES[0][0]), ['healthShare', 'visibleEnemiesWithinFightRange'],
                     list(CASES[2][0]), ['onEnemySide', 'nearestAllyDistance', 'missingEnemies'],
-                    list(CASES[4][0]), list(CASES[5][0]), list(CASES[6][0]), list(CASES[7][0])]
+                    list(CASES[4][0]), list(CASES[5][0]), list(CASES[6][0]), list(CASES[7][0]),
+                    ['intentDestinationOnEnemySide', 'missingEnemies', 'towerSeenShare'],
+                    ['healthShare', 'towerNearestSeenEnemy'], list(CASES[10][0])]
         for index, fields in enumerate(required):
             for field in fields:
                 values = {**CASES[index][0], field: None}

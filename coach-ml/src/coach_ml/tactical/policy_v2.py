@@ -60,6 +60,20 @@ def target_for(request):
          f"com Roshan vivo, vantagem de {fmt('teamNetWorthLead')} de patrimônio do time e sem Aegis próprio",
          'Preparar Roshan', 'Aplicar pressão em outro local', 'há recursos, cobertura e acesso para preparar Roshan',
          'outro objetivo está mais exposto do que o Roshan'),
+        # v5.1 rules: they read fields older contexts lack, so they never fire there (older targets reproduce).
+        (get('intentDestinationOnEnemySide') is True and missing is not None and missing >= 3
+         and num('towerSeenShare') is not None and num('towerSeenShare') < .5,
+         f"indo para um destino {fmt('intentDestinationAdvance')} unidades adiante no lado inimigo, com {fmt('missingEnemies')} inimigos sumidos e {fmt('towerSeenShare', True)} da rota de volta vista pelo time",
+         'Seguir para o destino', 'Esperar informação antes de avançar', 'o destino compensa voltar por uma rota pouco vista',
+         'esperar alguns segundos traz visão dos inimigos sumidos'),
+        (num('towerNearestSeenEnemy') is not None and num('towerNearestSeenEnemy') <= 1200 and hp is not None and hp <= .5,
+         f"com {fmt('healthShare', True)} de vida e a rota até a torre ({fmt('towerPathLength')} unidades) passando a {fmt('towerNearestSeenEnemy')} de um inimigo visto",
+         'Voltar pela rota da torre', 'Ir até o aliado mais próximo', 'a rota da torre pode ser percorrida antes do inimigo visto chegar',
+         f"a rota até o aliado ({fmt('allyPathLength')} unidades) passa mais longe dos inimigos vistos"),
+        (num('allyPingsNearLast10') is not None and num('allyPingsNearLast10') >= 2 and distance is not None and distance > 1500,
+         f"com {fmt('allyPingsNearLast10')} pings de aliados perto de você nos últimos 10 s e o aliado mais próximo a {fmt('nearestAllyDistance')} unidades",
+         'Responder aos pings', 'Manter a tarefa atual', 'os pings pedem algo alcançável com os recursos prontos',
+         'a tarefa atual ainda rende mais do que o pedido do aliado'),
     ]
     rule_id, details = 'R0', None
     for index, (applies, *content) in enumerate(rules, 1):

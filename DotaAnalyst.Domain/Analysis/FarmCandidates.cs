@@ -1,5 +1,6 @@
 using DotaAnalyst.Domain.Matches;
 using DotaAnalyst.Domain.Replays;
+using DotaAnalyst.Domain.Maps;
 
 namespace DotaAnalyst.Domain.Analysis;
 
@@ -24,7 +25,7 @@ public static class FarmCandidates
         var allies = positions.Where(p => p.HeroId != heroId && teams.TryGetValue(p.HeroId, out var allyTeam) && allyTeam == team)
             .Select(p => p.At(snapshot.Seconds, tolerance: 0)).Where(p => p is not null).Select(p => p!.Value).ToList();
         var ownRawTeam = team == Team.Radiant ? 2 : 3;
-        double Distance(int x, int y, PositionSample p) => Math.Sqrt(Math.Pow((double)x - p.X, 2) + Math.Pow((double)y - p.Y, 2));
+        double Distance(int x, int y, PositionSample p) => new MapPoint(x, y).DistanceTo(new MapPoint(p.X, p.Y));
         var candidates = snapshot.Units.Where(u => u.RawTeam != ownRawTeam && u.SeenBy(team) == true)
             .Select(u =>
             {

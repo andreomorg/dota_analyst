@@ -1,4 +1,5 @@
 using DotaAnalyst.Domain.Matches;
+using DotaAnalyst.Domain.Maps;
 
 namespace DotaAnalyst.Domain.Replays;
 
@@ -103,7 +104,7 @@ public sealed class HeroHeatmap
 
             // An ally counts while alive at about the same second (a dead hero has no sample).
             var close = allies.Count(ally => ally.At(sample.Seconds, tolerance: 1) is { } other
-                && Math.Sqrt(Math.Pow(other.X - sample.X, 2) + Math.Pow(other.Y - sample.Y, 2)) <= Analysis.MatchMetricsCalculator.AllyRadius);
+                && new MapPoint(other.X, other.Y).IsWithin(new MapPoint(sample.X, sample.Y), Analysis.MatchMetricsCalculator.AllyRadius));
             near[phase] += close >= 1 ? 1 : 0;
             grouped[phase] += close >= 2 ? 1 : 0;
         }

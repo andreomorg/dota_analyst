@@ -1,6 +1,7 @@
 using DotaAnalyst.Domain.Analysis;
 using DotaAnalyst.Domain.Replays;
 using DotaAnalyst.Domain.Stats;
+using DotaAnalyst.Domain.Maps;
 
 namespace DotaAnalyst.Domain.Coaching;
 
@@ -57,7 +58,7 @@ public static class CoachingEpisodeBuilder
     }
 
     private static double Distance(double x, double y, double otherX, double otherY) =>
-        Math.Sqrt(Math.Pow(x - otherX, 2) + Math.Pow(y - otherY, 2));
+        new MapPoint(x, y).DistanceTo(new MapPoint(otherX, otherY));
 
     private static CoachingEconomyInterval? EconomyAt(MatchTimeline timeline, int heroId, int seconds)
     {

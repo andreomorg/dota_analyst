@@ -184,7 +184,7 @@ public sealed class GameMap
                 foreach (var index in list)
                 {
                     var tree = Trees[index];
-                    if (down?.Contains(index) != true && Math.Pow(tree.X - x, 2) + Math.Pow(tree.Y - y, 2) <= radius * radius)
+                    if (down?.Contains(index) != true && new MapPoint(tree.X, tree.Y).IsWithin(new MapPoint(x, y), radius))
                     {
                         found.Add(index);
                     }
@@ -206,7 +206,7 @@ public sealed class GameMap
     public MapArea? PitAt(double x, double y) => BossPits.FirstOrDefault(pit => pit.Contains(x, y));
 
     // The pit nearest to a point: given Roshan's own position from the replay, the active pit.
-    public MapArea? PitNearest(double x, double y) => BossPits.MinBy(pit => DistanceSquared(pit.Center, x, y));
+    public MapArea? PitNearest(double x, double y) => BossPits.MinBy(pit => new MapPoint(pit.Center.X, pit.Center.Y).DistanceSquaredTo(new MapPoint(x, y)));
 
     public MapArea? CampAt(double x, double y) => CampAreas.FirstOrDefault(camp => camp.Contains(x, y));
 
@@ -223,14 +223,11 @@ public sealed class GameMap
     // The nearest landmark of a kind (of one team, or of any) and how far it is.
     public (MapLandmark Landmark, double Distance)? NearestLandmark(LandmarkKind kind, double x, double y, Team? team = null) =>
         Landmarks.Where(landmark => landmark.Kind == kind && (team is null || landmark.Team == team))
-            .Select(landmark => (Landmark: landmark, Distance: Math.Sqrt(DistanceSquared((landmark.X, landmark.Y), x, y))))
+            .Select(landmark => (Landmark: landmark, Distance: new MapPoint(landmark.X, landmark.Y).DistanceTo(new MapPoint(x, y))))
             .OrderBy(candidate => candidate.Distance)
             .Select(candidate => ((MapLandmark, double)?)candidate)
             .FirstOrDefault();
 
     private static (int, int) Bucket(double x, double y) =>
         ((int)Math.Floor(x / TreeBucket), (int)Math.Floor(y / TreeBucket));
-
-    private static double DistanceSquared((double X, double Y) point, double x, double y) =>
-        Math.Pow(point.X - x, 2) + Math.Pow(point.Y - y, 2);
 }

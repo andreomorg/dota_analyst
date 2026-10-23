@@ -1,4 +1,5 @@
 using System.Globalization;
+using DotaAnalyst.Domain.Maps;
 
 namespace DotaAnalyst.Domain.Coaching;
 
@@ -49,7 +50,7 @@ public static class CoachingCanonicalSceneBuilder
             {
                 Position = p,
                 // Cast before subtraction: replay coordinates should not overflow intermediate integers.
-                Distance = Math.Sqrt(Math.Pow((double)p.X - viewer.X, 2) + Math.Pow((double)p.Y - viewer.Y, 2))
+                Distance = new MapPoint(p.X, p.Y).DistanceTo(new MapPoint(viewer.X, viewer.Y))
             })
                 .OrderBy(p => p.Distance).ThenBy(p => p.Position.HeroId).FirstOrDefault();
             if (nearest is not null)

@@ -1,5 +1,6 @@
 using DotaAnalyst.Domain.Matches;
 using DotaAnalyst.Domain.Replays;
+using DotaAnalyst.Domain.Maps;
 
 namespace DotaAnalyst.Domain.Analysis;
 
@@ -115,8 +116,7 @@ public static class PlayQualityMetricsCalculator
             var enemies = teams.Where(p => p.Value != ownTeam).Select(p =>
                 (Id: p.Key, Sample: Before(p.Key, buff.Start, positions, deaths))).ToList();
             var near = enemies.Any(e => e.Sample is { } enemy && enemy.Vitals?.Health is not <= 0
-                && Math.Pow(enemy.X - sample.Value.X, 2) + Math.Pow(enemy.Y - sample.Value.Y, 2)
-                    <= (double)EnemyRadius * EnemyRadius);
+                && new MapPoint(enemy.X, enemy.Y).IsWithin(new MapPoint(sample.Value.X, sample.Value.Y), EnemyRadius));
             if (!near && (enemies.Count == 0 || enemies.Any(e => e.Sample is null
                 && !DeadAt(e.Id, buff.Start, positions, deaths))))
             {

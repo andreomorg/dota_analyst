@@ -93,8 +93,8 @@ public static class MapObjectiveMetricsCalculator
     {
         ArgumentNullException.ThrowIfNull(map);
         var shrine = map.Landmarks.Where(landmark => landmark.Kind == LandmarkKind.WisdomShrine)
-            .MinBy(landmark => Math.Pow(landmark.X - x, 2) + Math.Pow(landmark.Y - y, 2));
-        return shrine is not null && Math.Pow(shrine.X - x, 2) + Math.Pow(shrine.Y - y, 2) <= (double)ShrineReach * ShrineReach
+            .MinBy(landmark => new MapPoint(landmark.X, landmark.Y).DistanceSquaredTo(new MapPoint(x, y)));
+        return shrine is not null && new MapPoint(shrine.X, shrine.Y).IsWithin(new MapPoint(x, y), ShrineReach)
             ? shrine.X + shrine.Y < 0 ? Team.Radiant : Team.Dire
             : null;
     }
@@ -116,7 +116,7 @@ public static class MapObjectiveMetricsCalculator
             .FirstOrDefault(found => found is not null);
         if (sample is { } at)
         {
-            return Math.Pow(at.X - place.X, 2) + Math.Pow(at.Y - place.Y, 2) <= (double)PresenceRadius * PresenceRadius;
+            return new MapPoint(at.X, at.Y).IsWithin(new MapPoint(place.X, place.Y), PresenceRadius);
         }
 
         var lastDeath = heroDeaths.Where(death => death.Seconds <= seconds).MaxBy(death => death.Seconds);

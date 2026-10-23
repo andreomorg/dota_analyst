@@ -1,6 +1,7 @@
 using DotaAnalyst.Domain.Analysis;
 using DotaAnalyst.Domain.Matches;
 using DotaAnalyst.Domain.Replays;
+using DotaAnalyst.Domain.Maps;
 
 namespace DotaAnalyst.Domain.Situations;
 
@@ -126,7 +127,7 @@ public sealed partial class HeroSituationBuilder
     private bool InObserverVision(Team team, PositionSample at, int seconds) =>
         replay.Wards!.Any(ward => ward.Team == team && ward.Kind == WardKind.Observer && ward.PlacedAt <= seconds
             && (ward.RemovedAt ?? int.MaxValue) > seconds
-            && Math.Sqrt(Math.Pow(ward.X - at.X, 2) + Math.Pow(ward.Y - at.Y, 2)) <= ObserverVisionRadius);
+            && new MapPoint(ward.X, ward.Y).IsWithin(new MapPoint(at.X, at.Y), ObserverVisionRadius));
 
     // The map as a grid of cells this wide (the heatmap's 32 × 32 over the minimap square), each cell in one region.
     private const int VisionCellSize = 592;
@@ -154,7 +155,7 @@ public sealed partial class HeroSituationBuilder
         }
 
         var seen = cells.Count(cell => observers.Any(ward =>
-            Math.Pow(ward.X - cell.X, 2) + Math.Pow(ward.Y - cell.Y, 2) <= (double)ObserverVisionRadius * ObserverVisionRadius));
+            new MapPoint(ward.X, ward.Y).IsWithin(new MapPoint(cell.X, cell.Y), ObserverVisionRadius)));
         return Math.Round((double)seen / cells.Count, 3);
     }
 

@@ -1,5 +1,6 @@
 using DotaAnalyst.Domain.Matches;
 using DotaAnalyst.Domain.Replays;
+using DotaAnalyst.Domain.Maps;
 
 namespace DotaAnalyst.Domain.Situations;
 
@@ -25,7 +26,7 @@ public sealed partial class HeroSituationBuilder
         IEnumerable<BuildingHealth> buildings, Team team, PositionSample self, int seconds)
     {
         var nearest = buildings.Where(building => building.Team == team && building.Kind == BuildingKind.Tower && building.StandingAt(seconds))
-            .Select(building => (Building: building, Distance: (int)Math.Round(Math.Sqrt(Math.Pow(building.X - self.X, 2) + Math.Pow(building.Y - self.Y, 2)))))
+            .Select(building => (Building: building, Distance: (int)Math.Round(new MapPoint(building.X, building.Y).DistanceTo(new MapPoint(self.X, self.Y)))))
             .OrderBy(tower => tower.Distance)
             .FirstOrDefault();
         return nearest.Building?.At(seconds) is { } reading

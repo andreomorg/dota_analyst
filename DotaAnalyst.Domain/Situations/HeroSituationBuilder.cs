@@ -5,6 +5,7 @@ using DotaAnalyst.Domain.Items;
 using DotaAnalyst.Domain.Matches;
 using DotaAnalyst.Domain.Replays;
 using DotaAnalyst.Domain.Stats;
+using DotaAnalyst.Domain.Maps;
 
 namespace DotaAnalyst.Domain.Situations;
 
@@ -216,5 +217,5 @@ public sealed partial class HeroSituationBuilder
     private static int FromOwnSide(Team team, int progress) => team == Team.Radiant ? progress : -progress;
 
     private static int Distance(PositionSample a, PositionSample b) =>
-        (int)Math.Round(Math.Sqrt(Math.Pow(a.X - b.X, 2) + Math.Pow(a.Y - b.Y, 2)));
+        (int)Math.Round(new MapPoint(a.X, a.Y).DistanceTo(new MapPoint(b.X, b.Y)));
 }

@@ -1,4 +1,5 @@
 using DotaAnalyst.Domain.Replays;
+using DotaAnalyst.Domain.Maps;
 
 namespace DotaAnalyst.Domain.Coaching;
 
@@ -55,8 +56,7 @@ public static class CoachingSupportTransitionBuilder
                 UnavailableReason = previousViewer is null && previousAlly is null ? "earlier-both-unobserved"
                     : previousViewer is null ? "earlier-viewer-unobserved" : "earlier-ally-unobserved"
             };
-        var distance = Math.Sqrt(Math.Pow((double)previousViewer.Value.X - previousAlly.Value.X, 2)
-            + Math.Pow((double)previousViewer.Value.Y - previousAlly.Value.Y, 2));
+        var distance = new MapPoint(previousViewer.Value.X, previousViewer.Value.Y).DistanceTo(new MapPoint(previousAlly.Value.X, previousAlly.Value.Y));
         var change = ally.Distance.CompareTo(distance);
         return initial with
         {

@@ -1,6 +1,7 @@
 using DotaAnalyst.Domain.Items;
 using DotaAnalyst.Domain.Matches;
 using DotaAnalyst.Domain.Replays;
+using DotaAnalyst.Domain.Maps;
 
 namespace DotaAnalyst.Domain.Situations;
 
@@ -38,7 +39,7 @@ public sealed partial class HeroSituationBuilder
             GoldFromObjectives: Income(EconomyResource.Gold, EconomySource.Objectives),
             ExperienceGained: Income(EconomyResource.Experience),
             AllyPingsNear: recentPings?.Count(ping => ping.HeroId != heroId
-                && Math.Sqrt(Math.Pow(ping.X - self.X, 2) + Math.Pow(ping.Y - self.Y, 2)) <= PingNearRadius),
+                && new MapPoint(ping.X, ping.Y).IsWithin(new MapPoint(self.X, self.Y), PingNearRadius)),
             OwnPings: recentPings?.Count(ping => ping.HeroId == heroId),
             EnemySpellsOnMe: targetsKnown ? recentSpells!.Count(use => use.TargetHeroId == heroId && teamOf.GetValueOrDefault(use.HeroId) != team) : null,
             MySpellsOnEnemies: targetsKnown

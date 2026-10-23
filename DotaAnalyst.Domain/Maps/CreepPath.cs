@@ -28,6 +28,3 @@ public sealed record CreepPath(Lane Lane, Team Team, IReadOnlyList<MapPoint> Poi
         return best;
     }
 }
-
-// A point of the map, in replay coordinates.
-public readonly record struct MapPoint(int X, int Y);

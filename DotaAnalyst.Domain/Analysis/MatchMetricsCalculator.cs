@@ -1,5 +1,6 @@
 using DotaAnalyst.Domain.Matches;
 using DotaAnalyst.Domain.Replays;
+using DotaAnalyst.Domain.Maps;
 
 namespace DotaAnalyst.Domain.Analysis;
 
@@ -182,7 +183,7 @@ public static class MatchMetricsCalculator
         var centerY = fight.Deaths.Average(death => death.Y);
         return hero.Samples.Any(sample =>
             sample.Seconds >= fight.StartSeconds - FightLeadInSeconds && sample.Seconds <= fight.EndSeconds
-            && Math.Sqrt(Math.Pow(sample.X - centerX, 2) + Math.Pow(sample.Y - centerY, 2)) <= FightPresenceRadius);
+            && new MapPoint(sample.X, sample.Y).IsWithin(new MapPoint(centerX, centerY), FightPresenceRadius));
     }
 
     // Back from a death = the first position sample after it (a dead hero has none); Aegis deaths come back at once.
@@ -317,7 +318,7 @@ public static class MatchMetricsCalculator
 
             var dx = current.X - previous.X;
             var dy = current.Y - previous.Y;
-            var distance = Math.Sqrt((double)dx * dx + (double)dy * dy);
+            var distance = new MapPoint(current.X, current.Y).DistanceTo(new MapPoint(previous.X, previous.Y));
             if (distance > MaxWalkPerSample)
             {
                 continue;
@@ -344,7 +345,7 @@ public static class MatchMetricsCalculator
         return team == Team.Radiant ? pastRiver > RiverMargin : pastRiver < -RiverMargin;
     }
 
-    private static double Distance(int x1, int y1, int x2, int y2) => Math.Sqrt(Math.Pow(x1 - x2, 2) + Math.Pow(y1 - y2, 2));
+    private static double Distance(int x1, int y1, int x2, int y2) => new MapPoint(x1, y1).DistanceTo(new MapPoint(x2, y2));
 
     private static double Share(int part, int whole) => whole == 0 ? 0 : (double)part / whole;
 

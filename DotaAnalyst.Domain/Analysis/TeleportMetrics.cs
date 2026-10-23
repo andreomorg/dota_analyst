@@ -1,4 +1,5 @@
 using DotaAnalyst.Domain.Replays;
+using DotaAnalyst.Domain.Maps;
 
 namespace DotaAnalyst.Domain.Analysis;
 
@@ -69,7 +70,7 @@ public static class TeleportMetricsCalculator
             return null;
         }
 
-        var jumped = Math.Pow(to.X - from.X, 2) + Math.Pow(to.Y - from.Y, 2) > (double)ArrivalJump * ArrivalJump;
+        var jumped = !new MapPoint(to.X, to.Y).IsWithin(new MapPoint(from.X, from.Y), ArrivalJump);
         return (jumped, to.Seconds, to.X, to.Y);
     }
 
@@ -81,6 +82,6 @@ public static class TeleportMetricsCalculator
         }
 
         double centerX = fight.Deaths.Average(death => death.X), centerY = fight.Deaths.Average(death => death.Y);
-        return Math.Pow(arrival.X - centerX, 2) + Math.Pow(arrival.Y - centerY, 2) <= (double)FightReach * FightReach;
+        return new MapPoint(arrival.X, arrival.Y).IsWithin(new MapPoint(centerX, centerY), FightReach);
     }
 }

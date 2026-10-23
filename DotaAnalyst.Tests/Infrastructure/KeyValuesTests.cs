@@ -81,14 +81,11 @@ public sealed class KeyValuesTests
     }
 
     // A whole build on disk (GAME_DATA_DIR = a folder with items.txt, npc_abilities.txt, abilities_english.txt and
-    // heroes/*.txt): every file reads. Without the variable the test has nothing to read and passes.
-    [Fact]
+    // heroes/*.txt): every file reads. Without the variable the test is visibly skipped.
+    [GameDataFact]
     public void WholeBuildOnDisk_ReadsEveryFile()
     {
-        if (Environment.GetEnvironmentVariable("GAME_DATA_DIR") is not { Length: > 0 } folder)
-        {
-            return;
-        }
+        var folder = Environment.GetEnvironmentVariable("GAME_DATA_DIR")!;
 
         var files = Directory.GetFiles(folder, "*.txt", SearchOption.AllDirectories);
         Assert.True(files.Length > 100);

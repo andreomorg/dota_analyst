@@ -292,14 +292,11 @@ public sealed class GameFileMappingsTests
     }
 
     // A whole build on disk (GAME_DATA_DIR, same layout as KeyValuesTests): every hero has a kit and the counts are
-    // those of the build. Without the variable it passes without reading anything.
-    [Fact]
+    // those of the build. Without the variable the test is visibly skipped.
+    [GameDataFact]
     public void WholeBuildOnDisk_MapsEveryHeroAbilityAndItem()
     {
-        if (Environment.GetEnvironmentVariable("GAME_DATA_DIR") is not { Length: > 0 } folder)
-        {
-            return;
-        }
+        var folder = Environment.GetEnvironmentVariable("GAME_DATA_DIR")!;
 
         var texts = Directory.GetFiles(Path.Combine(folder, "heroes"), "*.txt")
             .ToDictionary(file => GameFiles.HeroesFolder + Path.GetFileName(file), File.ReadAllText);

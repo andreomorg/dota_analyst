@@ -70,6 +70,38 @@ public class PublishBaselineHandlerTests
         Assert.Contains(matchup.Distributions, distribution => distribution.Metric == ComparedMetric.DeathsPer30);
     }
 
+    [Fact]
+    public async Task MirrorFailure_PropagatesAfterLocalPublication_WithoutRollingItBack()
+    {
+        var local = new Store();
+        var failure = new StorageUnavailableException("Mirror unavailable.");
+        var mirror = new FailingMirror(failure);
+        var raw = new RawBase(new() { [(31, 5, BaselineSource.Pro)] = Enumerable.Range(1, 12).Select(Sample).ToList() });
+        var handler = new PublishBaselineHandler(raw, local, mirror, new FixedTimeProvider(Now),
+            NullLogger<PublishBaselineHandler>.Instance);
+
+        // Current behavior: local publication completes first; a mirror failure escapes to the caller.
+        var thrown = await Assert.ThrowsAsync<StorageUnavailableException>(() => handler.PublishAsync(CancellationToken.None));
+
+        Assert.Same(failure, thrown);
+        var published = Assert.Single(local.Sets!);
+        Assert.Equal(12, published.Matches);
+        Assert.Same(local.Sets, mirror.Sets);
+    }
+
+    private sealed class FailingMirror(StorageUnavailableException failure) : IBaselineMirror
+    {
+        public bool IsConfigured => true;
+        public IReadOnlyList<BaselineDistributionSet>? Sets { get; private set; }
+
+        public Task ReplaceAllAsync(IReadOnlyList<BaselineDistributionSet> sets, DateTimeOffset publishedAt,
+            CancellationToken cancellationToken)
+        {
+            Sets = sets;
+            throw failure;
+        }
+    }
+
     private sealed class RawBase(
         Dictionary<(int, int, BaselineSource), List<BaselineSample>> groups,
         Dictionary<(int, int, int, BaselineSource), List<BaselineSample>>? matchups = null) : IBaselineRepository

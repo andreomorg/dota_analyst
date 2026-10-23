@@ -95,6 +95,29 @@ public class GetGoldFactsHandlerTests
         Assert.False(result.Facts.Payments!.CompleteLedgerEstablished);
     }
 
+    [Fact]
+    public async Task NewObservationsReachTheExistingQueryWithoutAnotherArchiveRead()
+    {
+        var replay = Replay() with
+        {
+            Positions = [new(1, [new(10, 0, 0)])],
+            Facts = new ReplayAdditionalFacts
+            {
+                EconomyStates = [new(1, 10, 13000, 100, 40, 5, 0)],
+                GoldEvents = [new(1, 10, -100, 1, null, null)],
+                GoldLossChanges = [new(1, 10, 100, 140, 40, 0, 9.9)],
+                FarmSnapshots = [new(10, [new("100:4", "neutral", 4, 300, 0, 100, 30, 40, true, false)])],
+            },
+        };
+        var archive = new Archive(replay);
+        var result = await new GetGoldFactsHandler(archive).HandleAsync(Id, 1, 10, 30, default);
+        Assert.Equal(1, archive.Reads);
+        Assert.Equal(5, result.Facts!.EconomyState!.CooldownRemaining);
+        Assert.Equal(40, result.Facts.DeathGold!.CounterLoss);
+        Assert.True(Assert.Single(result.Facts.DeathGold.Changes).ConsistentWithUnreliableCap);
+        Assert.Single(result.Facts.Farm!.Candidates);
+    }
+
     private sealed class Archive(ArchivedReplay? replay) : IArchivedReplaySource
     {
         public int Reads { get; private set; }

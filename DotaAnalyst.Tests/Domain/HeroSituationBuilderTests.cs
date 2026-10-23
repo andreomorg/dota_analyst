@@ -11,6 +11,12 @@ namespace DotaAnalyst.Tests.Domain;
 
 public class HeroSituationBuilderTests
 {
+    [Fact]
+    public void BuybackReadsReplicatedCooldownInsteadOfAnAssumedPrice()
+    {
+        var activity = new ReplayActivity([], [], []) { EconomyStates = [new(1, 100, 13000, 5000, 5000, 50, 0)] };
+        Assert.False(Builder([Path(1, 100)], activity: activity).At(1, 100)!.Surroundings.BuybackReady);
+    }
     // Radiant: heroes 1 and 2; Dire: hero 6. Points at 0:00, 1:00, 2:00 and the end (3:00).
     private static readonly LaningStats[] Players =
     [
@@ -632,10 +638,10 @@ public class HeroSituationBuilderTests
             new HeroPositions(6, [At(100, 3000, 3000, 0)]),
         ], wards: wards, activity: activity).At(1, 100)!;
 
-        // 424 units in 2 s; x + y went from 0 to 600 (towards the Dire base). Net worth 900: buyback costs 275.
-        Assert.Equal(new Surroundings(MoveSpeed: 212, AdvanceSpeed: 300, BuybackReady: true, UnderSmoke: true, AlliesUnderSmoke: 1,
+        // 424 units in 2 s; x + y went from 0 to 600. No replicated price: gold alone cannot certify buyback.
+        Assert.Equal(new Surroundings(MoveSpeed: 212, AdvanceSpeed: 300, BuybackReady: null, UnderSmoke: true, AlliesUnderSmoke: 1,
             InOwnObserverVision: true), situation.Surroundings);
-        Assert.Equal((true, 0, 0), (situation.Hidden.InEnemyObserverVision, situation.Hidden.EnemiesUnderSmoke,
+        Assert.Equal((true, 0, (int?)null), (situation.Hidden.InEnemyObserverVision, situation.Hidden.EnemiesUnderSmoke,
             situation.Hidden.EnemiesWithBuyback));
         // The Radiant ward at (500, 500) stands on the river: part of it seen, no jungle; nothing without wards.
         Assert.True(situation.Vision.River > 0);

@@ -152,7 +152,8 @@ internal sealed record ReplayParserTimelines(
     IReadOnlyList<JsonElement>? OffLaneCreeps = null, IReadOnlyList<JsonElement>? CreepHeroDamage = null,
     IReadOnlyList<ReplayParserCourier?>? Couriers = null, IReadOnlyList<ReplayParserPlayerMadstones?>? Madstones = null,
     ReplayParserTrees? Trees = null, IReadOnlyList<JsonElement>? VisionUnits = null, JsonElement? TempTrees = null,
-    JsonElement? GoldBalances = null);
+    JsonElement? GoldBalances = null, JsonElement? EconomyStates = null, JsonElement? GoldLossChanges = null,
+    JsonElement? FarmSnapshots = null);
 
 // MP3: { deadAtStart: [index], changes: [[t, index, alive]] } — index = the tree in the map of the patch.
 internal sealed record ReplayParserTrees(IReadOnlyList<int>? DeadAtStart, IReadOnlyList<JsonElement>? Changes);
@@ -750,7 +751,8 @@ internal static partial class ReplayParserMappings
             ReadTrees(response),
             response.Timelines?.VisionUnits?.Select(ToVisionUnits).ToList(),
             CooldownChanges(response.Items?.CooldownChanges, "item cooldown changes"),
-            CooldownChanges(response.Abilities?.CooldownChanges, "ability cooldown changes"));
+            CooldownChanges(response.Abilities?.CooldownChanges, "ability cooldown changes"))
+        { EconomyStates = ReadEconomyStates(response) };
 
         List<CooldownCorrection>? CooldownChanges(IReadOnlyList<ReplayParserPlayerCooldownChanges?>? entries, string name) =>
             entries?.Select(entry => entry ?? throw Empty(name))

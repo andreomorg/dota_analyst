@@ -304,6 +304,9 @@ type GoldSpent struct {
 
 // Timelines is each player's numbers over time.
 type Timelines struct {
+	EconomyStates   List[EconomyState]    `json:"economyStates,omitempty"`
+	GoldLossChanges *List[GoldLossChange] `json:"goldLossChanges,omitempty"`
+	FarmSnapshots   List[FarmSnapshot]    `json:"farmSnapshots,omitempty"`
 	// GoldBalances is sampled independently of life/position; absent in older documents.
 	GoldBalances List[GoldBalance] `json:"goldBalances,omitempty"`
 	// Madstones is always present in new documents; absent in older documents.

@@ -35,6 +35,9 @@ public sealed record ReplayAdditionalFacts
 
     public IReadOnlyList<GoldEvent>? GoldEvents { get; init; }
     public IReadOnlyList<GoldBalance>? GoldBalances { get; init; }
+    public IReadOnlyList<EconomyObservation>? EconomyStates { get; init; }
+    public IReadOnlyList<GoldLossObservation>? GoldLossChanges { get; init; }
+    public IReadOnlyList<FarmResourceSnapshot>? FarmSnapshots { get; init; }
 
     // abilities.stolen (DATA-D17): stolen abilities held and their cooldowns; null in documents before it.
     public IReadOnlyList<StolenAbility>? StolenAbilities { get; init; }

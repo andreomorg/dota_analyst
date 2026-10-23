@@ -1,6 +1,6 @@
 using DotaAnalyst.Domain.Matches;
+using DotaAnalyst.Domain.Analysis;
 using DotaAnalyst.Domain.Replays;
-using DotaAnalyst.Domain.Stats;
 
 namespace DotaAnalyst.Domain.Situations;
 
@@ -11,10 +11,6 @@ public sealed partial class HeroSituationBuilder
     private const int MaxRunPerSample = 1200;
     // Observer wards see this far (day and night in the current patch).
     public const int ObserverVisionRadius = 1600;
-    // Buyback: 200 + net worth / 12 gold, then BuybackCooldownSeconds (.Activity.cs) of cooldown (current patch; an
-    // approximation: the replay does not write the cost).
-    private static int BuybackCost(int netWorth) => 200 + netWorth / 12;
-
     private Surroundings SurroundingsOf(int heroId, Team team, PositionSample self, int seconds)
     {
         var (speed, advance) = MovementOf(heroId, team, self);
@@ -22,7 +18,7 @@ public sealed partial class HeroSituationBuilder
         return new Surroundings(
             MoveSpeed: speed,
             AdvanceSpeed: advance,
-            BuybackReady: BuybackReady(heroId, self, seconds),
+            BuybackReady: BuybackReady(heroId, seconds),
             UnderSmoke: smoked?.Contains(heroId),
             AlliesUnderSmoke: smoked?.Count(hero => hero != heroId && teamOf.GetValueOrDefault(hero) == team && PositionAt(hero, seconds) is not null),
             InOwnObserverVision: InObserverVision(team, self, seconds),
@@ -117,13 +113,9 @@ public sealed partial class HeroSituationBuilder
         return (distance / elapsed, (FromOwnSide(team, now.X + now.Y) - FromOwnSide(team, then.X + then.Y)) / elapsed);
     }
 
-    // Gold on hand (the vitals) at least the buyback cost and no buyback in the last BuybackCooldownSeconds. Null
-    // without gold or without the buyback list.
-    private bool? BuybackReady(int heroId, PositionSample self, int seconds) =>
-        self.Vitals?.Gold is { } gold && activity?.Buybacks is { } buybacks
-            ? gold >= BuybackCost(Value(heroId, StatKey.NetWorth, seconds))
-                && !buybacks.Any(buyback => buyback.HeroId == heroId && buyback.Seconds <= seconds && buyback.Seconds > seconds - BuybackCooldownSeconds)
-            : null;
+    // Read only a recent replicated state; no inferred price or guarantee from minute-based net worth.
+    private bool? BuybackReady(int heroId, int seconds) =>
+        BuybackReadiness.At(heroId, seconds, activity?.EconomyStates);
 
     // The heroes with a smoke buff on at this second; null without buffs.
     private HashSet<int>? SmokedHeroes(int seconds) =>
@@ -190,9 +182,9 @@ public sealed partial class HeroSituationBuilder
     {
         var enemies = teamOf.Where(hero => hero.Value != team).Select(hero => hero.Key).ToList();
         var smoked = SmokedHeroes(seconds);
-        var buybacks = enemies.Select(enemy => PositionAt(enemy, seconds) is { } sample ? BuybackReady(enemy, sample, seconds) : null).ToList();
+        var buybacks = enemies.Select(enemy => PositionAt(enemy, seconds) is not null ? BuybackReady(enemy, seconds) : null).ToList();
         return (
             smoked is null ? null : enemies.Count(enemy => smoked.Contains(enemy) && PositionAt(enemy, seconds) is not null),
-            buybacks.Any(ready => ready is not null) ? buybacks.Count(ready => ready == true) : null);
+            buybacks.All(ready => ready is not null) ? buybacks.Count(ready => ready == true) : null);
     }
 }

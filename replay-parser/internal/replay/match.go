@@ -31,6 +31,7 @@ func newCollectors() []Collector {
 		&matchCollector{},              // match, draft (collect_match.go)
 		&playersCollector{},            // players, timelines (collect_players.go, card 03)
 		&goldBalancesCollector{},       // independent reliable/unreliable balances, including dead heroes
+		&economyPrecisionCollector{},   // sampled economy state, counter increments, live farm resources
 		&laningCollector{},             // laning (collect_laning.go, sprint 11)
 		&combatCollector{waves: waves}, // kills, buybacks, combat (collect_combat.go, card 04)
 		&itemsCollector{},              // items, abilities (collect_items.go, card 05)

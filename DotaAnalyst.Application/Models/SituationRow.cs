@@ -329,6 +329,7 @@ public sealed record SituationRow(
     // (DATA-D15; documents without items/abilities.cooldownChanges read exactly as before). Once a v2 export is saved,
     // any further change bumps the version.
     public const int FeatureVersion = 2;
+    // GOLD5 before the first v2 export: BuybackReady uses replicated cooldown evidence; no assumed /12 price.
 
     public static SituationRow From(HeroSituation s, bool activityKnown)
     {

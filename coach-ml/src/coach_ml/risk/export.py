@@ -25,6 +25,7 @@ _HIDDEN_V1 = ['hiddenNearestEnemyDistance', 'hiddenEnemiesNear', 'hiddenEnemiesW
 # every model trained on it) keeps its version, so older models stay readable on older exports. Version 2 had never
 # been exported by 22/10/2026 (only v1 exports and models-v1 exist), so the ultimate-from-catalog (DATA-D03) and the
 # readiness with cooldown resets (DATA-D15) meaning changes stay in v2; once a v2 export is saved, changes bump it.
+# GOLD5 before the first v2 export: buyback readiness uses replicated cooldown evidence, never an assumed /12 price.
 SITUATION_BY_VERSION = {
     1: _SITUATION_V1 + _HIDDEN_V1,
     2: _SITUATION_V1 + ['activityKnown', 'ownSmokeSecondsAgo', 'teleportSecondsAgo', 'escapeItemSecondsAgo',

@@ -1,5 +1,11 @@
 # replay-parser (serviço Go)
 
+### Observações econômicas e recursos vivos (GOLD5)
+
+`timelines.economyStates` amostra a cada 2 s patrimônio/saldos/cooldown restante/override customizado cru (zero não é preço grátis). Não replica preço final autoritativo de buyback. `goldLossChanges` conserva incrementos do contador de perda com valores antes/depois e saldo não confiável da atualização anterior; a idade anterior é exposta. Campo ausente é desconhecido; presente vazio prova apenas que não houve transição registrada. `farmSnapshots` conserva a cada 10 s unidades vivas de rota/selva selvagem com identidade índice:serial, posição, vida, faixa **base** de bounty e bits de visibilidade por time. Não transportar unidade da amostra anterior para um instante posterior como se estivesse comprovadamente viva. Faixa replicada não inclui promessa de todos os bônus/regras do recebedor. Não usar mapa de pagamentos como mapa de recursos. Propriedades verificadas em replays locais; cooldown/customCost não estabelecem elegibilidade ou suporte genérico a modificadores.
+
+Diagnóstico local `cmd/inspect -economy-precision <replay>` preserva tempo bruto e atualizações da entidade. Nos três replays locais, 72+92+19 incrementos de perda coincidiram com min(perda nominal do log, saldo não confiável anterior); 11 buybacks coincidiram com piso(200+NWcorrente/13). Não generalizar para propriedades/modificadores/modos não observados. Sem refresh persistido automático; listas novas são aditivas e documentos antigos continuam válidos.
+
 ### Saldos separados de ouro (G05, 22/10/2026)
 
 `timelines.goldBalances` é aditivo e opcional: tuplas `[segundo, jogador, confiável|null, nãoConfiável|null]` a cada 2 s, inclusive com herói morto/sem posição. Coletor independente `collect_gold_balances.go`, sem mudar `vitals` nem o ouro acumulado por minuto. As propriedades `m_vecDataTeam.XXXX.m_iReliableGold`/`m_iUnreliableGold` foram confirmadas no replay 9034320024, tick 18000 (Radiant: 32/81, 190/169, 202/0, 122/99, 46/0). Propriedade ausente continua null; ausência do bloco em documento antigo é desconhecido. Não é leitura exata no tick de uma morte/compra nem comprovação de reserva de buyback. O consumidor deve informar o instante e não extrapolar lacunas. Só entra nos documentos futuros, sem reprocessamento persistido automático.

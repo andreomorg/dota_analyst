@@ -366,6 +366,7 @@ public sealed record DamageBucket(int HeroId, int Seconds, int ToHeroes, int Fro
 // Like the positions, it is never saved with the analysis: only the prediction models' samples read it.
 public sealed record ReplayActivity
 {
+    public IReadOnlyList<EconomyObservation>? EconomyStates { get; init; }
     // damageBuckets: null for documents read before combat buckets existed (unknown, not "no damage").
     public ReplayActivity(
         IReadOnlyList<SmokeUse> smokes, IReadOnlyList<RecordedUse> itemUses, IReadOnlyList<RecordedUse> abilityUses,

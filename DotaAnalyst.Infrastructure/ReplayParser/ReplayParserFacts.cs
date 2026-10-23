@@ -185,7 +185,10 @@ internal static partial class ReplayParserMappings
         {
             Outposts = outposts, Tormentors = tormentors, CourierDeaths = couriers, Healing = healing, FinalStats = finalStats,
             FinalItems = finalItems, ChatWheel = chatWheel, TempTrees = tempTrees, BossTracks = bossTracks, Lanterns = lanterns,
-            GoldEvents = goldEvents, GoldBalances = goldBalances, StolenAbilities = stolenAbilities, StolenCooldowns = stolenCooldowns, InvalidFamilies = invalid,
+            GoldEvents = goldEvents, GoldBalances = goldBalances,
+            EconomyStates = ReadEconomyStates(response, invalid), GoldLossChanges = ReadGoldLossChanges(response, invalid),
+            FarmSnapshots = ReadFarmSnapshots(response, invalid),
+            StolenAbilities = stolenAbilities, StolenCooldowns = stolenCooldowns, InvalidFamilies = invalid,
         };
 
         static int StolenPlayer(JsonElement entry) =>

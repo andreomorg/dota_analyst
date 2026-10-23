@@ -11,6 +11,9 @@ public sealed record GoldFacts(string MatchId, int HeroId, double DurationSecond
     public GoldBalance? SampledBalance { get; init; }
     public BuybackWindow? Buybacks { get; init; }
     public GoldPaymentWindow? Payments { get; init; }
+    public EconomyObservation? EconomyState { get; init; }
+    public DeathGoldWindow? DeathGold { get; init; }
+    public FarmCandidatesAt? Farm { get; init; }
 }
 public sealed record GoldFactsResult(ReplayFactsStatus Status, GoldFacts? Facts, string? Problem = null);
 
@@ -44,6 +47,10 @@ public sealed class GetGoldFactsHandler(IArchivedReplaySource replays)
             SampledBalance = balance,
             Buybacks = BuybackEconomy.Window(heroId, window.From, seconds, replay.Activity?.Buybacks),
             Payments = GoldPayments.Window(heroId, window.From, seconds, replay.Facts?.GoldEvents),
+            EconomyState = replay.Facts?.EconomyStates?.Where(s => s.HeroId == heroId && s.Seconds <= seconds && seconds - s.Seconds <= 2).MaxBy(s => s.Seconds),
+            DeathGold = DeathGoldAccounting.Window(heroId, window.From, seconds, replay.Facts?.GoldLossChanges, replay.Facts?.GoldEvents),
+            Farm = FarmCandidates.At(heroId, replay.Analysis.Players.First(p => p.HeroId == heroId).Team, seconds,
+                replay.Facts?.FarmSnapshots, replay.Positions, replay.Analysis.Players.ToDictionary(p => p.HeroId, p => p.Team)),
         });
     }
 }

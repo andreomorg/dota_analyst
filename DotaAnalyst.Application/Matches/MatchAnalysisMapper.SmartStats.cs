@@ -102,7 +102,10 @@ internal static partial class MatchAnalysisMapper
             hero.LaneDamageTaken, hero.TeamObserverUptime, hero.LeadLostPerDeath,
             hero.NetWorthGainByRegion is { } gain ? ToRegionValues(gain) : null,
             hero.MinutesByRegion is { } minutes ? ToRegionValues(minutes.Select(count => (double)count)) : null,
-            hero.FirstBigItemSeconds);
+            hero.FirstBigItemSeconds,
+            ToSummary(hero.Terrain), ToSummary(hero.Vision), ToSummary(hero.Objectives), ToSummary(hero.Teleports),
+            ToSummary(hero.Plays), ToSummary(hero.DeathContext), ToSummary(hero.ItemUsage), ToSummary(hero.FightInitiation),
+            ToSummary(hero.LanePressure), ToSummary(hero.DayNight), ToSummary(hero.Smokes), ToSummary(hero.Farm));
 
     internal static RegionValues ToRegionValues(PerRegion<double> values) =>
         new(values.OwnBase, values.EnemyBase, values.TopLane, values.MiddleLane, values.BottomLane, values.River,

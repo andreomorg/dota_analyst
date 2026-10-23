@@ -676,6 +676,56 @@ public class GetMatchAnalysisHandlerTests
         Assert.False(result.Catalog!.ItemRulesAvailable);
     }
 
+    [Fact]
+    public async Task ReplayStatistics_GoToThePlayersSummary_UnknownStaysNull()
+    {
+        var source = SupportDuel();
+        var metrics = source.Metrics!.Select(hero => hero.HeroId != 31 ? hero : hero with
+        {
+            Terrain = new TerrainMetrics(0.1, 0.2, 0.3, null, null, 1, 2, null, null),
+            Vision = new VisionMetrics(0.4, 1, null, 0, 2, null),
+            Objectives = new MapObjectiveMetrics(new MapObjectiveCounts(1, 2, 3, 4, 5, 6, 7, 8, 9), 2, 1, 0, null, 3, 2),
+            Teleports = new TeleportMetrics(5, 1, 2),
+            Plays = new PlayQualityMetrics(null, null, 3, 2, 1),
+            DeathContext = new DeathContextMetrics(4, 1, null, 2, 1, 3.5),
+            ItemUsage = new ItemUsageMetrics(3, 2, 1, null, null),
+            FightInitiation = new FightInitiationMetrics(3, 1, 0),
+            LanePressure = new LanePressureMetrics(280, 0.25, -150.5),
+            DayNight = new DayNightMetrics(0.5, 6, 2, 4, 3),
+            Smokes = new SmokeMetrics(2, 1),
+            Farm = new FarmMetrics(100, 50, 10, 60, 40),
+        }).ToList();
+        var replay = new ReplayAnalysis(source.MatchId, 600, source.Players, source.Timeline, [], [], purchases: [], objectives: [],
+            metrics: metrics, heatmaps: [], abilityUpgrades: []);
+        var handler = CreateHandler(new FakeReplayAnalyzer(UnparsedMatchWithMe()),
+            replays: new FakeReplayAnalysisRepository(SavedReplayAnalysis.Ready(replay, Now)),
+            queue: new FakeReplayParseQueue { Result = ReplayEnqueueResult.Unavailable });
+
+        var smart = (await handler.HandleAsync(MatchIdOf(10), Me, CancellationToken.None))!.SmartStats!;
+
+        Assert.Equal(new TerrainSummary(0.1, 0.2, 0.3, null, null, 1, 2, null, null), smart.Player.Terrain);
+        Assert.Equal(new VisionSummary(0.4, 1, null, 0, 2, null), smart.Player.Vision);
+        Assert.Equal(new ObjectiveCountsSummary(1, 2, 3, 4, 5, 6, 7, 8, 9), smart.Player.Objectives!.Counts);
+        Assert.Equal((2, 1, 3, 2), (smart.Player.Objectives.RoshanKills, smart.Player.Objectives.RoshanKillsNearby!.Value,
+            smart.Player.Objectives.EnemyTowersTaken, smart.Player.Objectives.EnemyTowersTakenNearby!.Value));
+        Assert.Equal(new TeleportsSummary(5, 1, 2), smart.Player.Teleports);
+        Assert.Equal(new PlaysSummary(null, null, 3, 2, 1), smart.Player.Plays);
+        Assert.Equal(new DeathContextSummary(4, 1, null, 2, 1, 3.5), smart.Player.DeathContext);
+        Assert.Equal(new ItemUsageSummary(3, 2, 1, null, null), smart.Player.ItemUsage);
+        Assert.Equal(new FightInitiationSummary(3, 1, 0), smart.Player.FightInitiation);
+        Assert.Equal(new LanePressureSummary(280, 0.25, -150.5), smart.Player.LanePressure);
+        Assert.Equal(new DayNightSummary(0.5, 6, 2, 4, 3), smart.Player.DayNight);
+        Assert.Equal(new SmokesSummary(2, 1), smart.Player.Smokes);
+        Assert.Equal(new FarmSummary(100, 50, 10, 60, 40), smart.Player.Farm);
+        // The counterpart has none of the blocks; the match average never has them.
+        Assert.All([smart.Counterpart, smart.MatchAverage], summary =>
+        {
+            Assert.Null(summary.Terrain);
+            Assert.Null(summary.DeathContext);
+            Assert.Null(summary.Farm);
+        });
+    }
+
     private sealed class HistoricalBuilds(GameCatalog catalog) : IGameBuildCatalog
     {
         public int Calls { get; private set; }

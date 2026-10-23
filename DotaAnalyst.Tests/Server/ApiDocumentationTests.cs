@@ -38,6 +38,22 @@ public class ApiDocumentationTests
     }
 
     [Fact]
+    public async Task ReplayStatistics_AreDescribedInTheMetricsSummary()
+    {
+        var schemas = (await GetDocumentAsync()).GetProperty("components").GetProperty("schemas");
+        var properties = schemas.GetProperty("MetricsSummary").GetProperty("properties");
+
+        string[] blocks = ["terrain", "vision", "objectives", "teleports", "plays", "deathContext", "itemUsage",
+            "fightInitiation", "lanePressure", "dayNight", "smokes", "farm"];
+        Assert.All(blocks, block => Assert.True(properties.TryGetProperty(block, out _), $"MetricsSummary has no {block}"));
+        Assert.All(
+            ["TerrainSummary", "VisionSummary", "ObjectivesSummary", "ObjectiveCountsSummary", "TeleportsSummary",
+                "PlaysSummary", "DeathContextSummary", "ItemUsageSummary", "FightInitiationSummary", "LanePressureSummary",
+                "DayNightSummary", "SmokesSummary", "FarmSummary"],
+            name => Assert.True(schemas.TryGetProperty(name, out _), $"no {name} schema"));
+    }
+
+    [Fact]
     public async Task SuccessResponsesWithABody_AreJson()
     {
         foreach (var (path, method, operation) in Operations(await GetDocumentAsync()))

@@ -38,6 +38,18 @@ namespace DotaAnalyst.Application.Matches;
 /// <param name="NetWorthGainByRegion">Net worth gained in the minutes spent mostly in each region (divide by MinutesByRegion for a rate per minute); null for older metrics.</param>
 /// <param name="MinutesByRegion">Minutes spent mostly in each region (minutes dead all along left out); null for older metrics.</param>
 /// <param name="FirstBigItemSeconds">Game-clock time when the first build item worth at least 2000 gold was ready; null when none was recorded.</param>
+/// <param name="Terrain">Where the hero stood and died by the real terrain; null for older analyses, without the patch's map, and in the match average.</param>
+/// <param name="Vision">What the fog of war showed around the hero; null for older analyses, without visibility, and in the match average.</param>
+/// <param name="Objectives">Runes, shrines, lotuses, Watchers, outposts and presence at Roshan/Tormentor/towers; null for older analyses and in the match average.</param>
+/// <param name="Teleports">Teleports done, cancelled and into fights; null for older analyses, without buffs, and in the match average.</param>
+/// <param name="Plays">Skillshots hit, allies saved, disables dispelled; null for older analyses, without activity, and in the match average.</param>
+/// <param name="DeathContext">Each death at its moment (escape item / BKB ready, 3+ attackers, disabled); null for older analyses and in the match average.</param>
+/// <param name="ItemUsage">Fight items held ready and used in team fights; null for older analyses and in the match average.</param>
+/// <param name="FightInitiation">Who started the team fights the hero was in; null for older analyses and in the match average.</param>
+/// <param name="LanePressure">Where the waves met in the hero's lane in the laning phase; null for older analyses, roaming/jungle heroes, and in the match average.</param>
+/// <param name="DayNight">Kills and deaths by night; null for older analyses, without the day/night cycle, and in the match average.</param>
+/// <param name="Smokes">Smokes used and followed by a kill; null for older analyses, without activity, and in the match average.</param>
+/// <param name="Farm">Lane creeps, neutrals and denies; null for older analyses, without creep kills, and in the match average.</param>
 public record MetricsSummary(
     double Deaths,
     double IsolatedDeaths,
@@ -70,4 +82,16 @@ public record MetricsSummary(
     double? LeadLostPerDeath = null,
     RegionValues? NetWorthGainByRegion = null,
     RegionValues? MinutesByRegion = null,
-    double? FirstBigItemSeconds = null);
+    double? FirstBigItemSeconds = null,
+    TerrainSummary? Terrain = null,
+    VisionSummary? Vision = null,
+    ObjectivesSummary? Objectives = null,
+    TeleportsSummary? Teleports = null,
+    PlaysSummary? Plays = null,
+    DeathContextSummary? DeathContext = null,
+    ItemUsageSummary? ItemUsage = null,
+    FightInitiationSummary? FightInitiation = null,
+    LanePressureSummary? LanePressure = null,
+    DayNightSummary? DayNight = null,
+    SmokesSummary? Smokes = null,
+    FarmSummary? Farm = null);

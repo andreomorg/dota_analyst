@@ -15,13 +15,13 @@ from coach_ml.risk.export import columns_of
 HAS_NUMPY = importlib.util.find_spec('numpy') is not None
 
 
-def write_v1_export(folder):
+def write_v1_export(folder, matches=1):
     """A version-1 export as the first exporter wrote it: one partition, manifest without 'kind'."""
     columns = ['matchId', *columns_of(1)]
     rows = []
-    for index in range(20):
+    for index in range(20 * matches):
         row = {column: '0' for column in columns}
-        row.update({'matchId': '1', 'heroId': str(1 + index % 10), 'team': 'radiant' if index % 10 < 5 else 'dire',
+        row.update({'matchId': str(1 + index // 20), 'heroId': str(1 + index % 10), 'team': 'radiant' if index % 10 < 5 else 'dire',
                     'seconds': str(index * 10), 'role': '3', 'roleInferred': '1', 'region': 'ownJungle',
                     'secondsSinceLastDeath': '', 'diesSoon': '1' if index % 7 == 0 else '0',
                     'diedAtSeconds': str(index * 10 + 5) if index % 7 == 0 else ''})
@@ -36,6 +36,24 @@ def write_v1_export(folder):
 
 
 class VersionTests(unittest.TestCase):
+    @unittest.skipUnless(importlib.util.find_spec('sklearn') is not None, 'needs the risk extra (scikit-learn)')
+    def test_version_1_still_trains_and_evaluates_four_models(self):
+        from coach_ml.risk.data import VISIBLE_BY_VERSION
+        from coach_ml.risk.evaluate import evaluate
+        from coach_ml.risk.train import train
+
+        with tempfile.TemporaryDirectory() as name:
+            root = Path(name)
+            source = root / 'export'
+            source.mkdir()
+            write_v1_export(source, matches=20)
+            training = train(source, root / 'models', iterations=[1], log=lambda _m: None)
+            self.assertEqual(set(training['columns']),
+                             {'constant', 'logistic', 'boostedVisible', 'boostedOmniscient'})
+            self.assertEqual(training['columns']['boostedVisible'], VISIBLE_BY_VERSION[1])
+            report = evaluate(root / 'models', source, root / 'report', partitions=['train'])
+            self.assertEqual(set(report['models']), set(training['columns']))
+
     def test_version_1_never_had_a_next_region_export(self):
         with self.assertRaises(AuditError):
             columns_of(1, 'next-region')

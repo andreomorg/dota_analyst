@@ -12,7 +12,6 @@ from .train import ml, simple_features
 
 PHASES = [('0-10', 0, 600), ('10-20', 600, 1200), ('20+', 1200, None)]
 CALIBRATION_BINS = 10
-MODELS = ['constant', 'logistic', 'boostedVisible', 'boostedOmniscient']
 
 
 def metrics(labels, predicted, lib):
@@ -57,13 +56,18 @@ def evaluate(models_dir, export, output, partitions=VALIDATION, final=False, lib
     visible = features[:, :len(visible_columns)]
     inputs = {'constant': visible, 'logistic': simple_features(visible, visible_columns, np), 'boostedVisible': visible,
               'boostedOmniscient': features}
+    if 'boostedVisibleHero' in training['columns']:
+        hero_columns = training['columns']['boostedVisibleHero']
+        source = {column: features[:, index] for index, column in enumerate(columns)}
+        source['heroId'] = extra['heroId']
+        inputs['boostedVisibleHero'] = np.column_stack([source[column] for column in hero_columns])
     roles = np.asarray([role or 'none' for role in extra['role']])
     seconds = extra['seconds']
 
     report = {'schemaVersion': 1, 'partitions': list(partitions), 'final': final,
               'matches': int(len(np.unique(groups))), 'models': {},
               'note': 'validation-new is not the final test' if not final else 'final test: evaluated once'}
-    for name in MODELS:
+    for name in inputs:
         predicted = np.asarray(models[name].predict(inputs[name]), dtype=float)
         by_phase = {label: metrics(labels[mask], predicted[mask], lib)
                     for label, start, end in PHASES
@@ -83,7 +87,7 @@ def evaluate(models_dir, export, output, partitions=VALIDATION, final=False, lib
 def table(report):
     lines = [f"Partições: {', '.join(report['partitions'])} — {report['matches']} partidas. {report['note']}.", '',
              '| Modelo | PR-AUC | ROC-AUC | Brier | Log loss |', '|---|---:|---:|---:|---:|']
-    for name in MODELS:
+    for name in report['models']:
         values = report['models'][name]['overall']
         lines.append(f"| {name} | {values['prAuc']} | {values['rocAuc']} | {values['brier']} | {values['logLoss']} |")
     return '\n'.join(lines) + '\n'

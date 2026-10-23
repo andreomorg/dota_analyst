@@ -1,4 +1,4 @@
-"""Train the four death-risk models on the development partitions (scikit-learn, CPU). Never reads validation/test."""
+"""Train death-risk models on the development partitions (scikit-learn, CPU). Never reads validation/test."""
 import argparse
 import copy
 import json
@@ -20,7 +20,8 @@ from .data import (
 )
 
 FIT, TUNE, CALIBRATE = 0.70, 0.15, 0.15
-ITERATIONS = [100, 200, 400, 800]
+ITERATIONS = [100, 200, 400, 800, 1600, 3200]
+MAX_BINS = 255
 SEED = 20261020
 # Far beyond any fight: what "no ally alive" means to the simple model (it cannot take a missing value).
 NO_ALLY_DISTANCE = 20000.0
@@ -84,7 +85,7 @@ def simple_features(features, visible, np):
 def boosted(lib, features, labels, masks, columns, choices):
     """Boosting with the number of iterations picked on the tune matches, then calibrated on the calibrate matches."""
     fit, tune, calibrate = masks
-    categorical = [column in CATEGORICAL for column in columns]
+    categorical = [column in CATEGORICAL or column == 'heroId' for column in columns]
     best = None
     # warm_start: each larger max_iter continues the same trees instead of starting again; the best is copied.
     model = lib['HGB'](learning_rate=0.05, max_leaf_nodes=31, min_samples_leaf=200, l2_regularization=1.0,
@@ -111,7 +112,13 @@ def train(export, output, lib=None, log=print, iterations=ITERATIONS):
     columns = visible_columns + HIDDEN_BY_VERSION[version]
     partitions = [split for split in DEVELOPMENT if split in export_identity(export)]
     require(partitions, 'The export has no development partition')
-    features, labels, groups, _ = load(export, partitions, columns, np)
+    features, labels, groups, extra = load(export, partitions, columns, np)
+    hero_columns = visible_columns + ['heroId'] if version >= 2 else None
+    if hero_columns:
+        heroes = extra['heroId']
+        require(bool(((heroes >= 0) & (heroes < MAX_BINS)).all()),
+                f'boostedVisibleHero requires integer heroId >= 0 and < {MAX_BINS}; '
+                f'observed range {int(heroes.min())}..{int(heroes.max())}')
     masks = split_matches(groups, np)
     fit, tune, calibrate = masks
     visible = features[:, :len(visible_columns)]
@@ -129,6 +136,11 @@ def train(export, output, lib=None, log=print, iterations=ITERATIONS):
     log(json.dumps({'trained': 'boostedVisible', **details['boostedVisible']}))
     models['boostedOmniscient'], details['boostedOmniscient'] = boosted(lib, features, labels, masks, columns, iterations)
     log(json.dumps({'trained': 'boostedOmniscient', **details['boostedOmniscient']}))
+    if hero_columns:
+        visible_hero = np.column_stack([visible, extra['heroId']])
+        models['boostedVisibleHero'], details['boostedVisibleHero'] = boosted(
+            lib, visible_hero, labels, masks, hero_columns, iterations)
+        log(json.dumps({'trained': 'boostedVisibleHero', **details['boostedVisibleHero']}))
 
     output.mkdir(parents=True)
     lib['joblib'].dump(models, output / 'models.joblib')
@@ -146,6 +158,8 @@ def train(export, output, lib=None, log=print, iterations=ITERATIONS):
         'scikitLearn': lib['version'],
         'humanReviewed': False,
     }
+    if hero_columns:
+        metadata['columns']['boostedVisibleHero'] = hero_columns
     metadata['modelsSha256'] = file_hash(output / 'models.joblib')
     # Written last: a folder without it is an interrupted training.
     with (output / 'training.json').open('x', encoding='utf-8') as stream:

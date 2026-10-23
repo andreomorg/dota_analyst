@@ -76,11 +76,46 @@ class RiskModelTests(unittest.TestCase):
         self.assertFalse(self.training['humanReviewed'])
         self.assertTrue((self.models / 'training.json').exists())
 
+    def test_hero_variant_keeps_the_original_models_columns(self):
+        from coach_ml.risk.data import HIDDEN_BY_VERSION, SIMPLE, VISIBLE_BY_VERSION
+        from coach_ml.risk.train import ITERATIONS, ml
+
+        visible = VISIBLE_BY_VERSION[FEATURE_VERSION]
+        training = json.loads((self.models / 'training.json').read_text(encoding='utf-8'))
+        self.assertEqual(training['columns']['boostedVisibleHero'], visible + ['heroId'])
+        self.assertEqual(training['columns']['boostedVisible'], visible)
+        self.assertEqual(training['columns']['boostedOmniscient'], visible + HIDDEN_BY_VERSION[FEATURE_VERSION])
+        self.assertEqual(training['columns']['logistic'], SIMPLE)
+        self.assertEqual(ITERATIONS, [100, 200, 400, 800, 1600, 3200])
+        models = ml()['joblib'].load(self.models / 'models.joblib')
+        self.assertTrue(models['boostedVisibleHero'].model.categorical_features[-1])
+
+    def test_hero_ids_outside_the_category_range_are_refused_before_training(self):
+        from unittest.mock import patch
+
+        from coach_ml.risk.data import load
+        from coach_ml.risk.train import ml, train
+
+        lib = ml()
+        for hero_id in (-1, 255, 300):
+            def invalid_load(*args, **kwargs):
+                features, labels, groups, extra = load(*args, **kwargs)
+                extra['heroId'][0] = hero_id
+                return features, labels, groups, extra
+
+            with self.subTest(hero_id=hero_id), tempfile.TemporaryDirectory() as folder:
+                output = Path(folder) / 'models'
+                with patch('coach_ml.risk.train.load', side_effect=invalid_load):
+                    with self.assertRaisesRegex(AuditError, 'heroId >= 0 and < 255'):
+                        train(self.export, output, lib=lib, iterations=[1], log=lambda _m: None)
+                self.assertFalse(output.exists())
+
     def test_the_boosted_model_finds_the_signal_and_beats_the_constant(self):
         from coach_ml.risk.evaluate import evaluate
         with tempfile.TemporaryDirectory() as folder:
             report = evaluate(self.models, self.export, Path(folder) / 'report')
         models = report['models']
+        self.assertIn('boostedVisibleHero', models)
         self.assertGreater(models['boostedVisible']['overall']['prAuc'], models['constant']['overall']['prAuc'] + 0.2)
         self.assertGreater(models['boostedVisible']['overall']['rocAuc'], 0.8)
         self.assertEqual(report['partitions'], ['validation-new'])

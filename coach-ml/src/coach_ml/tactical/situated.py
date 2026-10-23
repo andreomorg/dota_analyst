@@ -100,10 +100,10 @@ def project_situated_scene(context, index):
     situation = snapshot['situation']
     groups = None
     if situation is not None:
+        # Values only: units and meanings cost tokens on every example; the names and the prompt's legend carry them.
         groups = {}
-        for field, (group, unit, meaning) in FIELDS.items():
-            groups.setdefault(group, {})[field] = {
-                'value': situation.get(field), 'unit': unit, 'meaning': meaning}
+        for field, (group, _, _) in FIELDS.items():
+            groups.setdefault(group, {})[field] = situation.get(field)
         # A group is available even when its recorded value is false or zero.
         available = {group for field, (group, _, _) in FIELDS.items()
                      if situation.get(field) is not None}

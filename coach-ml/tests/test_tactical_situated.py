@@ -104,7 +104,7 @@ damageFromHeroesLast6Seconds enemiesHittingMe enemySpellsOnMeLast10 underSmoke''
             if situation is None:
                 self.assertIsNone(actual['facts'][-2]['value'])
             else:
-                self.assertIsNone(actual['facts'][-2]['value']['você']['healthShare']['value'])
+                self.assertIsNone(actual['facts'][-2]['value']['você']['healthShare'])
 
     def test_facts_and_legacy_projection_unchanged(self):
         context = fixture()

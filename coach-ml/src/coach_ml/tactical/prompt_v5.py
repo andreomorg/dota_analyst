@@ -6,6 +6,7 @@ O que é desconhecido está listado em unknowns: não preencha essas lacunas.
 Formule uma pergunta de revisão com duas alternativas e a condição que as separa, sem veredito de erro.
 O resultado futuro não existe para você.
 Leia situation como valores do que o time do jogador via naquele segundo; nulo = desconhecido.
+Legenda: ...Share = 0 a 1; ...Distance e posições = unidades do mapa; ...Seconds/...SecondsAgo = segundos; ...Ready = pronto agora; Within/Near = em alcance de luta.
 Leia roster como nomes, relações de time e papéis do catálogo; use os nomes daqui, nunca da memória.
 Não confunda aliado com inimigo. Não confunda compra com item pronto. Não deduza nomes por ID.
 disposition: conditional-review para hipótese condicionada (preference=undetermined); insufficient quando

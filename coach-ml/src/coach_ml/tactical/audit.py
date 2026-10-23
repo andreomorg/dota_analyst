@@ -44,7 +44,7 @@ def _validate_v5(request):
     _validate_request(legacy)
     value = by_id['situation']['value']
     situation = None if value is None else {
-        field: value[group][field]['value'] for field, (group, _, _) in FIELDS.items()}
+        field: value[group][field] for field, (group, _, _) in FIELDS.items()}
     roster = by_id['roster']['value']
     require(all(h['team'] in ('aliado', 'inimigo') for h in roster), 'Invalid roster relation')
     heroes = [{'heroId': h['heroId'], 'name': h['name'], 'roles': h['roles'],
@@ -162,10 +162,16 @@ def audit_sft(dataset, metadata, manifest, partition, profile='tactical-review-v
         require(meta['exampleId'] not in identities, 'Duplicate tactical scene')
         identities.add(meta['exampleId'])
         require(meta.get('humanReviewed') is False and meta.get('tacticalQualityApproved') is False
-                and meta.get('labelOrigin') == 'model-generated-and-model-critiqued'
                 and meta.get('provisionalAccepted') is True, 'Missing provisional review provenance')
-        for name in ('sourcePredictionsSha256','criticIdentitySha256'):
-            require(type(meta.get(name)) is str and re.fullmatch('[0-9a-f]{64}',meta[name]), 'Missing tactical review artifact identity')
+        if profile == 'tactical-review-v5' and meta.get('labelOrigin') == 'deterministic-policy-v2':
+            # Targets from the situated rule policy: the rule must reproduce the very target, no critic involved.
+            from .policy_v2 import target_for
+            require(meta.get('policyVersion') == 2 and target_for(request) == (meta.get('policyRule'), target),
+                    'Deterministic target does not reproduce from its policy')
+        else:
+            require(meta.get('labelOrigin') == 'model-generated-and-model-critiqued', 'Missing provisional review provenance')
+            for name in ('sourcePredictionsSha256','criticIdentitySha256'):
+                require(type(meta.get(name)) is str and re.fullmatch('[0-9a-f]{64}',meta[name]), 'Missing tactical review artifact identity')
         inputs[digest(request)] += 1
         targets[digest(target)] += 1
         exercises[digest(target['exercise'])] += 1

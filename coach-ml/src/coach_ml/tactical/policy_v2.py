@@ -11,7 +11,7 @@ def target_for(request):
     situation = next(f['value'] for f in request['facts'] if f['id'] == 'situation') or {}
 
     def get(field):
-        return situation.get(FIELDS[field][0], {}).get(field, {}).get('value')
+        return situation.get(FIELDS[field][0], {}).get(field)
 
     def num(field):
         value = get(field)

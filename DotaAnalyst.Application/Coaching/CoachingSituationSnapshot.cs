@@ -21,7 +21,11 @@ public sealed record CoachingSituationSnapshot(
     int? AheadOfOwnWave, int? WaveClashPoint, int? WaveClashPastOwnTower, int? OwnBuildingsUnderAttack,
     int TeamNetWorthLead, int TeamExperienceLead, bool? IsNight, int? SecondsSinceRoshanKill, bool? RoshanAlive,
     bool HasAegis, bool EnemyHasAegis, int RecentDeaths, int EnemyKillsLastMinute,
-    int? DamageFromHeroesLast6Seconds, int? EnemiesHittingMe, int? EnemySpellsOnMeLast10, bool? UnderSmoke)
+    int? DamageFromHeroesLast6Seconds, int? EnemiesHittingMe, int? EnemySpellsOnMeLast10, bool? UnderSmoke,
+    // v5.1: the player's own orders in the last 10 s (the observable intent) and the team's pings near the hero.
+    int? IntentMoves = null, int? IntentAttacks = null, int? IntentCasts = null, int? IntentDestinationDistance = null,
+    int? IntentDestinationAdvance = null, bool? IntentDestinationOnEnemySide = null, int? AllyPingsNearLast10 = null,
+    int? OwnPingsLast10 = null)
 {
     public static CoachingSituationSnapshot From(HeroSituation situation, bool activityKnown)
     {
@@ -40,6 +44,8 @@ public sealed record CoachingSituationSnapshot(
             r.HasAegis, r.EnemyHasAegis, r.RecentDeaths, r.EnemyKillsLastMinute,
             // Activity-based numbers mean nothing without the activity: unknown, not "none".
             activityKnown ? r.DamageFromHeroesLast6Seconds : null, r.EnemiesHittingMe, r.EnemySpellsOnMeLast10,
-            r.UnderSmoke);
+            r.UnderSmoke,
+            r.IntentMoves, r.IntentAttacks, r.IntentCasts, r.IntentDestinationDistance, r.IntentDestinationAdvance,
+            r.IntentDestinationOnEnemySide, r.AllyPingsNearLast10, r.OwnPingsLast10);
     }
 }

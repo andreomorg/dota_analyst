@@ -18,7 +18,7 @@ public sealed class GetSituatedDecisionsHandlerTests
         var columns = typeof(SituationRow).GetProperties().Select(property => property.Name).ToHashSet();
         var fields = typeof(CoachingSituationSnapshot).GetProperties().Select(property => property.Name).ToList();
 
-        Assert.Equal(54, fields.Count);
+        Assert.Equal(62, fields.Count);
         Assert.DoesNotContain(fields, field => field.StartsWith("Hidden", StringComparison.Ordinal));
         Assert.All(fields, field => Assert.Contains(field, columns));
     }
@@ -39,8 +39,30 @@ public sealed class GetSituatedDecisionsHandlerTests
         Assert.Equal((0, 1), (anchor.Situation.AlliesAlive, anchor.Situation.EnemiesAlive));
         // Without the replay's activity the recent damage is unknown, not zero.
         Assert.Null(anchor.Situation.DamageFromHeroesLast6Seconds);
+        // No map in the fake catalog: both routes unknown, never invented.
+        Assert.NotNull(anchor.Escape);
+        Assert.Null(anchor.Escape.ToTower);
+        Assert.Null(anchor.Escape.ToAlly);
+        Assert.DoesNotContain(typeof(CoachingRouteSnapshot).GetProperties(), p => p.Name.Contains("Hidden", StringComparison.Ordinal));
         Assert.Equal(["Anti-Mage", "Unknown hero"], context.Heroes.Select(hero => hero.Name));
         Assert.Equal([HeroRole.Carry, HeroRole.Escape], context.Heroes[0].Roles);
+    }
+
+    [Fact]
+    public async Task OfficialPatchAndKitEffects_ComeFromTheMatchBuild()
+    {
+        var catalogs = new Catalogs();
+        var handler = new GetSituatedDecisionsHandler(
+            new Archive(new(Replay(), [new(1, [new(90, 0, 0)])], StartedAt: DateTimeOffset.UnixEpoch.AddDays(2))),
+            new GameCatalogLoader(catalogs, catalogs, catalogs, catalogs), catalogs, new NoMatches(),
+            new Patches([new("7.41f", DateTimeOffset.UnixEpoch)]));
+
+        var context = (await handler.HandleAsync(Id, 1, CancellationToken.None))!;
+
+        Assert.Equal("7.41f", context.Decision.Patch.MatchPatch);
+        Assert.Equal("game-build:build", context.Decision.Patch.Source);
+        // The fake catalog has no kits: unknown, never "no effect".
+        Assert.All(context.Heroes, hero => Assert.Null(hero.KitEffects));
     }
 
     [Fact]
@@ -79,6 +101,11 @@ public sealed class GetSituatedDecisionsHandlerTests
     private sealed class Archive(ArchivedReplay? replay) : IArchivedReplaySource
     {
         public Task<ArchivedReplay?> FindAsync(MatchId id, CancellationToken ct) => Task.FromResult(replay);
+    }
+
+    private sealed class Patches(IReadOnlyList<GamePatch> patches) : IGamePatchCatalog
+    {
+        public Task<IReadOnlyList<GamePatch>> GetPatchesAsync(CancellationToken cancellationToken) => Task.FromResult(patches);
     }
 
     private sealed class NoMatches : IMatchRepository

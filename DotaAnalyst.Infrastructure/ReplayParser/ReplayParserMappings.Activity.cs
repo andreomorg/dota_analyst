@@ -186,6 +186,9 @@ internal static partial class ReplayParserMappings
         List<CooldownStart>? Cooldowns(IReadOnlyList<ReplayParserPlayerCooldowns?>? entries, string name) =>
             entries?.Select(entry => entry ?? throw Empty($"{name} entry"))
                 .SelectMany(entry => Required(entry.Cooldowns, $"{name}.cooldowns").Select(tuple => ToCooldown(HeroOf(entry.Player), tuple)))
+                // A zero-length cooldown (ready the moment it starts: seen on a pre-game TP scroll) never ran: no
+                // cooldown, not an unreadable document (9 of 1,246 kept documents, 23/10/2026).
+                .Where(cooldown => cooldown.ReadyAt > cooldown.Seconds)
                 .ToList();
     }
 

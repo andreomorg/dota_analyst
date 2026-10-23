@@ -32,7 +32,8 @@ public class CoachMlClientTests
         {
             Assert.Equal("http://localhost/v1/reviews", request.RequestUri!.AbsoluteUri);
             Assert.Equal("Bearer test-key-for-service", request.Headers.Authorization!.ToString());
-        })) { BaseAddress = new("http://localhost/") };
+        }))
+        { BaseAddress = new("http://localhost/") };
         var result = await Provider(client).ReviewAsync(Context(), CancellationToken.None);
         Assert.Equal("policy-preview-v1", result.Engine);
         Assert.False(result.HumanReviewed);

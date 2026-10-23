@@ -1,13 +1,13 @@
 using System.Net;
 using System.Security.Cryptography;
 using System.Text.Json;
-using Microsoft.AspNetCore.DataProtection;
-using Microsoft.AspNetCore.TestHost;
-using Microsoft.Extensions.DependencyInjection;
 using DotaAnalyst.Domain.Players;
 using DotaAnalyst.Server.Authentication;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.AspNetCore.WebUtilities;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace DotaAnalyst.Tests.Server;
 

@@ -1,8 +1,8 @@
-using DotaAnalyst.Application.Baseline;
 using DotaAnalyst.Application.Abstractions;
+using DotaAnalyst.Application.Baseline;
 using DotaAnalyst.Application.Matches;
-using DotaAnalyst.Domain.Analysis;
 using DotaAnalyst.Domain.Abilities;
+using DotaAnalyst.Domain.Analysis;
 using DotaAnalyst.Domain.Heroes;
 using DotaAnalyst.Domain.Items;
 using DotaAnalyst.Domain.Matches;
@@ -433,7 +433,8 @@ public class GetMatchAnalysisHandlerTests
             MatchPlayerBuilder.Create(accountId: null, heroId: 5, team: Team.Radiant),
             MatchPlayerBuilder.Create(accountId: null, heroId: 28, team: Team.Dire),
             MatchPlayerBuilder.Create(accountId: null, heroId: 2, team: Team.Dire))
-        with { ReplayUrl = ReplayUrl };
+        with
+        { ReplayUrl = ReplayUrl };
 
     private static ReplayAnalysis TeamfightReplay(IReadOnlyList<HeroDeath> deaths, IReadOnlyList<DamageRow>? damage)
     {
@@ -1162,7 +1163,8 @@ public class GetMatchAnalysisHandlerTests
     // An unparsed match with a replay address, where the current player plays Lich (hero 31) on Radiant.
     private static MatchDetails UnparsedMatchWithMe() =>
         CreateMatch(Team.Radiant, MatchPlayerBuilder.Create(accountId: Me, heroId: 31, team: Team.Radiant))
-            with { ReplayUrl = ReplayUrl };
+            with
+        { ReplayUrl = ReplayUrl };
 
     private static GetMatchAnalysisHandler CreateHandler(
         MatchDetails match,

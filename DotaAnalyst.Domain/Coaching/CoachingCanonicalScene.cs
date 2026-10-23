@@ -28,11 +28,15 @@ public static class CoachingCanonicalSceneBuilder
         {
             CoachingEpisodeKind.Death => episode.IsolatedDeath switch
             {
-                true => "isolated-death", false => "non-isolated-death", null => "unknown-death-isolation"
+                true => "isolated-death",
+                false => "non-isolated-death",
+                null => "unknown-death-isolation"
             },
             CoachingEpisodeKind.DetectedFight => episode.NearFight switch
             {
-                true => "near-detected-fight", false => "distant-detected-fight", null => "unknown-fight-proximity"
+                true => "near-detected-fight",
+                false => "distant-detected-fight",
+                null => "unknown-fight-proximity"
             },
             _ => throw new ArgumentException("Unknown episode kind.", nameof(scene))
         };
@@ -42,11 +46,11 @@ public static class CoachingCanonicalSceneBuilder
         {
             var allies = facts.Positions.Where(p => p.HeroId != viewer.HeroId && p.Team == viewer.Team).ToArray();
             var nearest = allies.Select(p => new
-                {
-                    Position = p,
-                    // Cast before subtraction: replay coordinates should not overflow intermediate integers.
-                    Distance = Math.Sqrt(Math.Pow((double)p.X - viewer.X, 2) + Math.Pow((double)p.Y - viewer.Y, 2))
-                })
+            {
+                Position = p,
+                // Cast before subtraction: replay coordinates should not overflow intermediate integers.
+                Distance = Math.Sqrt(Math.Pow((double)p.X - viewer.X, 2) + Math.Pow((double)p.Y - viewer.Y, 2))
+            })
                 .OrderBy(p => p.Distance).ThenBy(p => p.Position.HeroId).FirstOrDefault();
             if (nearest is not null)
                 distance = new(nearest.Position.HeroId, viewer.SampleSeconds, nearest.Position.SampleSeconds,

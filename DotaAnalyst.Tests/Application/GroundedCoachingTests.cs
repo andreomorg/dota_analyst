@@ -31,9 +31,9 @@ public class GroundedCoachingTests
         var context = Context();
         Assert.Throws<ArgumentException>(() => PrepareGroundedCoaching.Build(context with { HeroId = 2 }));
         Assert.Throws<ArgumentException>(() => PrepareGroundedCoaching.Build(context with
-            { Scenes = [context.Scenes[0], context.Scenes[0]] }));
+        { Scenes = [context.Scenes[0], context.Scenes[0]] }));
         Assert.Throws<ArgumentException>(() => PrepareGroundedCoaching.Build(context with
-            { Scenes = [context.Scenes[0] with { RetrospectiveEpisode = context.Scenes[0].RetrospectiveEpisode with { Id = "" } }] }));
+        { Scenes = [context.Scenes[0] with { RetrospectiveEpisode = context.Scenes[0].RetrospectiveEpisode with { Id = "" } }] }));
     }
 
     [Fact]

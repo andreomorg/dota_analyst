@@ -36,10 +36,10 @@ public sealed class OpenDotaParseClientTests
     public async Task RateLimitedPost_IsKnownRefusedAndWeighted()
     {
         var limiter = new OpenDotaRateLimiter(Options.Create(new OpenDotaOptions
-            { BaseUrl = new("https://example.com/api/"), PermitsPerMinute = 11, MaxQueueWait = TimeSpan.Zero }),
+        { BaseUrl = new("https://example.com/api/"), PermitsPerMinute = 11, MaxQueueWait = TimeSpan.Zero }),
             TimeProvider.System, NullLogger<OpenDotaRateLimiter>.Instance);
         var handler = new OpenDotaRateLimitHandler(limiter, TimeProvider.System, NullLogger<OpenDotaRateLimitHandler>.Instance)
-            { InnerHandler = new Stub(_ => new(HttpStatusCode.TooManyRequests)) };
+        { InnerHandler = new Stub(_ => new(HttpStatusCode.TooManyRequests)) };
         var ex = await Assert.ThrowsAsync<OpenDotaParseException>(() => Client(handler).SubmitAsync(Match(), default));
         Assert.Equal("rateLimited", ex.Code);
         Assert.False(ex.OutcomeUnknown);
@@ -50,7 +50,7 @@ public sealed class OpenDotaParseClientTests
     public void WeightedReservation_ChargesTenWithoutPartialReservation()
     {
         var limiter = new OpenDotaRateLimiter(Options.Create(new OpenDotaOptions
-            { BaseUrl = new("https://example.com/"), PermitsPerMinute = 11, MaxQueueWait = TimeSpan.Zero }),
+        { BaseUrl = new("https://example.com/"), PermitsPerMinute = 11, MaxQueueWait = TimeSpan.Zero }),
             TimeProvider.System, NullLogger<OpenDotaRateLimiter>.Instance);
         Assert.Equal(TimeSpan.Zero, limiter.TryReserve(10));
         Assert.Null(limiter.TryReserve(2));

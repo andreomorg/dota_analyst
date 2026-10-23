@@ -1,5 +1,5 @@
-using DotaAnalyst.Domain.Matches;
 using DotaAnalyst.Domain.Analysis;
+using DotaAnalyst.Domain.Matches;
 using DotaAnalyst.Domain.Replays;
 
 namespace DotaAnalyst.Domain.Situations;

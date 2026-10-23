@@ -20,7 +20,9 @@ public sealed class ModelSamplesApiTests : IDisposable
 
     private static Dictionary<string, string?> Settings => new()
     {
-        ["CoachMl:Enabled"] = "true", ["CoachMl:BaseUrl"] = "http://coach.invalid/", ["CoachMl:ApiKey"] = Key,
+        ["CoachMl:Enabled"] = "true",
+        ["CoachMl:BaseUrl"] = "http://coach.invalid/",
+        ["CoachMl:ApiKey"] = Key,
     };
 
     [Fact]

@@ -33,8 +33,11 @@ public static class CoachingSupportTransitionBuilder
             earlierTarget is null ? 0 : InspectionSeconds + 1, 0);
         if (earlierTarget is null) return initial with { UnavailableReason = "insufficient-earlier-window" };
         if (ally is null)
-            return initial with { UnavailableReason = scene.AtOrBeforeAnchor.Positions.Any(p => p.HeroId == viewerId)
-                ? "anchor-ally-unobserved" : "anchor-viewer-unobserved" };
+            return initial with
+            {
+                UnavailableReason = scene.AtOrBeforeAnchor.Positions.Any(p => p.HeroId == viewerId)
+                ? "anchor-ally-unobserved" : "anchor-viewer-unobserved"
+            };
         var tracks = positions ?? [];
         if (tracks.Select(p => p.HeroId).Distinct().Count() != tracks.Count)
             throw new ArgumentException("Expected one position track per hero.", nameof(positions));
@@ -46,9 +49,12 @@ public static class CoachingSupportTransitionBuilder
         var previousViewer = Before(viewer, earlierTarget.Value);
         var previousAlly = Before(support, earlierTarget.Value);
         if (previousViewer is null || previousAlly is null)
-            return initial with { ObservedPairedSeconds = pairedSeconds,
+            return initial with
+            {
+                ObservedPairedSeconds = pairedSeconds,
                 UnavailableReason = previousViewer is null && previousAlly is null ? "earlier-both-unobserved"
-                    : previousViewer is null ? "earlier-viewer-unobserved" : "earlier-ally-unobserved" };
+                    : previousViewer is null ? "earlier-viewer-unobserved" : "earlier-ally-unobserved"
+            };
         var distance = Math.Sqrt(Math.Pow((double)previousViewer.Value.X - previousAlly.Value.X, 2)
             + Math.Pow((double)previousViewer.Value.Y - previousAlly.Value.Y, 2));
         var change = ally.Distance.CompareTo(distance);

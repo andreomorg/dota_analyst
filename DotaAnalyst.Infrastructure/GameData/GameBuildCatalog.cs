@@ -80,7 +80,8 @@ public sealed class GameBuildCatalog(IGameDataStore store, IMemoryCache cache, C
             }
 
             catalog = GameFileMappings.ToCatalog(new GameFiles(stored.Files.ToDictionary(file => file.Key, file => contents[file.Value])))
-                with { FileVersions = stored.Files };
+                with
+            { FileVersions = stored.Files };
             cache.Set(key, catalog, CacheEntries.Catalog(CatalogFor));
             return catalog;
         }

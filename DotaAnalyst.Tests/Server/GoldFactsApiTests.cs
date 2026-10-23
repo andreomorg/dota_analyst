@@ -86,7 +86,9 @@ public class GoldFactsApiTests
 
     private static WebApplicationFactory<Program> Factory(Archive archive) => new ApiFactory(new Dictionary<string, string?>
     {
-        ["CoachMl:Enabled"] = "true", ["CoachMl:BaseUrl"] = "http://coach.invalid/", ["CoachMl:ApiKey"] = Key,
+        ["CoachMl:Enabled"] = "true",
+        ["CoachMl:BaseUrl"] = "http://coach.invalid/",
+        ["CoachMl:ApiKey"] = Key,
     }).WithWebHostBuilder(builder => builder.ConfigureTestServices(services => services.AddSingleton<IArchivedReplaySource>(archive)));
 
     private static HttpClient Client(WebApplicationFactory<Program> factory)

@@ -416,8 +416,12 @@ public static partial class GameFileMappings
         {
             var kind = part.Groups["kind"].Value.ToLowerInvariant() switch
             {
-                "active" => ItemAbilityKind.Active, "passive" => ItemAbilityKind.Passive, "toggle" => ItemAbilityKind.Toggle,
-                "use" => ItemAbilityKind.Use, "upgrade" => ItemAbilityKind.Upgrade, _ => ItemAbilityKind.Other,
+                "active" => ItemAbilityKind.Active,
+                "passive" => ItemAbilityKind.Passive,
+                "toggle" => ItemAbilityKind.Toggle,
+                "use" => ItemAbilityKind.Use,
+                "upgrade" => ItemAbilityKind.Upgrade,
+                _ => ItemAbilityKind.Other,
             };
             parts.Add(new ItemAbility(kind, part.Groups["title"].Value.Trim(), Readable(part.Groups["text"].Value, values)));
         }
@@ -452,10 +456,21 @@ public static partial class GameFileMappings
     // The names the OpenDota constants use, so the rules written for them (IsPassive, AbilityEffects) read both sources.
     private static string? DisplayBehavior(string flag) => flag switch
     {
-        "PASSIVE" => "Passive", "UNIT_TARGET" => "Unit Target", "POINT" => "Point Target", "NO_TARGET" => "No Target",
-        "AOE" => "AOE", "CHANNELLED" => "Channeled", "AUTOCAST" => "Autocast", "ATTACK" => "Attack Modifier",
-        "HIDDEN" => "Hidden", "IMMEDIATE" => "Instant Cast", "TOGGLE" => "Toggle", "AURA" => "Aura",
-        "DIRECTIONAL" => "Directional", "VECTOR_TARGETING" => "Vector Targeting", _ => null,
+        "PASSIVE" => "Passive",
+        "UNIT_TARGET" => "Unit Target",
+        "POINT" => "Point Target",
+        "NO_TARGET" => "No Target",
+        "AOE" => "AOE",
+        "CHANNELLED" => "Channeled",
+        "AUTOCAST" => "Autocast",
+        "ATTACK" => "Attack Modifier",
+        "HIDDEN" => "Hidden",
+        "IMMEDIATE" => "Instant Cast",
+        "TOGGLE" => "Toggle",
+        "AURA" => "Aura",
+        "DIRECTIONAL" => "Directional",
+        "VECTOR_TARGETING" => "Vector Targeting",
+        _ => null,
     };
 
     // HERO -> Hero, CREEP_HERO -> Creep Hero.

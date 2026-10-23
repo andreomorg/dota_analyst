@@ -23,8 +23,11 @@ public sealed class AliasedCoachingInput
             Reflections = response.Reflections.Select(reflection =>
             {
                 var source = references[reflection.EpisodeId];
-                return reflection with { EpisodeId = source.EpisodeId,
-                    EvidenceIds = reflection.EvidenceIds.Select(id => source.EvidenceIds[id]).ToArray() };
+                return reflection with
+                {
+                    EpisodeId = source.EpisodeId,
+                    EvidenceIds = reflection.EvidenceIds.Select(id => source.EvidenceIds[id]).ToArray()
+                };
             }).ToArray()
         };
     }

@@ -83,19 +83,25 @@ public static class OpenDotaKitMappings
         var team = teams.Contains("Both") || (teams.Contains("Enemy") && teams.Contains("Friendly"))
             ? AbilityTargetTeam.Both : teams.Count == 1 ? teams[0] switch
             {
-                "Enemy" => AbilityTargetTeam.Enemy, "Friendly" => AbilityTargetTeam.Ally,
-                "Custom" => AbilityTargetTeam.Custom, _ => AbilityTargetTeam.None,
+                "Enemy" => AbilityTargetTeam.Enemy,
+                "Friendly" => AbilityTargetTeam.Ally,
+                "Custom" => AbilityTargetTeam.Custom,
+                _ => AbilityTargetTeam.None,
             } : AbilityTargetTeam.None;
         return new(key, Text(data, "dname") ?? key, Text(data, "desc"), Strings(Field(data, "behavior")), team,
             Strings(Field(data, "target_type")), Text(data, "dmg_type") switch
             {
-                "Physical" => AbilityDamageType.Physical, "Magical" => AbilityDamageType.Magical,
-                "Pure" => AbilityDamageType.Pure, _ => AbilityDamageType.None,
+                "Physical" => AbilityDamageType.Physical,
+                "Magical" => AbilityDamageType.Magical,
+                "Pure" => AbilityDamageType.Pure,
+                _ => AbilityDamageType.None,
             }, Text(data, "bkbpierce") switch { "Yes" => true, "No" => false, _ => null },
             Text(data, "dispellable") switch
             {
-                "Yes" => Dispellable.Yes, "No" => Dispellable.No,
-                "Strong Dispels Only" => Dispellable.StrongOnly, _ => Dispellable.Unknown,
+                "Yes" => Dispellable.Yes,
+                "No" => Dispellable.No,
+                "Strong Dispels Only" => Dispellable.StrongOnly,
+                _ => Dispellable.Unknown,
             }, Numbers(Field(data, "cd")), Numbers(Field(data, "mc")), Values(Field(data, "attrib")),
             Field(data, "is_innate").ValueKind == JsonValueKind.True || Text(data, "is_innate") == "true",
             Text(data, "lore"), Numbers(Field(data, "dmg")));

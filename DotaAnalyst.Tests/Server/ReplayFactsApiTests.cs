@@ -16,7 +16,9 @@ public class ReplayFactsApiTests
     private const string Key = "test-machine-key-for-facts";
     private static Dictionary<string, string?> Settings => new()
     {
-        ["CoachMl:Enabled"] = "true", ["CoachMl:BaseUrl"] = "http://coach.invalid/", ["CoachMl:ApiKey"] = Key,
+        ["CoachMl:Enabled"] = "true",
+        ["CoachMl:BaseUrl"] = "http://coach.invalid/",
+        ["CoachMl:ApiKey"] = Key,
     };
 
     [Fact]
@@ -87,11 +89,14 @@ public class ReplayFactsApiTests
     [Fact]
     public async Task Snapshot_HidesFuturePossessionEnd_AndReadsTormentorAsOfAnchor()
     {
-        var replay = Replay() with { Facts = new ReplayAdditionalFacts
+        var replay = Replay() with
         {
-            StolenAbilities = [new(1, 5, 40, "test_spell", 100, 2, 3, false)],
-            Tormentors = [new(Team.Radiant, 1, 2, [new(8, true), new(12, false)])],
-        } };
+            Facts = new ReplayAdditionalFacts
+            {
+                StolenAbilities = [new(1, 5, 40, "test_spell", 100, 2, 3, false)],
+                Tormentors = [new(Team.Radiant, 1, 2, [new(8, true), new(12, false)])],
+            }
+        };
         using var factory = Factory(new Archive(replay));
         using var client = Client(factory);
         using var json = JsonDocument.Parse(await client.GetStringAsync("/api/internal/replay-facts/123?heroId=1&seconds=10"));
@@ -106,13 +111,16 @@ public class ReplayFactsApiTests
     [Fact]
     public async Task FinalQuery_PreservesFractionalEvents_ExcludesPostgame()
     {
-        var replay = Replay() with { Facts = new ReplayAdditionalFacts
+        var replay = Replay() with
         {
-            CourierDeaths = [new(60.2, 1, null), new(60.5, 1, null)],
-            ChatWheel = [new(1, 60.2, 17), new(1, 60.5, 18)],
-            StolenAbilities = [new(1, 60.5, null, "postgame_spell", 100, 1, 1, false)],
-            Tormentors = [new(Team.Radiant, 1, 2, [new(60, true), new(61, false)])],
-        } };
+            Facts = new ReplayAdditionalFacts
+            {
+                CourierDeaths = [new(60.2, 1, null), new(60.5, 1, null)],
+                ChatWheel = [new(1, 60.2, 17), new(1, 60.5, 18)],
+                StolenAbilities = [new(1, 60.5, null, "postgame_spell", 100, 1, 1, false)],
+                Tormentors = [new(Team.Radiant, 1, 2, [new(60, true), new(61, false)])],
+            }
+        };
         using var factory = Factory(new Archive(replay));
         using var client = Client(factory);
         using var json = JsonDocument.Parse(await client.GetStringAsync("/api/internal/replay-facts/123?heroId=1&seconds=61&includeFinal=true"));

@@ -42,7 +42,9 @@ public sealed class OllamaCoachingProvider(HttpClient client, string model) : IC
             [new(f.Id, f.ExerciseIds.Single())]).Suggestions.Single()).ToArray();
         var alternatives = candidates.Select(f => new
         {
-            type = "object", additionalProperties = false, required = new[] { "findingId", "exerciseId" },
+            type = "object",
+            additionalProperties = false,
+            required = new[] { "findingId", "exerciseId" },
             properties = new
             {
                 findingId = new { type = "string", @enum = new[] { f.Id } },
@@ -51,18 +53,31 @@ public sealed class OllamaCoachingProvider(HttpClient client, string model) : IC
         }).ToArray();
         var schema = new
         {
-            type = "object", additionalProperties = false, required = new[] { "selections" },
+            type = "object",
+            additionalProperties = false,
+            required = new[] { "selections" },
             properties = new { selections = new { type = "array", maxItems = 3, items = new { oneOf = alternatives } } }
         };
         var payload = new
         {
-            context.SchemaVersion, context.MatchId, context.HeroId, context.Role, context.Patch,
-            context.Perspective, context.Limitations, candidates = previews
+            context.SchemaVersion,
+            context.MatchId,
+            context.HeroId,
+            context.Role,
+            context.Patch,
+            context.Perspective,
+            context.Limitations,
+            candidates = previews
         };
         using var response = await client.PostAsJsonAsync("api/generate", new
         {
-            model, system = Instructions, prompt = JsonSerializer.Serialize(payload, JsonOptions),
-            stream = false, think = false, format = schema, keep_alive = "5m",
+            model,
+            system = Instructions,
+            prompt = JsonSerializer.Serialize(payload, JsonOptions),
+            stream = false,
+            think = false,
+            format = schema,
+            keep_alive = "5m",
             options = new { temperature = 0, seed = 42, num_ctx = 8192, num_predict = 400 }
         }, cancellationToken);
         response.EnsureSuccessStatusCode();

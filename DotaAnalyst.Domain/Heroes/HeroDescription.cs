@@ -13,8 +13,10 @@ public sealed record HeroDescription(string Language, int Version, string Text)
         var attack = details.AttackType == HeroAttackType.Melee ? "corpo a corpo" : "à distância";
         var attribute = details.PrimaryAttribute switch
         {
-            HeroAttribute.Strength => "força", HeroAttribute.Agility => "agilidade",
-            HeroAttribute.Intelligence => "inteligência", _ => "universal",
+            HeroAttribute.Strength => "força",
+            HeroAttribute.Agility => "agilidade",
+            HeroAttribute.Intelligence => "inteligência",
+            _ => "universal",
         };
         return new("pt-BR", 1,
             $"Herói {attack}, de atributo {attribute}. " +

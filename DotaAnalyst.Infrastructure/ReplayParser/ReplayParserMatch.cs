@@ -784,8 +784,13 @@ internal static partial class ReplayParserMappings
                 int? At(int i) => target[i].ValueKind == JsonValueKind.Null ? null : (int)Math.Round(target[i].GetDouble());
                 if (target.GetArrayLength() == 4 && target[3].ValueKind != JsonValueKind.Null && !target[3].TryGetInt32(out _))
                     throw new InvalidDataException("Ability target source is not an integer.");
-                return use with { TargetHeroId = At(0) is { } player ? HeroOf(player) : null, TargetX = At(1), TargetY = At(2),
-                    PointSource = target.GetArrayLength() == 4 ? At(3) : null };
+                return use with
+                {
+                    TargetHeroId = At(0) is { } player ? HeroOf(player) : null,
+                    TargetX = At(1),
+                    TargetY = At(2),
+                    PointSource = target.GetArrayLength() == 4 ? At(3) : null
+                };
             }).ToList();
         }
 
@@ -1157,7 +1162,8 @@ internal static partial class ReplayParserMappings
             tuple.ValueKind == JsonValueKind.Array && tuple.GetArrayLength() == 2 && tuple[0].TryGetInt32(out var t)
                 && tuple[1].TryGetInt32(out var alive)
                 ? (t, alive)
-                : throw new InvalidDataException("A camp reading is not [t, alive].")).ToList()) { SpawnerType = camp.SpawnerType };
+                : throw new InvalidDataException("A camp reading is not [t, alive].")).ToList())
+    { SpawnerType = camp.SpawnerType };
 
     // [t, radiantCount, direCount, radiantX | null, radiantY | null, direX | null, direY | null] -> off-lane creeps.
     private static OffLaneCreeps ToOffLaneCreeps(JsonElement tuple)

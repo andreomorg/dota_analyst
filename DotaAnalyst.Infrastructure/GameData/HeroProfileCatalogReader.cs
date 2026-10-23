@@ -15,8 +15,11 @@ public sealed class HeroProfileCatalogReader(ICatalogStore store) : IHeroProfile
         try
         {
             var entry = JsonSerializer.Deserialize<Entry>(json, HeroProfileCatalogKey.JsonOptions);
-            if (entry is not { SchemaVersion: 1, Profile: { Enabled: true } p, Roles: not null,
-                    PrimaryAttribute: { } attribute, AttackType: { } attack }
+            if (entry is not
+                {
+                    SchemaVersion: 1, Profile: { Enabled: true } p, Roles: not null,
+                    PrimaryAttribute: { } attribute, AttackType: { } attack
+                }
                 || entry.HeroId != heroId || entry.Build?.Id != buildId || !p.HasValidShape()) return null;
             // Recompute deterministic text for the current description version, never trust a stale/malformed string.
             return new(attribute, attack, entry.Roles.ToHashSet()) { Profile = p };

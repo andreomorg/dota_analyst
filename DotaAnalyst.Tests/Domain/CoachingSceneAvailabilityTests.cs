@@ -35,7 +35,7 @@ public class CoachingSceneAvailabilityTests
     {
         var scene = Scene();
         Assert.Equal("no-observed-ally", CoachingSceneAvailabilityBuilder.Build(scene with
-            { AtOrBeforeAnchor = scene.AtOrBeforeAnchor with { Positions = [new(1, Team.Radiant, 30, 0, 0)] } }).AnchorSupportDistance);
+        { AtOrBeforeAnchor = scene.AtOrBeforeAnchor with { Positions = [new(1, Team.Radiant, 30, 0, 0)] } }).AnchorSupportDistance);
     }
 
     [Fact]
@@ -43,6 +43,6 @@ public class CoachingSceneAvailabilityTests
     {
         var scene = Scene();
         Assert.Throws<ArgumentException>(() => CoachingSceneAvailabilityBuilder.Build(scene with
-            { RetrospectiveEpisode = scene.RetrospectiveEpisode with { PositionCoverage = new(4, 5) } }));
+        { RetrospectiveEpisode = scene.RetrospectiveEpisode with { PositionCoverage = new(4, 5) } }));
     }
 }

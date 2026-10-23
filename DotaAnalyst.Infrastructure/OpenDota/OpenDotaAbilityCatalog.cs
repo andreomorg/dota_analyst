@@ -70,8 +70,11 @@ public sealed class OpenDotaAbilityCatalog(OpenDotaClient client, IMemoryCache c
         {
             var snapshot = json is null ? null : JsonSerializer.Deserialize<Snapshot>(json, Options);
             return snapshot is { Version: 1 or Version, Abilities: not null, Kits: not null }
-                && snapshot.Abilities.Values.All(a => a is { Key: not null, Name: not null, Behavior: not null,
-                    TargetTypes: not null, Cooldown: not null, ManaCost: not null, Values: not null }
+                && snapshot.Abilities.Values.All(a => a is
+                {
+                    Key: not null, Name: not null, Behavior: not null,
+                    TargetTypes: not null, Cooldown: not null, ManaCost: not null, Values: not null
+                }
                     && a.Values.All(v => v is { Levels: not null }))
                 && snapshot.Kits.Values.All(k => k is { Abilities: not null, Talents: not null, Facets: not null })
                 ? snapshot : null;

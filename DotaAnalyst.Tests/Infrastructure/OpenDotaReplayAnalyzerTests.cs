@@ -75,7 +75,7 @@ public class OpenDotaReplayAnalyzerTests
         var handler = new ChangingHandler();
         using var cache = new MemoryCache(new MemoryCacheOptions { SizeLimit = 20 });
         var analyzer = new OpenDotaReplayAnalyzer(new OpenDotaClient(new HttpClient(handler)
-            { BaseAddress = new("https://example.com/api/") }), cache);
+        { BaseAddress = new("https://example.com/api/") }), cache);
         var id = CreateMatchId(12);
         Assert.False((await analyzer.GetMatchDetailsAsync(id, default))!.IsParsed);
         Assert.False((await analyzer.GetMatchDetailsAsync(id, default))!.IsParsed);
@@ -90,8 +90,11 @@ public class OpenDotaReplayAnalyzerTests
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken token)
         {
             Calls++;
-            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(
-                Calls == 1 ? "{\"match_id\":12}" : "{\"match_id\":12,\"version\":21}") });
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(
+                Calls == 1 ? "{\"match_id\":12}" : "{\"match_id\":12,\"version\":21}")
+            });
         }
     }
 

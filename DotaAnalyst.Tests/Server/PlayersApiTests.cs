@@ -115,8 +115,11 @@ public class PlayersApiTests
         public Task<IReadOnlyDictionary<int, Hero>> GetHeroesAsync(CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlyDictionary<int, Hero>>(new Dictionary<int, Hero>
             {
-                [31] = new(31, "Lich") { Details = new HeroDetails(HeroAttribute.Intelligence,
-                    HeroAttackType.Ranged, new HashSet<HeroRole> { HeroRole.Support }) },
+                [31] = new(31, "Lich")
+                {
+                    Details = new HeroDetails(HeroAttribute.Intelligence,
+                    HeroAttackType.Ranged, new HashSet<HeroRole> { HeroRole.Support })
+                },
             });
     }
 

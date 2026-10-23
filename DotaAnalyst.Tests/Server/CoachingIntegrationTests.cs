@@ -16,7 +16,9 @@ public class CoachingIntegrationTests
     private const string Key = "test-machine-key-for-coach";
     private static Dictionary<string, string?> Settings => new()
     {
-        ["CoachMl:Enabled"] = "true", ["CoachMl:BaseUrl"] = "http://coach.invalid/", ["CoachMl:ApiKey"] = Key
+        ["CoachMl:Enabled"] = "true",
+        ["CoachMl:BaseUrl"] = "http://coach.invalid/",
+        ["CoachMl:ApiKey"] = Key
     };
 
     [Fact]

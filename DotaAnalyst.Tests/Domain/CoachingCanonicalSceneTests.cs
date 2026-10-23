@@ -48,7 +48,7 @@ public class CoachingCanonicalSceneTests
             new(1, Team.Radiant, 825, 0, 0), new(1, Team.Radiant, 825, 0, 0))));
         var scene = Scene();
         Assert.Throws<ArgumentException>(() => CoachingCanonicalSceneBuilder.Build(scene with
-            { AtOrBeforeAnchor = scene.AtOrBeforeAnchor with { AnchorSeconds = 836 } }));
+        { AtOrBeforeAnchor = scene.AtOrBeforeAnchor with { AnchorSeconds = 836 } }));
     }
 
     [Fact]

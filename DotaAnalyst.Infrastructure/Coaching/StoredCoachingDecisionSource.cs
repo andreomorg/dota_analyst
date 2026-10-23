@@ -1,8 +1,8 @@
+using System.Text.Json;
 using DotaAnalyst.Application.Abstractions;
 using DotaAnalyst.Domain.Coaching;
 using DotaAnalyst.Domain.Matches;
 using DotaAnalyst.Infrastructure.ReplayParser;
-using System.Text.Json;
 
 namespace DotaAnalyst.Infrastructure.Coaching;
 

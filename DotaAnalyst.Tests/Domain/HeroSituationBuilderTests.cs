@@ -1,7 +1,7 @@
 using DotaAnalyst.Domain.Abilities;
-using DotaAnalyst.Domain.Items;
-using DotaAnalyst.Domain.Heroes;
 using DotaAnalyst.Domain.Analysis;
+using DotaAnalyst.Domain.Heroes;
+using DotaAnalyst.Domain.Items;
 using DotaAnalyst.Domain.Matches;
 using DotaAnalyst.Domain.Replays;
 using DotaAnalyst.Domain.Situations;
@@ -936,9 +936,9 @@ public class HeroSituationBuilderTests
         var items = new Dictionary<string, ItemDetails>
         {
             ["pogo_stick"] = new("pogo_stick", 0, null, false)
-                { Abilities = [new ItemAbility(ItemAbilityKind.Active, "Hop", "Leaps forward.")] },
+            { Abilities = [new ItemAbility(ItemAbilityKind.Active, "Hop", "Leaps forward.")] },
             ["occult_bracelet"] = new("occult_bracelet", 0, null, false)
-                { Abilities = [new ItemAbility(ItemAbilityKind.Passive, "Rites of Eloshar", null)] },
+            { Abilities = [new ItemAbility(ItemAbilityKind.Passive, "Rites of Eloshar", null)] },
         };
         var activity = new ReplayActivity([], [], [],
             slotChanges:

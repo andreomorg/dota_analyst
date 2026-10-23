@@ -38,6 +38,6 @@ public class BoundedCoachingTests
         Assert.Empty(PrepareBoundedCoaching.Validate(request, response));
         Assert.NotEmpty(PrepareBoundedCoaching.Validate(request, response with { SchemaVersion = 2 }));
         Assert.NotEmpty(PrepareBoundedCoaching.Validate(request, response with
-            { Reflections = [response.Reflections[0] with { EvidenceIds = ["position-999"] }] }));
+        { Reflections = [response.Reflections[0] with { EvidenceIds = ["position-999"] }] }));
     }
 }

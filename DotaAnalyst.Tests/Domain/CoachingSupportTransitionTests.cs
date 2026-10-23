@@ -55,7 +55,7 @@ public class CoachingSupportTransitionTests
     {
         var scene = Scene();
         var result = CoachingSupportTransitionBuilder.Build(scene with
-            { AtOrBeforeAnchor = scene.AtOrBeforeAnchor with { Positions = [] } },
+        { AtOrBeforeAnchor = scene.AtOrBeforeAnchor with { Positions = [] } },
             [new(1, [new(20, 0, 0)]), new(2, [new(20, 10, 0)])]);
         Assert.Null(result.AtAnchor);
         Assert.Equal(CoachingSupportChange.Unavailable, result.Change);
@@ -67,7 +67,7 @@ public class CoachingSupportTransitionTests
     {
         var scene = Scene();
         var result = CoachingSupportTransitionBuilder.Build(scene with
-            { AtOrBeforeAnchor = scene.AtOrBeforeAnchor with { AnchorSeconds = 5, Positions = [] } }, null);
+        { AtOrBeforeAnchor = scene.AtOrBeforeAnchor with { AnchorSeconds = 5, Positions = [] } }, null);
         Assert.Null(result.EarlierTargetSeconds);
         Assert.Equal(0, result.ExpectedPairedSeconds);
         Assert.Equal("insufficient-earlier-window", result.UnavailableReason);
@@ -78,8 +78,10 @@ public class CoachingSupportTransitionTests
     {
         var scene = Scene();
         var result = CoachingSupportTransitionBuilder.Build(scene with
-            { AtOrBeforeAnchor = scene.AtOrBeforeAnchor with
-                { Positions = [new(1, Team.Radiant, 30, 0, 0), new(2, Team.Radiant, 30, 10000, 0)] } },
+        {
+            AtOrBeforeAnchor = scene.AtOrBeforeAnchor with
+            { Positions = [new(1, Team.Radiant, 30, 0, 0), new(2, Team.Radiant, 30, 10000, 0)] }
+        },
             [new(1, [new(20, 0, 0), new(30, 0, 0)]), new(2, [new(20, 10, 0), new(30, 10000, 0)])]);
         Assert.Equal(CoachingSupportChange.Increased, result.Change);
         Assert.Equal(10000, result.AtAnchor!.Distance);
@@ -98,7 +100,7 @@ public class CoachingSupportTransitionTests
         var result = CoachingSupportTransitionBuilder.Build(scene, tracks);
         Assert.Equal(11, result.ObservedPairedSeconds);
         Assert.Equal(result, CoachingSupportTransitionBuilder.Build(scene with
-            { RetrospectiveEpisode = scene.RetrospectiveEpisode with { PositionCoverage = new(4, 4), IsolatedDeath = true } }, tracks));
+        { RetrospectiveEpisode = scene.RetrospectiveEpisode with { PositionCoverage = new(4, 4), IsolatedDeath = true } }, tracks));
     }
 
     [Fact]

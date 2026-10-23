@@ -14,8 +14,8 @@ using System.IO.Compression;
 using System.Numerics;
 using System.Security.Cryptography;
 using System.Text.Json;
-using ValvePak;
 using ValveKeyValue;
+using ValvePak;
 using ValveResourceFormat;
 using ValveResourceFormat.ResourceTypes;
 using PhysMesh = ValveResourceFormat.ResourceTypes.RubikonPhysics.Shapes.Mesh;
@@ -78,10 +78,11 @@ object Area(KVObject entity)
     return new
     {
         name = Name(Text(entity, "targetname")),
-        x = (int)MathF.Round(origin.X), y = (int)MathF.Round(origin.Y),
+        x = (int)MathF.Round(origin.X),
+        y = (int)MathF.Round(origin.Y),
         yaw = (int)MathF.Round(yaw),
         local = new[] { (int)MathF.Floor(min.X), (int)MathF.Floor(min.Y), (int)MathF.Ceiling(max.X), (int)MathF.Ceiling(max.Y) },
-        min =new[] { (int)MathF.Floor(origin.X + corners.Min(c => c.X)), (int)MathF.Floor(origin.Y + corners.Min(c => c.Y)) },
+        min = new[] { (int)MathF.Floor(origin.X + corners.Min(c => c.X)), (int)MathF.Floor(origin.Y + corners.Min(c => c.Y)) },
         max = new[] { (int)MathF.Ceiling(origin.X + corners.Max(c => c.X)), (int)MathF.Ceiling(origin.Y + corners.Max(c => c.Y)) },
     };
 }
@@ -106,7 +107,11 @@ var map = new
     },
     grid = new
     {
-        cell, width, height, originX, originY,
+        cell,
+        width,
+        height,
+        originX,
+        originY,
         // One byte per cell, rows from the bottom up (base64).
         nav = Convert.ToBase64String(nav),
         // Floor height of each cell, 16-bit little-endian, short.MinValue = no floor (base64).

@@ -1,8 +1,8 @@
 using System.Net;
 using System.Text.Json;
 using DotaAnalyst.Application.Abstractions;
-using DotaAnalyst.Domain.Heroes;
 using DotaAnalyst.Domain.Abilities;
+using DotaAnalyst.Domain.Heroes;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
@@ -27,8 +27,8 @@ public sealed class HeroProfileApiTests
     private sealed class Historical : IGameBuildCatalog
     {
         public Task<(GameBuild Build, GameCatalog Catalog)?> ForMatchAsync(DateTimeOffset? at, CancellationToken ct) =>
-            Task.FromResult<(GameBuild,GameCatalog)?>((new("historical", 1, DateTimeOffset.UnixEpoch),
-                new(Heroes: new Dictionary<int,HeroDetails>())));
+            Task.FromResult<(GameBuild, GameCatalog)?>((new("historical", 1, DateTimeOffset.UnixEpoch),
+                new(Heroes: new Dictionary<int, HeroDetails>())));
     }
 
     [Theory]
@@ -63,6 +63,6 @@ public sealed class HeroProfileApiTests
     {
         public Task<IReadOnlyDictionary<int, Hero>> GetHeroesAsync(CancellationToken ct) =>
             Task.FromResult<IReadOnlyDictionary<int, Hero>>(new Dictionary<int, Hero>
-            { [31] = new(31,"Lich") { Details = new(HeroAttribute.Intelligence,HeroAttackType.Ranged,new HashSet<HeroRole> { HeroRole.Support }) } });
+            { [31] = new(31, "Lich") { Details = new(HeroAttribute.Intelligence, HeroAttackType.Ranged, new HashSet<HeroRole> { HeroRole.Support }) } });
     }
 }

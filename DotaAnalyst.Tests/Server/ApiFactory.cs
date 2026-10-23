@@ -232,7 +232,8 @@ internal sealed class ApiFactory(IReadOnlyDictionary<string, string?>? settings 
                 {
                     Details = new ItemDetails("blink", 2250, [], false)
                     {
-                        Behavior = ["Point Target"], Cooldown = 15,
+                        Behavior = ["Point Target"],
+                        Cooldown = 15,
                         Abilities = [new(ItemAbilityKind.Active, "Blink", "Teleport to a target point up to 1200 units away.")],
                     },
                 },

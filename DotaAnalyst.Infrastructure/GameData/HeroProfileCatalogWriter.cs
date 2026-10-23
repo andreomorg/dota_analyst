@@ -20,9 +20,14 @@ public sealed class HeroProfileCatalogWriter(IGameBuildCatalog builds, ICatalogS
         var names = valid.ToDictionary(h => h.Key, h => h.Value.Profile!.Key);
         var details = valid.ToDictionary(h => h.Key, h => JsonSerializer.Serialize(new
         {
-            schemaVersion = 1, build = snapshot.Build, heroId = h.Key,
-            primaryAttribute = h.Value.PrimaryAttribute, attackType = h.Value.AttackType,
-            roles = h.Value.Roles.OrderBy(role => role).ToArray(), profile = h.Value.Profile, description = h.Value.Description,
+            schemaVersion = 1,
+            build = snapshot.Build,
+            heroId = h.Key,
+            primaryAttribute = h.Value.PrimaryAttribute,
+            attackType = h.Value.AttackType,
+            roles = h.Value.Roles.OrderBy(role => role).ToArray(),
+            profile = h.Value.Profile,
+            description = h.Value.Description,
         }, HeroProfileCatalogKey.JsonOptions));
         var saved = await store.LoadAsync(name, cancellationToken);
         if (saved is not null && saved.Details.Values.Any(json => !BelongsToBuild(json, snapshot.Build.Id)))

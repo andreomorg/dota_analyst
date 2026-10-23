@@ -41,8 +41,11 @@ public sealed class TemporalCoachingInput
                 || new[] { reflection.Hypothesis, reflection.Alternative, reflection.Exercise, reflection.Limitations }
                     .Any(text => string.IsNullOrWhiteSpace(text) || text.Length > 700))
                 throw new InvalidDataException("Malformed reflection or unknown scene/evidence alias.");
-            restored.Add(reflection with { EpisodeId = map.EpisodeId,
-                EvidenceIds = reflection.EvidenceIds.Select(id => map.EvidenceIds[id]).ToArray() });
+            restored.Add(reflection with
+            {
+                EpisodeId = map.EpisodeId,
+                EvidenceIds = reflection.EvidenceIds.Select(id => map.EvidenceIds[id]).ToArray()
+            });
         }
         return response with { Reflections = restored };
     }

@@ -57,7 +57,7 @@ public sealed partial class HeroSituationBuilder
         if (learned.Where(name => !name.StartsWith("special_bonus_", StringComparison.Ordinal))
             .Any(name => abilityDetails.GetValueOrDefault(name)?.Profile?.IsUltimate is null)) return null;
         var candidates = learned.Where(name => abilityDetails.GetValueOrDefault(name) is
-            { IsPassive: false, Profile.IsUltimate: true }).ToArray();
+        { IsPassive: false, Profile.IsUltimate: true }).ToArray();
         return candidates.Length == 1 ? candidates[0] : null;
     }
 

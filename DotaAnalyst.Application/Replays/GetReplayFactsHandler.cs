@@ -108,10 +108,18 @@ public sealed class GetReplayFactsHandler(IArchivedReplaySource replays, GameCat
     {
         var families = new Dictionary<string, object?>
         {
-            ["outposts"] = facts?.Outposts, ["tormentors"] = facts?.Tormentors, ["courierDeaths"] = facts?.CourierDeaths,
-            ["healing"] = facts?.Healing, ["finalStats"] = facts?.FinalStats, ["finalItems"] = facts?.FinalItems,
-            ["chatWheel"] = facts?.ChatWheel, ["tempTrees"] = facts?.TempTrees, ["bossTracks"] = facts?.BossTracks,
-            ["lanterns"] = facts?.Lanterns, ["goldEvents"] = facts?.GoldEvents, ["stolenAbilities"] = facts?.StolenAbilities,
+            ["outposts"] = facts?.Outposts,
+            ["tormentors"] = facts?.Tormentors,
+            ["courierDeaths"] = facts?.CourierDeaths,
+            ["healing"] = facts?.Healing,
+            ["finalStats"] = facts?.FinalStats,
+            ["finalItems"] = facts?.FinalItems,
+            ["chatWheel"] = facts?.ChatWheel,
+            ["tempTrees"] = facts?.TempTrees,
+            ["bossTracks"] = facts?.BossTracks,
+            ["lanterns"] = facts?.Lanterns,
+            ["goldEvents"] = facts?.GoldEvents,
+            ["stolenAbilities"] = facts?.StolenAbilities,
             ["stolenCooldowns"] = facts?.StolenCooldowns,
         };
         return families.ToDictionary(family => family.Key,

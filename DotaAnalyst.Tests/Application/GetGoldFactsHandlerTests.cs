@@ -73,8 +73,14 @@ public class GetGoldFactsHandlerTests
     [Fact]
     public async Task Balance_IsRecentPastSample_IncludingPartialComponents_NeverFutureOrStale()
     {
-        var replay = Replay() with { Facts = new ReplayAdditionalFacts { GoldBalances =
-            [new(1, 10, 40, null), new(1, 12, 80, 20), new(2, 11, 999, 999)] } };
+        var replay = Replay() with
+        {
+            Facts = new ReplayAdditionalFacts
+            {
+                GoldBalances =
+            [new(1, 10, 40, null), new(1, 12, 80, 20), new(2, 11, 999, 999)]
+            }
+        };
         var handler = new GetGoldFactsHandler(new Archive(replay));
         var at11 = (await handler.HandleAsync(Id, 1, 11, 30, default)).Facts!.SampledBalance!;
         Assert.Equal(10, at11.Seconds);

@@ -14,8 +14,11 @@ public class OpenDotaHeroCatalogTests
     [Fact]
     public async Task DamagedExtendedProfileDoesNotDiscardLegacyClassificationOrRefreshForever()
     {
-        var store = new MemoryStore { Saved = new SavedCatalog(new Dictionary<int,string> { [31] = "Lich" }, Now)
-        { Details = new Dictionary<int,string> { [31] = """{"primaryAttribute":2,"attackType":1,"roles":[1],"profile":{"attributes":{"strength":{"value":10,"origin":99}}}}""" } } };
+        var store = new MemoryStore
+        {
+            Saved = new SavedCatalog(new Dictionary<int, string> { [31] = "Lich" }, Now)
+            { Details = new Dictionary<int, string> { [31] = """{"primaryAttribute":2,"attackType":1,"roles":[1],"profile":{"attributes":{"strength":{"value":10,"origin":99}}}}""" } }
+        };
         var source = new OpenDota { Fail = true };
         var heroes = await CreateCatalog(store, source).GetHeroesAsync(default);
         Assert.Equal(HeroAttribute.Intelligence, heroes[31].Details!.PrimaryAttribute);
@@ -140,7 +143,7 @@ public class OpenDotaHeroCatalogTests
             Calls++;
             var body = """[{"id":31,"localized_name":"Lich","primary_attr":"int","attack_type":"Ranged","roles":["Support","Nuker","FutureRole","Support"]}]""";
             return Task.FromResult(new HttpResponseMessage(Fail ? HttpStatusCode.ServiceUnavailable : HttpStatusCode.OK)
-                { Content = new StringContent(Body ?? body) });
+            { Content = new StringContent(Body ?? body) });
         }
     }
 }

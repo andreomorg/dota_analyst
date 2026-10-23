@@ -128,9 +128,12 @@ public static class OpenDotaMappings
             Abilities = OpenDotaKitMappings.Array(item.Abilities).Select(ability => new ItemAbility(
                 OpenDotaKitMappings.Text(ability, "type") switch
                 {
-                    "active" => ItemAbilityKind.Active, "passive" => ItemAbilityKind.Passive,
-                    "toggle" => ItemAbilityKind.Toggle, "use" => ItemAbilityKind.Use,
-                    "upgrade" => ItemAbilityKind.Upgrade, _ => ItemAbilityKind.Other,
+                    "active" => ItemAbilityKind.Active,
+                    "passive" => ItemAbilityKind.Passive,
+                    "toggle" => ItemAbilityKind.Toggle,
+                    "use" => ItemAbilityKind.Use,
+                    "upgrade" => ItemAbilityKind.Upgrade,
+                    _ => ItemAbilityKind.Other,
                 }, OpenDotaKitMappings.Text(ability, "title"), OpenDotaKitMappings.Text(ability, "description"))).ToArray(),
             Behavior = OpenDotaKitMappings.Strings(item.Behavior),
             Cooldown = OpenDotaKitMappings.Numbers(item.Cd).Cast<double?>().FirstOrDefault(),

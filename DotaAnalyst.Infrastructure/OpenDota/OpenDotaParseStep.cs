@@ -31,26 +31,42 @@ public sealed class OpenDotaParseStep(IOpenDotaParseRequestRepository requests, 
                 {
                     if (request.EnrichmentOnly)
                     {
-                        await requests.CompleteAsync(next with { State = "refreshing", LastErrorCode = "notParsedYet",
-                            NextAttemptAt = now.AddMinutes(options.ResumeMinutes) }, cancellationToken);
+                        await requests.CompleteAsync(next with
+                        {
+                            State = "refreshing",
+                            LastErrorCode = "notParsedYet",
+                            NextAttemptAt = now.AddMinutes(options.ResumeMinutes)
+                        }, cancellationToken);
                         return true;
                     }
                     var reset = now - request.RequestedAt >= TimeSpan.FromHours(options.RetryHours);
-                    next = next with { State = "queued", JobId = null, PollAttempts = 0,
-                        SubmitAttempts = reset ? 0 : request.SubmitAttempts, RequestedAt = reset ? now : request.RequestedAt,
+                    next = next with
+                    {
+                        State = "queued",
+                        JobId = null,
+                        PollAttempts = 0,
+                        SubmitAttempts = reset ? 0 : request.SubmitAttempts,
+                        RequestedAt = reset ? now : request.RequestedAt,
                         NextAttemptAt = request.SubmitAttempts >= options.MaxSubmitAttempts && !reset
-                            ? request.RequestedAt.AddHours(options.RetryHours) : now.AddMinutes(options.ResumeMinutes), LastErrorCode = "notParsedYet" };
+                            ? request.RequestedAt.AddHours(options.RetryHours) : now.AddMinutes(options.ResumeMinutes),
+                        LastErrorCode = "notParsedYet"
+                    };
                 }
             }
             else if (request.JobId is { } jobId)
             {
                 var pending = await client.IsPendingAsync(jobId, cancellationToken);
                 var count = request.PollAttempts + 1;
-                next = next with { State = pending ? "processing" : "refreshing", PollAttempts = count,
-                    LastErrorCode = null, NextAttemptAt = pending
+                next = next with
+                {
+                    State = pending ? "processing" : "refreshing",
+                    PollAttempts = count,
+                    LastErrorCode = null,
+                    NextAttemptAt = pending
                         ? now + (now - request.RequestedAt >= TimeSpan.FromMinutes(options.ActiveMinutes)
                             ? TimeSpan.FromMinutes(options.ResumeMinutes)
-                            : TimeSpan.FromSeconds(Math.Min(options.MaxPollSeconds, count * options.PollSeconds))) : now };
+                            : TimeSpan.FromSeconds(Math.Min(options.MaxPollSeconds, count * options.PollSeconds))) : now
+                };
             }
             else
             {
@@ -62,9 +78,13 @@ public sealed class OpenDotaParseStep(IOpenDotaParseRequestRepository requests, 
                 }
                 if (request.SubmitAttempts >= options.MaxSubmitAttempts)
                 {
-                    await requests.CompleteAsync(next with { State = "refreshing", LastErrorCode = "attemptLimit",
+                    await requests.CompleteAsync(next with
+                    {
+                        State = "refreshing",
+                        LastErrorCode = "attemptLimit",
                         NextAttemptAt = request.RequestedAt.AddHours(options.RetryHours) > now
-                            ? request.RequestedAt.AddHours(options.RetryHours) : now }, cancellationToken);
+                            ? request.RequestedAt.AddHours(options.RetryHours) : now
+                    }, cancellationToken);
                     return true;
                 }
                 // Persist intent BEFORE POST. Interrupted/cancelled sends are reconciled without immediate retry.
@@ -76,9 +96,13 @@ public sealed class OpenDotaParseStep(IOpenDotaParseRequestRepository requests, 
         }
         catch (OpenDotaParseException ex)
         {
-            next = next with { State = ex.Code is "invalidRequest" or "accessDenied" ? "failed"
+            next = next with
+            {
+                State = ex.Code is "invalidRequest" or "accessDenied" ? "failed"
                     : ex.OutcomeUnknown || ex.Code == "jobMissing" ? "refreshing" : "deferred",
-                LastErrorCode = ex.Code, NextAttemptAt = now.AddMinutes(options.ResumeMinutes) };
+                LastErrorCode = ex.Code,
+                NextAttemptAt = now.AddMinutes(options.ResumeMinutes)
+            };
         }
         catch (DataSourceUnavailableException)
         {

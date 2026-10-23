@@ -65,8 +65,12 @@ public class OpenDotaItemCatalog(
             return JsonSerializer.Deserialize<StoredItemDetails>(json, JsonOptions) is { Key: not null } stored
                 ? new ItemDetails(stored.Key, stored.Cost, stored.Components, stored.IsConsumable)
                 {
-                    Abilities = stored.Abilities ?? [], Behavior = stored.Behavior ?? [], Cooldown = stored.Cooldown,
-                    ManaCost = stored.ManaCost, Values = stored.Values ?? [], HasCharges = stored.HasCharges,
+                    Abilities = stored.Abilities ?? [],
+                    Behavior = stored.Behavior ?? [],
+                    Cooldown = stored.Cooldown,
+                    ManaCost = stored.ManaCost,
+                    Values = stored.Values ?? [],
+                    HasCharges = stored.HasCharges,
                 }
                 : null;
         }
@@ -83,7 +87,7 @@ public class OpenDotaItemCatalog(
         {
             return json is not null && ReadDetails(json) is not null
                 && JsonSerializer.Deserialize<StoredItemDetails>(json, JsonOptions) is
-                    { Version: 2, Abilities: not null, Behavior: not null, Values: not null };
+                { Version: 2, Abilities: not null, Behavior: not null, Values: not null };
         }
         catch (JsonException) { return false; }
     }

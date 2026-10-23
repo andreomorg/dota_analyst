@@ -23,11 +23,14 @@ public sealed class HeroProfileCatalogWriterTests
     [Fact]
     public async Task SavingSameBuildTwiceDoesNotRewriteOrIncludeDisabledUnits()
     {
-        var profile = new HeroProfile("npc_dota_hero_test", true, new(null,null,null,null,null,null),
-            new(null,null,null,null,null,null,null,null,null), new(null,null), new(null,null,null,null), new(null,null,null,null));
+        var profile = new HeroProfile("npc_dota_hero_test", true, new(null, null, null, null, null, null),
+            new(null, null, null, null, null, null, null, null, null), new(null, null), new(null, null, null, null), new(null, null, null, null));
         var details = new HeroDetails(HeroAttribute.Strength, HeroAttackType.Melee, new HashSet<HeroRole>()) { Profile = profile };
-        var builds = new Builds(new GameCatalog(Heroes: new Dictionary<int, HeroDetails> { [1] = details,
-            [127] = details with { Profile = profile with { Enabled = false } } }));
+        var builds = new Builds(new GameCatalog(Heroes: new Dictionary<int, HeroDetails>
+        {
+            [1] = details,
+            [127] = details with { Profile = profile with { Enabled = false } }
+        }));
         var store = new Store();
         var writer = new HeroProfileCatalogWriter(builds, store, TimeProvider.System);
         var first = await writer.SaveForAsync(DateTimeOffset.UtcNow, default);
@@ -52,11 +55,11 @@ public sealed class HeroProfileCatalogWriterTests
         Assert.Equal(details, await new HeroProfileCatalogReader(store).FindAsync("test-build", 1, default));
         store.Saved = text;
         Assert.Null(await new HeroProfileCatalogReader(store).FindAsync("wrong-build", 1, default));
-        store.Saved = store.Saved with { Names = new Dictionary<int,string> { [1] = profile.Key, [999] = "previous-valid-hero" } };
+        store.Saved = store.Saved with { Names = new Dictionary<int, string> { [1] = profile.Key, [999] = "previous-valid-hero" } };
         await Assert.ThrowsAsync<InvalidDataException>(() => writer.SaveForAsync(DateTimeOffset.UtcNow, default));
         var partial = System.Text.Json.Nodes.JsonNode.Parse(store.Saved.Details[1])!;
         partial.AsObject().Remove("primaryAttribute");
-        store.Saved = store.Saved with { Details = new Dictionary<int,string> { [1] = partial.ToJsonString() } };
+        store.Saved = store.Saved with { Details = new Dictionary<int, string> { [1] = partial.ToJsonString() } };
         Assert.Null(await new HeroProfileCatalogReader(store).FindAsync("test-build", 1, default));
     }
 
@@ -71,13 +74,16 @@ public sealed class HeroProfileCatalogWriterTests
         public SavedCatalog? Saved;
         public int Writes;
         public Task<SavedCatalog?> LoadAsync(string catalog, CancellationToken ct) => Task.FromResult(Saved);
-        public Task ReplaceAsync(string catalog, IReadOnlyDictionary<int,string> names, IReadOnlyDictionary<int,string> details,
+        public Task ReplaceAsync(string catalog, IReadOnlyDictionary<int, string> names, IReadOnlyDictionary<int, string> details,
             DateTimeOffset at, CancellationToken ct)
         {
             Writes++;
-            Saved = new(names, at) { Details = details.ToDictionary(p => p.Key, p =>
+            Saved = new(names, at)
+            {
+                Details = details.ToDictionary(p => p.Key, p =>
                 System.Text.Json.JsonSerializer.Serialize(System.Text.Json.JsonDocument.Parse(p.Value).RootElement,
-                    new System.Text.Json.JsonSerializerOptions { WriteIndented = true })) };
+                    new System.Text.Json.JsonSerializerOptions { WriteIndented = true }))
+            };
             return Task.CompletedTask;
         }
     }

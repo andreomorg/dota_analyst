@@ -1,6 +1,6 @@
 using System.Text.Json;
-using DotaAnalyst.Domain.Replays;
 using DotaAnalyst.Domain.Matches;
+using DotaAnalyst.Domain.Replays;
 
 namespace DotaAnalyst.Infrastructure.ReplayParser;
 
@@ -183,12 +183,24 @@ internal static partial class ReplayParserMappings
             .OrderBy(cooldown => cooldown.Seconds).ToList());
         return new ReplayAdditionalFacts
         {
-            Outposts = outposts, Tormentors = tormentors, CourierDeaths = couriers, Healing = healing, FinalStats = finalStats,
-            FinalItems = finalItems, ChatWheel = chatWheel, TempTrees = tempTrees, BossTracks = bossTracks, Lanterns = lanterns,
-            GoldEvents = goldEvents, GoldBalances = goldBalances,
-            EconomyStates = ReadEconomyStates(response, invalid), GoldLossChanges = ReadGoldLossChanges(response, invalid),
+            Outposts = outposts,
+            Tormentors = tormentors,
+            CourierDeaths = couriers,
+            Healing = healing,
+            FinalStats = finalStats,
+            FinalItems = finalItems,
+            ChatWheel = chatWheel,
+            TempTrees = tempTrees,
+            BossTracks = bossTracks,
+            Lanterns = lanterns,
+            GoldEvents = goldEvents,
+            GoldBalances = goldBalances,
+            EconomyStates = ReadEconomyStates(response, invalid),
+            GoldLossChanges = ReadGoldLossChanges(response, invalid),
             FarmSnapshots = ReadFarmSnapshots(response, invalid),
-            StolenAbilities = stolenAbilities, StolenCooldowns = stolenCooldowns, InvalidFamilies = invalid,
+            StolenAbilities = stolenAbilities,
+            StolenCooldowns = stolenCooldowns,
+            InvalidFamilies = invalid,
         };
 
         static int StolenPlayer(JsonElement entry) =>

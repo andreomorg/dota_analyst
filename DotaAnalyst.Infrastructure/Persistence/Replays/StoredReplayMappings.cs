@@ -1,7 +1,7 @@
-using DotaAnalyst.Domain.Analysis;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using DotaAnalyst.Application.Abstractions;
+using DotaAnalyst.Domain.Analysis;
 using DotaAnalyst.Domain.Matches;
 using DotaAnalyst.Domain.Replays;
 using DotaAnalyst.Domain.Stats;

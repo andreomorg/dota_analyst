@@ -279,7 +279,7 @@ public static class MatchMetricsCalculator
         return losses.Count == 0 ? null : losses.Average();
     }
 
-    private static PerGamePhase<PerRegion<int>> CountRegionsByPhase(        IEnumerable<(int Seconds, int X, int Y)> positions, Team team)
+    private static PerGamePhase<PerRegion<int>> CountRegionsByPhase(IEnumerable<(int Seconds, int X, int Y)> positions, Team team)
     {
         var counts = positions
             .Where(position => position.Seconds >= 0)

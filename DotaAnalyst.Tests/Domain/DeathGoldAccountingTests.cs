@@ -2,6 +2,7 @@ using DotaAnalyst.Domain.Analysis;
 using DotaAnalyst.Domain.Replays;
 
 namespace DotaAnalyst.Tests.Domain;
+
 public class DeathGoldAccountingTests
 {
     [Fact]

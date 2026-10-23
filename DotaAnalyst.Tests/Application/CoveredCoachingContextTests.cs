@@ -39,10 +39,13 @@ public class CoveredCoachingContextTests
     public void LegacyCountsCannotTurnUnknownDeathsOrReturnEstimatesIntoAdvice()
     {
         var context = Context(Death("d1", null), Death("d2", null), Death("d3", null));
-        context = context with { Evidence = [.. context.Evidence,
+        context = context with
+        {
+            Evidence = [.. context.Evidence,
             new("legacy-deaths", "Deaths", 10, "count", 0, 600, "legacy", ""),
             new("legacy-isolated", "IsolatedDeaths", 10, "count", 0, 600, "legacy", ""),
-            new("legacy-return", "QuickRedeaths", 10, "count", 0, 600, "legacy", "")] };
+            new("legacy-return", "QuickRedeaths", 10, "count", 0, 600, "legacy", "")]
+        };
         Assert.Empty(CoachingFindingSelector.Select(context));
         Assert.Empty(RenderCoachingAdvice.Render(context, []).Suggestions);
     }
@@ -63,8 +66,11 @@ public class CoveredCoachingContextTests
     public void ForgedEpisodeCountsAreRejectedEvenWithNoChoices()
     {
         var context = Context(Death("d1", true), Death("d2", true));
-        context = context with { Evidence = context.Evidence.Select(e =>
-            e.Metric == "ConfirmedIsolatedDeaths" ? e with { Value = 100 } : e).ToArray() };
+        context = context with
+        {
+            Evidence = context.Evidence.Select(e =>
+            e.Metric == "ConfirmedIsolatedDeaths" ? e with { Value = 100 } : e).ToArray()
+        };
         Assert.NotEmpty(CoachingFindingSelector.ValidateChoices(context, []));
         Assert.Throws<InvalidDataException>(() => RenderCoachingAdvice.Render(context, []));
     }

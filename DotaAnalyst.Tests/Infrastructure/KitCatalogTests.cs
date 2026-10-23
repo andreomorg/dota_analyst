@@ -109,8 +109,11 @@ public sealed class KitCatalogTests
     [InlineData("{}")]
     public async Task CorruptSavedSnapshot_IsRefreshed(string json)
     {
-        var store = new KitStore { Saved = new(new Dictionary<int, string> { [1] = "current" }, Now)
-            { Details = new Dictionary<int, string> { [1] = json } } };
+        var store = new KitStore
+        {
+            Saved = new(new Dictionary<int, string> { [1] = "current" }, Now)
+            { Details = new Dictionary<int, string> { [1] = json } }
+        };
         Assert.NotEmpty(await Abilities(store, new()).GetAbilitiesAsync(default));
     }
 
@@ -134,8 +137,11 @@ public sealed class KitCatalogTests
     [Fact]
     public async Task LegacyItemDetails_AreRefreshed_EvenWhenFresh()
     {
-        var store = new KitStore { Saved = new(new Dictionary<int, string> { [116] = "Black King Bar" }, Now)
-            { Details = new Dictionary<int, string> { [116] = """{"key":"black_king_bar","cost":4050,"components":[],"isConsumable":false}""" } } };
+        var store = new KitStore
+        {
+            Saved = new(new Dictionary<int, string> { [116] = "Black King Bar" }, Now)
+            { Details = new Dictionary<int, string> { [116] = """{"key":"black_king_bar","cost":4050,"components":[],"isConsumable":false}""" } }
+        };
         var http = new KitHttp();
         Assert.NotEmpty((await Items(store, http).GetItemsAsync(default))[116].Details!.Abilities);
         Assert.Equal(2, http.Calls);
@@ -144,8 +150,11 @@ public sealed class KitCatalogTests
     [Fact]
     public async Task LegacyItemDetails_RemainUsableIfSourceFails()
     {
-        var store = new KitStore { Saved = new(new Dictionary<int, string> { [116] = "Black King Bar" }, Now)
-            { Details = new Dictionary<int, string> { [116] = """{"key":"black_king_bar","cost":4050,"components":[],"isConsumable":false}""" } } };
+        var store = new KitStore
+        {
+            Saved = new(new Dictionary<int, string> { [116] = "Black King Bar" }, Now)
+            { Details = new Dictionary<int, string> { [116] = """{"key":"black_king_bar","cost":4050,"components":[],"isConsumable":false}""" } }
+        };
         var item = (await Items(store, new() { Fails = true }).GetItemsAsync(default))[116];
         Assert.Equal(4050, item.Details!.Cost);
         Assert.Empty(item.Details.Abilities);

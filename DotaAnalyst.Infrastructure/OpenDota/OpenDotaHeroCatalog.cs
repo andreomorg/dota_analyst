@@ -101,7 +101,7 @@ public class OpenDotaHeroCatalog(
         try
         {
             return JsonSerializer.Deserialize<StoredHeroDetails>(json, JsonOptions) is
-                { PrimaryAttribute: { } attribute, AttackType: { } attack, Roles: { } roles }
+            { PrimaryAttribute: { } attribute, AttackType: { } attack, Roles: { } roles }
                 ? new HeroDetails(attribute, attack, roles.ToHashSet()) { Profile = ReadProfile(json) }
                 : null;
         }

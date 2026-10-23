@@ -124,7 +124,11 @@ public static class KeyValues
                     var escaped = text[position++];
                     builder.Append(escaped switch
                     {
-                        'n' => "\n", 't' => "\t", '"' => "\"", '\\' => "\\", _ => $"\\{escaped}",
+                        'n' => "\n",
+                        't' => "\t",
+                        '"' => "\"",
+                        '\\' => "\\",
+                        _ => $"\\{escaped}",
                     });
                     continue;
                 }

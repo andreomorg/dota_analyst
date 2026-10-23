@@ -1,0 +1,118 @@
+# Formatting and C# style for every editor and for the build (dotnet build/format read this file; VS Code needs the
+# EditorConfig extension for the other languages). The rules match how the code was already written.
+root = true
+
+# ---------- Every file ----------
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+# Markdown: two trailing spaces are a line break.
+[*.md]
+trim_trailing_whitespace = false
+
+# YAML, JSON and project files: 2 spaces (those tools' default).
+[*.{yml,yaml,json,jsonc,csproj,esproj,slnx,props,targets,xml}]
+indent_size = 2
+
+# Go: tabs, as gofmt requires (CI checks gofmt).
+[{*.go,go.mod,go.sum}]
+indent_style = tab
+
+[*.py]
+max_line_length = 120
+
+# ---------- C# ----------
+[*.cs]
+max_line_length = 120
+
+# Layout
+csharp_style_namespace_declarations = file_scoped:warning
+dotnet_sort_system_directives_first = true
+csharp_using_directive_placement = outside_namespace:warning
+# Braces on their own line (Allman, the .NET default).
+csharp_new_line_before_open_brace = all
+csharp_new_line_before_else = true
+csharp_new_line_before_catch = true
+csharp_new_line_before_finally = true
+# A one-line "if (x) return;" may go without braces; anything longer has them.
+csharp_prefer_braces = when_multiline:suggestion
+
+# var
+csharp_style_var_for_built_in_types = true:suggestion
+csharp_style_var_when_type_is_apparent = true:suggestion
+csharp_style_var_elsewhere = true:suggestion
+
+# Modern C# the code already uses
+csharp_style_prefer_primary_constructors = true:suggestion
+csharp_style_expression_bodied_methods = when_on_single_line:silent
+csharp_style_expression_bodied_properties = true:silent
+dotnet_style_prefer_collection_expression = when_types_loosely_match:suggestion
+csharp_style_prefer_pattern_matching = true:suggestion
+dotnet_style_qualification_for_field = false:suggestion
+dotnet_style_qualification_for_property = false:suggestion
+dotnet_style_qualification_for_method = false:suggestion
+dotnet_style_readonly_field = true:warning
+
+# .NET analyzers (Directory.Build.props): LoggerMessage delegates only pay off with heavy logging; a hint, not a warning.
+dotnet_diagnostic.CA1848.severity = suggestion
+
+# ---------- Naming (C#) ----------
+# The first rule that matches wins.
+
+dotnet_naming_symbols.interfaces.applicable_kinds = interface
+dotnet_naming_style.begins_with_i.required_prefix = I
+dotnet_naming_style.begins_with_i.capitalization = pascal_case
+dotnet_naming_rule.interfaces_begin_with_i.symbols = interfaces
+dotnet_naming_rule.interfaces_begin_with_i.style = begins_with_i
+dotnet_naming_rule.interfaces_begin_with_i.severity = warning
+
+dotnet_naming_symbols.types.applicable_kinds = class, struct, enum, delegate, namespace
+dotnet_naming_style.pascal_case.capitalization = pascal_case
+dotnet_naming_rule.types_are_pascal_case.symbols = types
+dotnet_naming_rule.types_are_pascal_case.style = pascal_case
+dotnet_naming_rule.types_are_pascal_case.severity = warning
+
+dotnet_naming_symbols.members.applicable_kinds = method, property, event
+dotnet_naming_rule.members_are_pascal_case.symbols = members
+dotnet_naming_rule.members_are_pascal_case.style = pascal_case
+dotnet_naming_rule.members_are_pascal_case.severity = warning
+
+dotnet_naming_symbols.constants.applicable_kinds = field, local
+dotnet_naming_symbols.constants.required_modifiers = const
+dotnet_naming_rule.constants_are_pascal_case.symbols = constants
+dotnet_naming_rule.constants_are_pascal_case.style = pascal_case
+dotnet_naming_rule.constants_are_pascal_case.severity = warning
+
+dotnet_naming_symbols.static_readonly.applicable_kinds = field
+dotnet_naming_symbols.static_readonly.required_modifiers = static, readonly
+dotnet_naming_rule.static_readonly_are_pascal_case.symbols = static_readonly
+dotnet_naming_rule.static_readonly_are_pascal_case.style = pascal_case
+dotnet_naming_rule.static_readonly_are_pascal_case.severity = warning
+
+# Private fields: _camelCase (Microsoft's convention).
+dotnet_naming_symbols.private_fields.applicable_kinds = field
+dotnet_naming_symbols.private_fields.applicable_accessibilities = private, private_protected
+dotnet_naming_style.underscore_camel.required_prefix = _
+dotnet_naming_style.underscore_camel.capitalization = camel_case
+dotnet_naming_rule.private_fields_are_underscore_camel.symbols = private_fields
+dotnet_naming_rule.private_fields_are_underscore_camel.style = underscore_camel
+dotnet_naming_rule.private_fields_are_underscore_camel.severity = suggestion
+
+dotnet_naming_symbols.locals_and_parameters.applicable_kinds = parameter, local
+dotnet_naming_style.camel_case.capitalization = camel_case
+dotnet_naming_rule.locals_are_camel_case.symbols = locals_and_parameters
+dotnet_naming_rule.locals_are_camel_case.style = camel_case
+dotnet_naming_rule.locals_are_camel_case.severity = warning
+
+# Test names read as sentences with underscores (Method_Situation_Result), the xUnit convention.
+[DotaAnalyst.Tests/**.cs]
+dotnet_diagnostic.CA1707.severity = none
+
+# EF Core migrations are generated: no style checks there.
+[**/Migrations/*.cs]
+generated_code = true

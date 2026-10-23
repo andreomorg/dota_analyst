@@ -1,4 +1,12 @@
-# gofmt only accepts LF: keep Go sources LF in the working tree even with core.autocrlf=true (Windows).
+# Text files are stored and checked out with LF on every machine (Windows included, whatever core.autocrlf says), so
+# editors, gofmt and the .editorconfig agree. Git decides what is text; binaries are left alone.
+* text=auto eol=lf
+
+# gofmt only accepts LF.
 *.go text eol=lf
 go.mod text eol=lf
 go.sum text eol=lf
+
+# Windows scripts keep CRLF (cmd.exe needs it).
+*.cmd text eol=crlf
+*.bat text eol=crlf

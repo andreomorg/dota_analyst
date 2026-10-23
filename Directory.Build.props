@@ -1,0 +1,9 @@
+<!-- Applied by MSBuild to every .csproj below this folder: one place for what all projects share. -->
+<Project>
+  <PropertyGroup>
+    <!-- The .NET analyzers' recommended rules, and the .editorconfig style/naming rules checked by the build (and CI),
+         not only by the editor. They are warnings, never errors: the build still passes while they get fixed. -->
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+  </PropertyGroup>
+</Project>

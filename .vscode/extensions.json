@@ -2,6 +2,8 @@
   // VS Code offers to install these when the folder is opened.
   "recommendations": [
     "anthropic.claude-code",
+    // Applies .editorconfig (spacing, line endings) to every language; C# Dev Kit already reads it for C#.
+    "editorconfig.editorconfig",
     "ms-dotnettools.csdevkit",
     "golang.go",
     "dbaeumer.vscode-eslint",

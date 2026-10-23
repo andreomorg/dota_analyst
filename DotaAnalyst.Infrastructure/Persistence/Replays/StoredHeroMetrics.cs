@@ -47,7 +47,15 @@ internal sealed record StoredHeroMetrics(
     // Teleport metrics; absent in older rows, which stay valid.
     TeleportMetrics? Teleports = null,
     // Play quality metrics; absent in older rows, which stay valid.
-    PlayQualityMetrics? Plays = null);
+    PlayQualityMetrics? Plays = null,
+    // The blocks below were added on 22/10/2026; absent in older rows, which stay valid.
+    DeathContextMetrics? DeathContext = null,
+    ItemUsageMetrics? ItemUsage = null,
+    FightInitiationMetrics? FightInitiation = null,
+    LanePressureMetrics? LanePressure = null,
+    DayNightMetrics? DayNight = null,
+    SmokeMetrics? Smokes = null,
+    FarmMetrics? Farm = null);
 
 internal sealed record StoredMapObjectiveMetrics(
     MapObjectiveCounts? Counts, int RoshanKills, int? RoshanKillsNearby, int TormentorKills, int? TormentorKillsNearby,

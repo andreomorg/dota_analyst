@@ -103,7 +103,7 @@ public static class MatchMetricsCalculator
             var movement = EstimateMovement(player.Team, samples);
             var heroPositions = positionsOf.GetValueOrDefault(player.HeroId);
             var farm = timeline.FindHero(player.HeroId) is { } heroSeries ? FarmByRegion(heroSeries, timeline, samples, player.Team) : ((PerRegion<double> Gain, PerRegion<int> Minutes)?)null;
-            var fightsNearby = fights.Count(fight => WasNear(heroPositions, fight));
+            var fightsIn = fights.Where(fight => WasNear(heroPositions, fight)).ToList();
             var enemyDeaths = deaths.Where(death => teamOf.GetValueOrDefault(death.HeroId) != player.Team).ToList();
             var kills = enemyDeaths.Count(death => death.KillerHeroId == player.HeroId || death.AssistHeroIds.Contains(player.HeroId));
 
@@ -142,7 +142,7 @@ public static class MatchMetricsCalculator
                 TimeByRegionByPhase: phaseTimeShares,
                 DeathsByRegionByPhase: phaseDeathCounts,
                 TeamFights: fights.Count,
-                FightsNearby: fightsNearby,
+                FightsNearby: fightsIn.Count,
                 KillParticipation: enemyDeaths.Count == 0 ? null : (double)kills / enemyDeaths.Count,
                 QuickRedeaths: QuickRedeaths(heroDeaths, heroPositions),
                 LaneDamageDealt: damageOf.TryGetValue(player.HeroId, out var dealtMinutes) ? dealtMinutes.ToHeroes.Take(LaningMinutes).Sum() : null,
@@ -157,7 +157,14 @@ public static class MatchMetricsCalculator
                     objectives, objectivePlaces, objectiveCounts?.GetValueOrDefault(player.HeroId), wisdom, heroDeaths),
                 Teleports: TeleportMetricsCalculator.Calculate(player.HeroId, buffs, heroPositions, fights, heroDeaths),
                 Plays: activity is null ? null : PlayQualityMetricsCalculator.Calculate(player.HeroId, activity, teamOf, positionsOf,
-                    deaths, matchEnd, kits?.GetValueOrDefault(player.HeroId)));
+                    deaths, matchEnd, kits?.GetValueOrDefault(player.HeroId)),
+                DeathContext: DeathContextMetricsCalculator.Calculate(player.HeroId, heroDeaths, activity),
+                ItemUsage: ItemUsageMetricsCalculator.Calculate(player.HeroId, fightsIn, activity),
+                FightInitiation: FightInitiationMetricsCalculator.Calculate(player.HeroId, player.Team, fightsIn, activity?.HeroHits, teamOf),
+                LanePressure: LanePressureMetricsCalculator.Calculate(player.Team, player.Lane, activity?.Waves),
+                DayNight: DayNightMetricsCalculator.Calculate(player.HeroId, player.Team, deaths, teamOf, activity?.DayNight, matchEnd),
+                Smokes: SmokeMetricsCalculator.Calculate(player.HeroId, player.Team, activity, deaths, teamOf),
+                Farm: FarmMetricsCalculator.Calculate(player.HeroId, activity?.CreepKills));
         }).ToList();
     }
 

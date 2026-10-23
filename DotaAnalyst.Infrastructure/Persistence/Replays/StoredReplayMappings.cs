@@ -266,7 +266,8 @@ internal static class StoredReplayMappings
                     objectives.OwnShrinesLost, objectives.EnemyShrinesTaken)
                 : null,
             hero.Teleports,
-            hero.Plays);
+            hero.Plays,
+            hero.DeathContext, hero.ItemUsage, hero.FightInitiation, hero.LanePressure, hero.DayNight, hero.Smokes, hero.Farm);
 
     public static StoredHeroMetrics ToStored(HeroMetrics hero) =>
         new(hero.HeroId, hero.Team, hero.Role, hero.Deaths, hero.IsolatedDeaths, hero.DeathsOnEnemySide,
@@ -301,7 +302,8 @@ internal static class StoredReplayMappings
                     objectives.OwnShrinesLost, objectives.EnemyShrinesTaken)
                 : null,
             hero.Teleports,
-            hero.Plays);
+            hero.Plays,
+            hero.DeathContext, hero.ItemUsage, hero.FightInitiation, hero.LanePressure, hero.DayNight, hero.Smokes, hero.Farm);
 
     private static PerGamePhase<PerRegion<T>> ToDomain<T>(StoredRegionPhases<T> phases) =>
         new(ToRegion(phases.EarlyGame), ToRegion(phases.MidGame), ToRegion(phases.LateGame));

@@ -88,4 +88,20 @@ public record HeroMetrics(
     // Teleports done, cancelled and into fights; null without the buffs (never makes an analysis outdated).
     TeleportMetrics? Teleports = null,
     // Skillshots hit, allies saved, disables dispelled (PlayQualityMetrics); null without the replay's activity.
-    PlayQualityMetrics? Plays = null);
+    PlayQualityMetrics? Plays = null,
+    // The blocks below read replay data no statistic used before; each is null for metrics computed before it (never
+    // makes an analysis outdated) or when the document lacks what it needs.
+    // Each death at its moment: escape item / BKB ready, 3+ attackers, disabled.
+    DeathContextMetrics? DeathContext = null,
+    // Fight items held ready and used in the team fights the hero was in.
+    ItemUsageMetrics? ItemUsage = null,
+    // Which team (and whether the hero) landed the first hit of the team fights it was in.
+    FightInitiationMetrics? FightInitiation = null,
+    // Where the waves met in the hero's lane during the laning phase.
+    LanePressureMetrics? LanePressure = null,
+    // Kills and deaths by night next to the totals.
+    DayNightMetrics? DayNight = null,
+    // Smokes used and the ones followed by an enemy death.
+    SmokeMetrics? Smokes = null,
+    // Lane creeps, neutrals and denies, over the match and after the laning phase.
+    FarmMetrics? Farm = null);

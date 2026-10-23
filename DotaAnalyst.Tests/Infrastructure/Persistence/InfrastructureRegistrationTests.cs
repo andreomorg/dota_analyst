@@ -1,5 +1,6 @@
 using DotaAnalyst.Application.Abstractions;
 using DotaAnalyst.Infrastructure;
+using DotaAnalyst.Infrastructure.OpenDota;
 using DotaAnalyst.Infrastructure.Persistence;
 using DotaAnalyst.Infrastructure.Persistence.Replays;
 using DotaAnalyst.Infrastructure.ReplayParser;
@@ -101,6 +102,19 @@ public class InfrastructureRegistrationTests(PostgresFixture postgres) : IAsyncL
     }
 
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task OpenDotaParsing_RunsItsBackgroundLoop_OnlyWhenEnabled(bool enabled)
+    {
+        await using var services = BuildServices(postgres.ConnectionString, openDotaParsing: enabled);
+        await using var scope = services.CreateAsyncScope();
+
+        // The coordinator is there either way: off, it tells the analysis "unavailable/disabled".
+        Assert.IsType<OpenDotaParseCoordinator>(scope.ServiceProvider.GetRequiredService<IOpenDotaParseCoordinator>());
+        Assert.Equal(enabled, services.GetServices<IHostedService>().Any(service => service is OpenDotaParseWorker));
+    }
+
+    [Theory]
     [InlineData("replay-parser:8081")] // not absolute
     [InlineData("ftp://replay-parser:8081/")]
     [InlineData("https://example.ngrok-free.app/parser")] // no trailing '/': "v1/laning" would replace "parser"
@@ -150,12 +164,14 @@ public class InfrastructureRegistrationTests(PostgresFixture postgres) : IAsyncL
     private ServiceProvider BuildServices() => BuildServices(postgres.ConnectionString);
 
     private static ServiceProvider BuildServices(
-        string? connectionString, string? replayParserUrl = null, string? replayParserApiKey = "test-key", bool keepDocuments = false)
+        string? connectionString, string? replayParserUrl = null, string? replayParserApiKey = "test-key", bool keepDocuments = false,
+        bool openDotaParsing = false)
     {
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["ConnectionStrings:Database"] = connectionString,
+                ["OpenDota:Parsing:Enabled"] = openDotaParsing.ToString(),
                 ["OpenDota:BaseUrl"] = "https://api.opendota.com/api/",
                 ["OpenDota:Timeout"] = "00:00:10",
                 ["ReplayParser:BaseUrl"] = replayParserUrl,

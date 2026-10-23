@@ -50,9 +50,12 @@ public static class DependencyInjection
         return services;
     }
 
+    // Asking OpenDota to parse matches it hasn't (and enriching parsed ones): off unless OpenDota:Parsing:Enabled. Off,
+    // the coordinator still tells the analysis "unavailable/disabled", and the background loop isn't started at all.
     private static void AddOpenDotaParsing(IServiceCollection services, IConfiguration configuration, bool hasDatabase)
     {
-        services.AddOptions<OpenDotaParsingOptions>().Bind(configuration.GetSection(OpenDotaParsingOptions.SectionName))
+        var section = configuration.GetSection(OpenDotaParsingOptions.SectionName);
+        services.AddOptions<OpenDotaParsingOptions>().Bind(section)
             .Validate(o => o.PollSeconds > 0 && o.MaxPollSeconds >= o.PollSeconds && o.ActiveMinutes > 0
                 && o.ResumeMinutes > 0 && o.MaxSubmitAttempts > 0 && o.RetryHours > 0,
                 "OpenDota:Parsing intervals and limits must be positive.").ValidateOnStart();
@@ -64,7 +67,10 @@ public static class DependencyInjection
         services.AddScoped<IOpenDotaParseRequestRepository, OpenDotaParseRequestRepository>();
         services.AddScoped<IOpenDotaParseCoordinator, OpenDotaParseCoordinator>();
         services.AddScoped<OpenDotaParseStep>();
-        services.AddHostedService<OpenDotaParseWorker>();
+        if (section.GetValue<bool>(nameof(OpenDotaParsingOptions.Enabled)))
+        {
+            services.AddHostedService<OpenDotaParseWorker>();
+        }
     }
 
     // Our own reading of replays (the Go service, replay-parser/), for matches OpenDota didn't parse. Only on

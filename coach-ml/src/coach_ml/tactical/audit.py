@@ -12,11 +12,49 @@ from .projection import project_scene
 from .facts import audit_candidate_facts
 
 
-def validate_request(request):
+def validate_request(request, profile=None):
     try:
+        if profile is not None:
+            require(request.get('task') == profile, 'Tactical request/profile mismatch')
+        if request.get('task') == 'tactical-review-v5':
+            return _validate_v5(request)
         return _validate_request(request)
     except (KeyError, TypeError, AttributeError, IndexError) as error:
         raise AuditError('Malformed tactical request') from error
+
+
+def _validate_v5(request):
+    from .situated import FIELDS, _reject_hidden, project_situated_scene
+    _reject_hidden(request)
+    facts = request['facts']
+    by_id = {f['id']: f for f in facts}
+    require(len(by_id) == len(facts) and {'situation', 'roster'} <= set(by_id),
+            'Missing or duplicate v5 facts')
+    legacy = {**request, 'schemaVersion': 1, 'task': 'tactical-review-v1',
+              'facts': [f for f in facts if f['id'] not in ('situation', 'roster')]}
+    coverage = by_id['positions']['value']
+    source = {'anchorSeconds': request['anchorSeconds'], 'positions': coverage['samples'],
+              'missingHeroPositions': coverage['missingHeroPositions'],
+              'economy': by_id['economy']['value'] if 'economy' in by_id else None}
+    for field, name in (('recentPurchases', 'purchases'), ('recentAbilityUpgrades', 'upgrades'),
+                        ('recentObjectives', 'objectives')):
+        source[field] = by_id[name]['value']['events']
+    base = project_scene(legacy, {'atOrBeforeAnchor': source})
+    legacy['unknowns'] = base['unknowns']
+    _validate_request(legacy)
+    value = by_id['situation']['value']
+    situation = None if value is None else {
+        field: value[group][field]['value'] for field, (group, _, _) in FIELDS.items()}
+    roster = by_id['roster']['value']
+    require(all(h['team'] in ('aliado', 'inimigo') for h in roster), 'Invalid roster relation')
+    heroes = [{'heroId': h['heroId'], 'name': h['name'], 'roles': h['roles'],
+               'team': 'radiant' if h['team'] == 'aliado' else 'dire'} for h in roster]
+    expected = project_situated_scene({
+        'schemaVersion': 5, 'decision': {**legacy, 'scenes': [{'atOrBeforeAnchor': source}]},
+        'heroes': heroes, 'situations': [{'anchorSeconds': request['anchorSeconds'],
+                                          'situation': situation}]}, 0)
+    require(canonical(expected) == canonical(request), 'Noncanonical situated request')
+    return request
 
 
 def _validate_request(request):
@@ -87,9 +125,12 @@ def _validate_request(request):
     return request
 
 
-def audit_sft(dataset, metadata, manifest, partition):
+def audit_sft(dataset, metadata, manifest, partition, profile='tactical-review-v1'):
     from ..audit import load_manifest
     from .pipeline import SYSTEM
+    from .prompt_v5 import SYSTEM_V5
+    require(profile in ('tactical-review-v1', 'tactical-review-v5'), 'Invalid tactical profile')
+    system = SYSTEM_V5 if profile == 'tactical-review-v5' else SYSTEM
     allowed = {'train':{'train','train-known'}, 'validation':{'validation-new','validation-known'}}
     require(partition in allowed, 'Tactical training audit excludes reserved tests and validations')
     matches = load_manifest(manifest)
@@ -106,18 +147,18 @@ def audit_sft(dataset, metadata, manifest, partition):
         require(type(messages) is list and len(messages) == 3 and all(type(m) is dict for m in messages)
                 and [m.get('role') for m in messages] == ['system','user','assistant'], 'Invalid tactical messages')
         require(all(type(m.get('content')) is str and m['content'].strip() for m in messages), 'Invalid tactical message content')
-        require(messages[0]['content'] == SYSTEM, 'Tactical system instructions changed')
+        require(messages[0]['content'] == system, 'Tactical system instructions changed')
         request, target = parse_json(messages[1]['content']), parse_json(messages[2]['content'])
         require(canonical(request) == canonical(meta.get('request')) and canonical(target) == canonical(meta.get('target')),
                 'Tactical metadata alignment mismatch')
-        validate_request(request)
+        validate_request(request, profile)
         validate_candidate(request,target)
         require(not audit_candidate_facts(request,target)['flags'], 'Tactical target needs factual content review')
         require(type(meta.get('heroId')) is int and request['heroId'] == meta['heroId'], 'Tactical hero identity mismatch')
         episode = meta.get('episodeId')
         require(type(episode) is str and bool(episode), 'Missing tactical scene identity')
         scene = f"{meta['matchId']}/{meta['heroId']}/{episode}"
-        require(meta.get('sourceSceneId') == scene and meta.get('exampleId') == scene+'/tactical-review-v1', 'Invalid tactical example identity')
+        require(meta.get('sourceSceneId') == scene and meta.get('exampleId') == scene+'/'+profile, 'Invalid tactical example identity')
         require(meta['exampleId'] not in identities, 'Duplicate tactical scene')
         identities.add(meta['exampleId'])
         require(meta.get('humanReviewed') is False and meta.get('tacticalQualityApproved') is False
@@ -133,7 +174,7 @@ def audit_sft(dataset, metadata, manifest, partition):
         used.add(meta['matchId'])
         rows += 1
     require(rows > 0, 'Empty tactical dataset')
-    return {'schemaVersion':1,'kind':'tactical-sft-integrity','profile':'tactical-review-v1','partition':partition,
+    return {'schemaVersion':1,'kind':'tactical-sft-integrity','profile':profile,'partition':partition,
             'rows':rows,'matches':len(used),'roles':dict(roles),'dispositions':dict(dispositions),
             'uniqueInputs':len(inputs),'duplicateInputOccurrences':rows-len(inputs),
             'uniqueTargets':len(targets),'uniqueExercises':len(exercises),

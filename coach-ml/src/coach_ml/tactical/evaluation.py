@@ -33,16 +33,18 @@ def evaluate_tactical(root):
     fingerprints = {name:file_hash(root/name) for name in names}
     metadata = list(iter_json_array(root/'validation-metadata.json'))
     require(bool(metadata), 'Empty tactical validation')
+    profile = parse_json((root/'config.json').read_text(encoding='utf-8-sig')).get('profile') if (root/'config.json').exists() else 'tactical-review-v1'
+    require(profile in ('tactical-review-v1', 'tactical-review-v5'), 'Invalid tactical profile')
     identities = set()
     for index, meta in enumerate(metadata):
         require(type(meta.get('row')) is int and meta['row'] == index, 'Tactical evaluation metadata order mismatch')
         require(type(meta.get('matchId')) is str and bool(meta['matchId'])
                 and type(meta.get('heroId')) is int and meta['heroId'] > 0
                 and type(meta.get('episodeId')) is str and bool(meta['episodeId']), 'Invalid tactical source identity')
-        identity = f"{meta['matchId']}/{meta['heroId']}/{meta['episodeId']}/tactical-review-v1"
+        identity = f"{meta['matchId']}/{meta['heroId']}/{meta['episodeId']}/{profile}"
         require(meta.get('exampleId') == identity and identity not in identities, 'Duplicate or invalid tactical example')
         identities.add(identity)
-        validate_request(meta['request'])
+        validate_request(meta['request'], profile)
         require(meta['request']['heroId'] == meta['heroId'], 'Tactical evaluation hero mismatch')
         validate_candidate(meta['request'],meta['target'])
     metrics, results = {}, {}
@@ -74,7 +76,7 @@ def evaluate_tactical(root):
     require(fingerprints == {name:file_hash(root/name) for name in names}, 'Tactical evaluation source changed')
     paired = {key:sum(before['valid']==a and after['valid']==b for before,after in zip(results['base'],results['adapted']))
               for key,a,b in [('bothValid',True,True),('gainedContract',False,True),('lostContract',True,False),('bothInvalid',False,False)]}
-    result = {'schemaVersion':1,'kind':'tactical-contract-comparison','profile':'tactical-review-v1',
+    result = {'schemaVersion':1,'kind':'tactical-contract-comparison','profile':profile,
               'summary':list(metrics.values()),'pairedContract':paired,'games':len({m['matchId'] for m in metadata}),
               'sourceFiles':fingerprints,'caseReport':{'file':cases_file.name,'sha256':file_hash(cases_file)},
               'structuralIntegrityPassed':True,'tacticalQualityApproved':False,'humanReviewed':False,

@@ -76,9 +76,9 @@ def check_factual_target(request, target, index):
 
 
 def audit_sft(dataset, metadata, manifest, partition, profile="factual-review"):
-    if profile == 'tactical-review-v1':
+    if profile in ('tactical-review-v1', 'tactical-review-v5'):
         from .tactical.audit import audit_sft as audit_tactical
-        return audit_tactical(dataset, metadata, manifest, partition)
+        return audit_tactical(dataset, metadata, manifest, partition, profile)
     require(partition in PARTITIONS, "Unknown audit partition")
     require(profile in ["factual-review", "competency-review-v1"], "Unknown audit profile")
     matches = load_manifest(manifest)
@@ -189,7 +189,7 @@ def main(argv=None):
     for flag in ["dataset", "metadata", "manifest"]:
         audit.add_argument("--" + flag, required=True, type=Path)
     audit.add_argument("--partition", choices=sorted(PARTITIONS), required=True)
-    audit.add_argument("--profile", choices=["factual-review", "competency-review-v1", "tactical-review-v1"], default="factual-review")
+    audit.add_argument("--profile", choices=["factual-review", "competency-review-v1", "tactical-review-v1", "tactical-review-v5"], default="factual-review")
     status = commands.add_parser("status", help="Read training files; does not inspect/start/stop processes")
     status.add_argument("--experiment", required=True, type=Path)
     args = parser.parse_args(argv)

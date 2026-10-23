@@ -9,6 +9,7 @@ from ..hashing import file_hash
 from ..datasets import audit_experiment
 from ..experiments.preparation import load_config
 from .pipeline import SYSTEM
+from .prompt_v5 import SYSTEM_V5
 
 
 def normalize_metadata(meta, audit):
@@ -17,7 +18,7 @@ def normalize_metadata(meta, audit):
     scene = f"{provenance['matchId']}/{provenance['heroId']}/{provenance['sceneId']}"
     expected = {'matchId':provenance['matchId'],'heroId':provenance['heroId'],'episodeId':provenance['sceneId'],
                 'sourceHash':provenance['sourceMatchHash'],'sourceSceneId':scene,
-                'exampleId':scene+'/tactical-review-v1','provisionalAccepted':True,
+                'exampleId':scene+'/'+audit.get('profile', 'tactical-review-v1'),'provisionalAccepted':True,
                 'sourcePredictionsSha256':audit['sourcePredictionsSha256'],
                 'criticIdentitySha256':audit['criticIdentitySha256']}
     for key, item in expected.items():
@@ -32,7 +33,8 @@ def assemble(train, validation, config, manifest, output, minimum_train=3000, mi
             and not output.is_relative_to(validation), 'Experiment must have a separate new directory')
     require(minimum_train > 0 and minimum_validation > 0, 'Positive dataset minimums required')
     cfg = parse_json(Path(config).read_text(encoding='utf-8-sig'))
-    require(cfg.get('profile') == 'tactical-review-v1', 'Explicit tactical training profile required')
+    profile = cfg.get('profile')
+    require(profile in ('tactical-review-v1', 'tactical-review-v5'), 'Explicit tactical training profile required')
     prepared, fingerprints = {}, {}
     for stem, directory, minimum in (('development',train,minimum_train),('validation',validation,minimum_validation)):
         veto = directory/'assistant-review-veto.json'
@@ -41,7 +43,7 @@ def assemble(train, validation, config, manifest, output, minimum_train=3000, mi
         names = ('provisional-sft.jsonl','metadata.json','curation-audit.json')
         fingerprints[stem] = {name:file_hash(directory/name) for name in names}
         audit = parse_json((directory/'curation-audit.json').read_text())
-        require(audit.get('profile') == 'tactical-review-v1' and audit.get('experimentalDataReady') is True
+        require(audit.get('profile') == profile and audit.get('experimentalDataReady') is True
                 and audit.get('humanReviewed') is False and audit.get('tacticalQualityApproved') is False,
                 'Curated source has not passed its provisional gate')
         metadata = parse_json((directory/'metadata.json').read_text())
@@ -55,15 +57,15 @@ def assemble(train, validation, config, manifest, output, minimum_train=3000, mi
     for stem,(directory,metadata) in prepared.items():
         (output/(stem+'.jsonl')).write_bytes((directory/'provisional-sft.jsonl').read_bytes())
         (output/(stem+'-metadata.json')).write_text(canonical(metadata)+'\n',encoding='utf-8')
-    (output/'instructions.txt').write_text(SYSTEM,encoding='utf-8')
+    (output/'instructions.txt').write_text(SYSTEM_V5 if profile == 'tactical-review-v5' else SYSTEM,encoding='utf-8')
     (output/'experimental-authorization.json').write_text(canonical({
         'scope':'User-requested separate tactical learning experiment; provisional labels, no promotion'})+'\n',encoding='utf-8')
-    joint = audit_experiment(output,manifest,'tactical-review-v1')
+    joint = audit_experiment(output,manifest,profile)
     require(joint['inputIsolationPassed'], 'Training/validation duplicate inputs or shared matches')
     for stem,(directory,_) in prepared.items():
         require(fingerprints[stem] == {name:file_hash(directory/name) for name in fingerprints[stem]},
                 'Curated source changed during assembly')
-    report = {'profile':'tactical-review-v1','samples':cfg['samples'],'validationSamples':cfg['validationSamples'],
+    report = {'profile':profile,'samples':cfg['samples'],'validationSamples':cfg['validationSamples'],
               'inputIsolationPassed':True,'curationSources':fingerprints,'manifestSha256':file_hash(manifest),
               'trainingStarted':False,'tacticalQualityApproved':False,'humanReviewed':False,
               'gpuBudgetVerified':False,'tokenBudgetVerified':False,

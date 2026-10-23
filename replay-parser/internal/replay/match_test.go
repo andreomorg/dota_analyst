@@ -21,7 +21,7 @@ import (
 // The real replays used by the /v1/match tests. They are not in Git (30 MB each, and Valve deletes them after a few
 // weeks): each test is skipped when its file is missing.
 var (
-	// All Pick, 28:45, no pauses (the replay of the /v1/laning tests).
+	// All Pick, 28:45, no pauses (the replay of the the laning rule tests).
 	allPickReplay = realReplay{env: "REPLAY_TEST_FILE", path: "../../../work/replays/9034320024.dem.bz2"}
 	// Turbo, 23:40, parsed by OpenDota (radiant_win false, duration 1420).
 	turboReplay = realReplay{env: "REPLAY_TEST_FILE_TURBO", path: "../../../work/replays/9041133074.dem"}

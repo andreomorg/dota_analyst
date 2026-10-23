@@ -6,7 +6,7 @@ import (
 )
 
 // laningCollector fills the laning section: the lane of each player, by the same rule (and the same samples: every
-// second between 1:00 and 10:00, living heroes only) as POST /v1/laning, so the API needs a single parse per match.
+// second between 1:00 and 10:00, living heroes only) as POST the laning rule, so the API needs a single parse per match.
 type laningCollector struct {
 	session    *Session
 	positions  laning.Aggregator

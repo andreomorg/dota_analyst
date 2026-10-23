@@ -12,7 +12,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
-	"sync"
 	"testing"
 
 	"github.com/andreomorg/dota_analyst/replay-parser/internal/laning"
@@ -58,7 +57,7 @@ func matchRequest(authorization, acceptEncoding string) *http.Request {
 }
 
 func newMatchHandler(source ReplaySource, analyzer MatchAnalyzer, config Config, logs io.Writer) http.Handler {
-	return NewHandler(source, analyzerReturning(lichResult, nil), config, slog.New(slog.NewJSONHandler(logs, nil)),
+	return NewHandler(source, config, slog.New(slog.NewJSONHandler(logs, nil)),
 		WithMatchAnalyzer(analyzer))
 }
 
@@ -191,42 +190,9 @@ func TestMatch_ResponseOverTheLimitIs500(t *testing.T) {
 	}
 }
 
-func TestMatch_SharesTheParseLimitWithLaning(t *testing.T) {
-	started, release := make(chan struct{}), make(chan struct{})
-	var once sync.Once
-	slowLaning := fakeAnalyzer{analyze: func(context.Context, io.Reader) (laning.Result, error) {
-		once.Do(func() { close(started) })
-		<-release
-		return lichResult, nil
-	}}
-	handler := NewHandler(replayBytes(), slowLaning, Config{MaxConcurrentParses: 1},
-		slog.New(slog.NewJSONHandler(io.Discard, nil)), WithMatchAnalyzer(matchReturning(sampleMatch(), nil)))
-
-	done := make(chan struct{})
-	go func() {
-		handler.ServeHTTP(httptest.NewRecorder(), laningRequestFor(`{"replayUrl":"`+replayURL+`"}`, ""))
-		close(done)
-	}()
-	<-started
-
-	busy := httptest.NewRecorder()
-	handler.ServeHTTP(busy, matchRequest("", ""))
-	if busy.Code != http.StatusServiceUnavailable || busy.Header().Get("Retry-After") == "" {
-		t.Fatalf("status %d, Retry-After %q; want 503 with Retry-After", busy.Code, busy.Header().Get("Retry-After"))
-	}
-	close(release)
-	<-done
-
-	again := httptest.NewRecorder()
-	handler.ServeHTTP(again, matchRequest("", ""))
-	if again.Code != http.StatusOK {
-		t.Fatalf("after the laning parse finished: status %d", again.Code)
-	}
-}
-
 func TestMatch_RouteNeedsTheOption(t *testing.T) {
 	response := httptest.NewRecorder()
-	newTestHandler(replayBytes(), analyzerReturning(lichResult, nil), Config{}).ServeHTTP(response, matchRequest("", ""))
+	NewHandler(replayBytes(), Config{}, slog.New(slog.NewJSONHandler(io.Discard, nil))).ServeHTTP(response, matchRequest("", ""))
 	if response.Code != http.StatusNotFound {
 		t.Fatalf("status %d, want 404 without WithMatchAnalyzer", response.Code)
 	}

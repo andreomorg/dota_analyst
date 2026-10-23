@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/andreomorg/dota_analyst/replay-parser/internal/laning"
+	"github.com/andreomorg/dota_analyst/replay-parser/internal/matchdata"
 	"github.com/andreomorg/dota_analyst/replay-parser/internal/valve"
 )
 
@@ -24,7 +25,7 @@ const (
 	replayURL = "http://replay202.valve.net/570/9034320024_96247495.dem.bz2"
 )
 
-// fakeSource and fakeAnalyzer stand in for valve.Downloader and replay.Analyzer.
+// fakeSource and fakeAnalyzer stand in for valve.Downloader and replay.MatchAnalyzer.
 type fakeSource struct {
 	open func(ctx context.Context, replayURL string) (io.ReadCloser, error)
 }
@@ -34,10 +35,10 @@ func (f fakeSource) Open(ctx context.Context, replayURL string) (io.ReadCloser, 
 }
 
 type fakeAnalyzer struct {
-	analyze func(ctx context.Context, r io.Reader) (laning.Result, error)
+	analyze func(ctx context.Context, r io.Reader) (matchdata.Match, error)
 }
 
-func (f fakeAnalyzer) Analyze(ctx context.Context, r io.Reader) (laning.Result, error) {
+func (f fakeAnalyzer) Analyze(ctx context.Context, r io.Reader) (matchdata.Match, error) {
 	return f.analyze(ctx, r)
 }
 
@@ -70,30 +71,24 @@ type errReader struct{ err error }
 
 func (r errReader) Read([]byte) (int, error) { return 0, r.err }
 
-var lichResult = laning.Result{
-	EndsAtSeconds: 600,
-	Players: []laning.PlayerLaning{{
-		HeroID: 31, SteamID: 76561198059783443, IsRadiant: true, Lane: laning.Bottom,
-		LastHits: 12, Denies: 3, NetWorth: 2900, XP: 3100, Deaths: 1,
-	}},
-}
+var lichResult = sampleMatch()
 
-func analyzerReturning(result laning.Result, err error) fakeAnalyzer {
-	return fakeAnalyzer{analyze: func(_ context.Context, r io.Reader) (laning.Result, error) {
+func analyzerReturning(result matchdata.Match, err error) fakeAnalyzer {
+	return fakeAnalyzer{analyze: func(_ context.Context, r io.Reader) (matchdata.Match, error) {
 		if _, readErr := io.ReadAll(r); readErr != nil {
 			// What a parser typically does with a broken stream.
-			return laning.Result{}, fmt.Errorf("%w: %v", laning.ErrUnreadableReplay, readErr)
+			return matchdata.Match{}, fmt.Errorf("%w: %v", laning.ErrUnreadableReplay, readErr)
 		}
 		return result, err
 	}}
 }
 
-func newTestHandler(source ReplaySource, analyzer Analyzer, config Config) http.Handler {
-	return NewHandler(source, analyzer, config, slog.New(slog.NewJSONHandler(io.Discard, nil)))
+func newTestHandler(source ReplaySource, analyzer MatchAnalyzer, config Config) http.Handler {
+	return NewHandler(source, config, slog.New(slog.NewJSONHandler(io.Discard, nil)), WithMatchAnalyzer(analyzer))
 }
 
-func laningRequestFor(body, authorization string) *http.Request {
-	request := httptest.NewRequest(http.MethodPost, "/v1/laning", strings.NewReader(body))
+func replayRequestFor(body, authorization string) *http.Request {
+	request := httptest.NewRequest(http.MethodPost, "/v1/match", strings.NewReader(body))
 	request.Header.Set("Content-Type", "application/json")
 	if authorization != "" {
 		request.Header.Set("Authorization", authorization)
@@ -101,7 +96,7 @@ func laningRequestFor(body, authorization string) *http.Request {
 	return request
 }
 
-func TestLaning(t *testing.T) {
+func TestReplay(t *testing.T) {
 	validBody := `{"replayUrl":"` + replayURL + `"}`
 	bearer := "Bearer " + testKey
 
@@ -114,29 +109,11 @@ func TestLaning(t *testing.T) {
 		source        fakeSource
 		analyzer      fakeAnalyzer
 		wantStatus    int
-		wantBody      string // exact JSON for 200
 	}{
 		{
 			name: "success", body: validBody, authorization: bearer,
 			source: replayBytes(), analyzer: analyzerReturning(lichResult, nil),
 			wantStatus: http.StatusOK,
-			wantBody: `{"laningEndsAtSeconds":600,"players":[{"heroId":31,"steamId":"76561198059783443","isRadiant":true,` +
-				`"lane":"bottom","lastHits":12,"denies":3,"netWorth":2900,"xp":3100,"deaths":1}]}`,
-		},
-		{
-			name: "no players is an empty list, bots have steamId 0", body: validBody, authorization: bearer,
-			source: replayBytes(),
-			analyzer: analyzerReturning(laning.Result{EndsAtSeconds: 420, Players: []laning.PlayerLaning{
-				{HeroID: 1, Lane: laning.Jungle},
-			}}, nil),
-			wantStatus: http.StatusOK,
-			wantBody: `{"laningEndsAtSeconds":420,"players":[{"heroId":1,"steamId":"0","isRadiant":false,` +
-				`"lane":"jungle","lastHits":0,"denies":0,"netWorth":0,"xp":0,"deaths":0}]}`,
-		},
-		{
-			name: "empty result", body: validBody, authorization: bearer,
-			source: replayBytes(), analyzer: analyzerReturning(laning.Result{EndsAtSeconds: 600}, nil),
-			wantStatus: http.StatusOK, wantBody: `{"laningEndsAtSeconds":600,"players":[]}`,
 		},
 		{
 			name: "unknown fields are ignored", body: `{"replayUrl":"` + replayURL + `","matchId":1}`, authorization: bearer,
@@ -192,7 +169,7 @@ func TestLaning(t *testing.T) {
 		},
 		{
 			name: "unreadable replay", body: validBody, authorization: bearer,
-			source: replayBytes(), analyzer: analyzerReturning(laning.Result{}, laning.ErrUnreadableReplay),
+			source: replayBytes(), analyzer: analyzerReturning(matchdata.Match{}, laning.ErrUnreadableReplay),
 			wantStatus: http.StatusUnprocessableEntity,
 		},
 		{
@@ -212,12 +189,12 @@ func TestLaning(t *testing.T) {
 		},
 		{
 			name: "unexpected analyzer error", body: validBody, authorization: bearer,
-			source: replayBytes(), analyzer: analyzerReturning(laning.Result{}, errors.New("boom")),
+			source: replayBytes(), analyzer: analyzerReturning(matchdata.Match{}, errors.New("boom")),
 			wantStatus: http.StatusInternalServerError,
 		},
 		{
 			name: "analyzer panic", body: validBody, authorization: bearer, source: replayBytes(),
-			analyzer: fakeAnalyzer{analyze: func(context.Context, io.Reader) (laning.Result, error) {
+			analyzer: fakeAnalyzer{analyze: func(context.Context, io.Reader) (matchdata.Match, error) {
 				panic("index out of range")
 			}},
 			wantStatus: http.StatusInternalServerError,
@@ -243,7 +220,7 @@ func TestLaning(t *testing.T) {
 			}
 
 			response := httptest.NewRecorder()
-			newTestHandler(source, test.analyzer, config).ServeHTTP(response, laningRequestFor(test.body, test.authorization))
+			newTestHandler(source, test.analyzer, config).ServeHTTP(response, replayRequestFor(test.body, test.authorization))
 
 			if response.Code != test.wantStatus {
 				t.Fatalf("status %d, want %d; body %s", response.Code, test.wantStatus, response.Body)
@@ -254,9 +231,6 @@ func TestLaning(t *testing.T) {
 			if test.wantStatus == http.StatusOK {
 				if got := response.Header().Get("Content-Type"); got != "application/json" {
 					t.Errorf("Content-Type %q", got)
-				}
-				if test.wantBody != "" && strings.TrimSpace(response.Body.String()) != test.wantBody {
-					t.Errorf("body\n got %s\nwant %s", response.Body, test.wantBody)
 				}
 				return
 			}
@@ -285,10 +259,10 @@ func assertProblem(t *testing.T, response *httptest.ResponseRecorder, status int
 	}
 }
 
-func TestLaning_BusyAnswers503WithRetryAfter(t *testing.T) {
+func TestReplay_BusyAnswers503WithRetryAfter(t *testing.T) {
 	started, release := make(chan struct{}), make(chan struct{})
 	var once sync.Once
-	analyzer := fakeAnalyzer{analyze: func(context.Context, io.Reader) (laning.Result, error) {
+	analyzer := fakeAnalyzer{analyze: func(context.Context, io.Reader) (matchdata.Match, error) {
 		once.Do(func() { close(started) })
 		<-release
 		return lichResult, nil
@@ -299,13 +273,13 @@ func TestLaning_BusyAnswers503WithRetryAfter(t *testing.T) {
 	first := httptest.NewRecorder()
 	done := make(chan struct{})
 	go func() {
-		handler.ServeHTTP(first, laningRequestFor(body, "Bearer "+testKey))
+		handler.ServeHTTP(first, replayRequestFor(body, "Bearer "+testKey))
 		close(done)
 	}()
 	<-started
 
 	busy := httptest.NewRecorder()
-	handler.ServeHTTP(busy, laningRequestFor(body, "Bearer "+testKey))
+	handler.ServeHTTP(busy, replayRequestFor(body, "Bearer "+testKey))
 	if busy.Code != http.StatusServiceUnavailable {
 		t.Fatalf("status %d, want 503", busy.Code)
 	}
@@ -321,23 +295,23 @@ func TestLaning_BusyAnswers503WithRetryAfter(t *testing.T) {
 	}
 	// The slot is free again.
 	again := httptest.NewRecorder()
-	handler.ServeHTTP(again, laningRequestFor(body, "Bearer "+testKey))
+	handler.ServeHTTP(again, replayRequestFor(body, "Bearer "+testKey))
 	if again.Code != http.StatusOK {
 		t.Fatalf("after the first finished: status %d", again.Code)
 	}
 }
 
-func TestLaning_TimeoutAnswers502(t *testing.T) {
+func TestReplay_TimeoutAnswers502(t *testing.T) {
 	var sawDeadline bool
-	analyzer := fakeAnalyzer{analyze: func(ctx context.Context, _ io.Reader) (laning.Result, error) {
+	analyzer := fakeAnalyzer{analyze: func(ctx context.Context, _ io.Reader) (matchdata.Match, error) {
 		_, sawDeadline = ctx.Deadline()
 		<-ctx.Done()
-		return laning.Result{}, ctx.Err()
+		return matchdata.Match{}, ctx.Err()
 	}}
 	handler := newTestHandler(replayBytes(), analyzer, Config{APIKey: testKey, RequestTimeout: 20 * time.Millisecond})
 
 	response := httptest.NewRecorder()
-	handler.ServeHTTP(response, laningRequestFor(`{"replayUrl":"`+replayURL+`"}`, "Bearer "+testKey))
+	handler.ServeHTTP(response, replayRequestFor(`{"replayUrl":"`+replayURL+`"}`, "Bearer "+testKey))
 	if response.Code != http.StatusBadGateway {
 		t.Fatalf("status %d, want 502; %s", response.Code, response.Body)
 	}
@@ -347,14 +321,14 @@ func TestLaning_TimeoutAnswers502(t *testing.T) {
 	}
 }
 
-func TestLaning_ReceivesTheReplayURL(t *testing.T) {
+func TestReplay_ReceivesTheReplayURL(t *testing.T) {
 	var got string
 	source := fakeSource{open: func(_ context.Context, url string) (io.ReadCloser, error) {
 		got = url
 		return io.NopCloser(bytes.NewReader(nil)), nil
 	}}
 	handler := newTestHandler(source, analyzerReturning(lichResult, nil), Config{})
-	handler.ServeHTTP(httptest.NewRecorder(), laningRequestFor(`{"replayUrl":"`+replayURL+`"}`, ""))
+	handler.ServeHTTP(httptest.NewRecorder(), replayRequestFor(`{"replayUrl":"`+replayURL+`"}`, ""))
 	if got != replayURL {
 		t.Fatalf("source got %q", got)
 	}
@@ -366,7 +340,8 @@ func TestRoutes(t *testing.T) {
 		wantStatus   int
 	}{
 		{http.MethodGet, "/health", http.StatusOK},
-		{http.MethodGet, "/v1/laning", http.StatusMethodNotAllowed},
+		{http.MethodGet, "/v1/match", http.StatusMethodNotAllowed},
+		{http.MethodPost, "/v1/laning", http.StatusNotFound},
 		{http.MethodPost, "/health", http.StatusMethodNotAllowed},
 		{http.MethodGet, "/", http.StatusNotFound},
 		{http.MethodPost, "/v2/laning", http.StatusNotFound},
@@ -389,10 +364,10 @@ func TestRoutes(t *testing.T) {
 
 func TestLogsNeverContainTheToken(t *testing.T) {
 	var logs bytes.Buffer
-	handler := NewHandler(replayBytes(), analyzerReturning(lichResult, nil), Config{APIKey: testKey},
-		slog.New(slog.NewJSONHandler(&logs, nil)))
+	handler := NewHandler(replayBytes(), Config{APIKey: testKey},
+		slog.New(slog.NewJSONHandler(&logs, nil)), WithMatchAnalyzer(matchReturning(sampleMatch(), nil)))
 	for _, authorization := range []string{"Bearer " + testKey, "Bearer wrong-" + testKey} {
-		handler.ServeHTTP(httptest.NewRecorder(), laningRequestFor(`{"replayUrl":"`+replayURL+`"}`, authorization))
+		handler.ServeHTTP(httptest.NewRecorder(), replayRequestFor(`{"replayUrl":"`+replayURL+`"}`, authorization))
 	}
 	if strings.Contains(logs.String(), testKey) {
 		t.Fatalf("token in the logs: %s", logs.String())

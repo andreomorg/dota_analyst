@@ -31,7 +31,7 @@ func TestPrefetchContract(t *testing.T) {
 		{"large", `{"replayUrl":"x"}`, testKey, parsing.ErrTooLarge, 422},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			h := NewHandler(replayBytes(), analyzerReturning(lichResult, nil), Config{APIKey: testKey}, slog.New(slog.NewTextHandler(io.Discard, nil)), WithPrefetcher(fakePrefetch{tt.err}))
+			h := NewHandler(replayBytes(), Config{APIKey: testKey}, slog.New(slog.NewTextHandler(io.Discard, nil)), WithPrefetcher(fakePrefetch{tt.err}))
 			r := httptest.NewRequest("POST", "/v1/prefetch", strings.NewReader(tt.body))
 			if tt.key != "" {
 				r.Header.Set("Authorization", "Bearer "+tt.key)
@@ -54,7 +54,7 @@ func TestPrefetchContract(t *testing.T) {
 	}
 }
 func TestPrefetchDisabledRoute(t *testing.T) {
-	h := NewHandler(replayBytes(), analyzerReturning(lichResult, nil), Config{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	h := NewHandler(replayBytes(), Config{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, httptest.NewRequest("POST", "/v1/prefetch", strings.NewReader(`{}`)))
 	if w.Code != 404 {

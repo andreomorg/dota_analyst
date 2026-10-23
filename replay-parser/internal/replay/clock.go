@@ -8,7 +8,7 @@ import (
 const ticksPerSecond = 30
 
 // gameClock follows the game rules tick by tick and turns the server clock into the game clock (seconds since the
-// horn, pauses left out). Both readers use it: Analyzer (/v1/laning) and Session (/v1/match).
+// horn, pauses left out). Both readers use it: Analyzer (the laning rule) and Session (/v1/match).
 type gameClock struct {
 	pause       pauseTracker
 	gameStart   float64 // m_flGameStartTime in server seconds; 0 until the horn

@@ -1,4 +1,4 @@
-// Package httpapi is the HTTP face of the service: POST /v1/laning, POST /v1/match and GET /health, the bearer token,
+// Package httpapi is the HTTP face of the service: POST /v1/match and GET /health, the bearer token,
 // the limit of parses running at once and the translation of errors into ProblemDetails (application/problem+json).
 package httpapi
 
@@ -9,29 +9,22 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/andreomorg/dota_analyst/replay-parser/internal/matchdata"
+	"github.com/andreomorg/dota_analyst/replay-parser/internal/parsing"
 	"io"
 	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/andreomorg/dota_analyst/replay-parser/internal/laning"
-	"github.com/andreomorg/dota_analyst/replay-parser/internal/matchdata"
-	"github.com/andreomorg/dota_analyst/replay-parser/internal/parsing"
 )
-
-// Analyzer reads a decompressed replay and returns its laning phase (implemented by replay.Analyzer).
-type Analyzer interface {
-	Analyze(ctx context.Context, r io.Reader) (laning.Result, error)
-}
 
 // ReplaySource is kept as a compatibility name for handler construction.
 type ReplaySource = parsing.ReplaySource
 
 // Config tunes the handler. Zero values mean the defaults.
 type Config struct {
-	// APIKey is the bearer token POST /v1/laning and /v1/match require. Empty disables authentication (local `go run` only).
+	// APIKey is the bearer token POST /v1/match require. Empty disables authentication (local `go run` only).
 	APIKey string
 	// MaxConcurrentParses is how many replays are downloaded and parsed at once; more requests get 503.
 	MaxConcurrentParses int
@@ -45,7 +38,7 @@ const (
 
 	// The body only carries a URL; anything bigger is not a valid request.
 	maxRequestBodyBytes = 4 << 10
-	// A laning parse takes seconds (download ~30 MB + ~0.5 s of parsing), so the caller can come back soon.
+	// A replay parse takes seconds (download ~30 MB + ~0.5 s of parsing), so the caller can come back soon.
 	retryAfterSeconds = 15
 )
 
@@ -73,7 +66,6 @@ type server struct {
 	prefetcher      Prefetcher
 	prefetchTimeout time.Duration
 	parser          *parsing.Service
-	analyzer        Analyzer
 	matchAnalyzer   MatchAnalyzer
 	// maxMatchBytes is the largest /v1/match answer (uncompressed); bigger is a bug, answered with 500.
 	maxMatchBytes int
@@ -84,7 +76,7 @@ type server struct {
 }
 
 // NewHandler returns the service's HTTP handler.
-func NewHandler(source ReplaySource, analyzer Analyzer, config Config, logger *slog.Logger,
+func NewHandler(source ReplaySource, config Config, logger *slog.Logger,
 	options ...Option) http.Handler {
 	if config.MaxConcurrentParses <= 0 {
 		config.MaxConcurrentParses = DefaultMaxConcurrentParses
@@ -98,7 +90,6 @@ func NewHandler(source ReplaySource, analyzer Analyzer, config Config, logger *s
 				"elapsedMs", m.Elapsed.Milliseconds(), "readBytes", m.ReadBytes, "activeAtStart", m.ActiveAtStart)
 		})),
 		prefetchTimeout: config.RequestTimeout,
-		analyzer:        analyzer,
 		authEnabled:     config.APIKey != "",
 		apiKeyHash:      sha256.Sum256([]byte(config.APIKey)),
 		logger:          logger,
@@ -116,7 +107,6 @@ func NewHandler(source ReplaySource, analyzer Analyzer, config Config, logger *s
 	if s.prefetcher != nil {
 		mux.Handle("POST /v1/prefetch", s.requireAPIKey(http.HandlerFunc(s.prefetch)))
 	}
-	mux.Handle("POST /v1/laning", s.requireAPIKey(http.HandlerFunc(s.laning)))
 	if s.matchAnalyzer != nil {
 		mux.Handle("POST /v1/match", s.requireAPIKey(http.HandlerFunc(s.match)))
 	}
@@ -136,19 +126,6 @@ type respondFunc func(w http.ResponseWriter, r *http.Request, logger *slog.Logge
 
 // analyzeFunc parses the decompressed replay and returns how to answer.
 type analyzeFunc func(ctx context.Context, replay io.Reader) (respondFunc, error)
-
-func (s *server) laning(w http.ResponseWriter, r *http.Request) {
-	s.serveReplay(w, r, func(ctx context.Context, replay io.Reader) (respondFunc, error) {
-		result, err := s.analyzer.Analyze(ctx, replay)
-		if err != nil {
-			return nil, err
-		}
-		return func(w http.ResponseWriter, _ *http.Request, logger *slog.Logger) {
-			logger.Info("replay analyzed", "players", len(result.Players))
-			writeJSON(w, http.StatusOK, newLaningResponse(result))
-		}, nil
-	})
-}
 
 // serveReplay is what every replay endpoint shares: the body ({ "replayUrl": ... }), the limit of parses at once,
 // the time limit, the download and the translation of errors. analyze only parses the replay and says how to answer.

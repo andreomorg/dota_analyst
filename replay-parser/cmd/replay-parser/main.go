@@ -1,10 +1,10 @@
 // Command replay-parser is the HTTP service the C# API calls to read a Dota 2 replay: the laning phase
-// (POST /v1/laning) or the whole match (POST /v1/match).
+// (POST the laning rule) or the whole match (POST /v1/match).
 //
 // Configuration (environment variables):
 //
 //	PORT                   port to listen on (default 8081)
-//	REPLAY_PARSER_API_KEY  bearer token required by POST /v1/laning and /v1/match; empty = no authentication (local only)
+//	REPLAY_PARSER_API_KEY  bearer token required by POST /v1/match; empty = no authentication (local only)
 //	MAX_CONCURRENT_PARSES  replays parsed at once; more requests get 503 (default 1)
 //	MAX_DOWNLOAD_MB        compressed replay size limit (default 200)
 //	MAX_DECOMPRESSED_MB    decompressed replay size limit (default 1024)
@@ -108,7 +108,7 @@ func envInt(name string, fallback int, errs *[]error) int {
 
 func run(c config, logger *slog.Logger) error {
 	if c.api.APIKey == "" {
-		logger.Warn("REPLAY_PARSER_API_KEY is empty: POST /v1/laning and /v1/match accept requests without a token " +
+		logger.Warn("REPLAY_PARSER_API_KEY is empty: POST /v1/match accept requests without a token " +
 			"(local use only)")
 	}
 
@@ -123,7 +123,7 @@ func run(c config, logger *slog.Logger) error {
 	if c.cacheDir != "" {
 		options = append(options, httpapi.WithPrefetcher(cache))
 	}
-	handler := httpapi.NewHandler(cache, replay.Analyzer{}, c.api, logger,
+	handler := httpapi.NewHandler(cache, c.api, logger,
 		options...)
 
 	server := &http.Server{

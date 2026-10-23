@@ -121,7 +121,7 @@ func checkPlayersSections(t *testing.T, match matchdata.Match) {
 func TestPlayersCollectorAllPick(t *testing.T) {
 	match := analyzePlayers(t, allPickReplay)
 
-	// At 10:00, the numbers of the /v1/laning test (the cut is on the same tick: the first one of 10:00).
+	// At 10:00, the numbers of the the laning rule test (the cut is on the same tick: the first one of 10:00).
 	tenMinutes := []struct {
 		player, lastHits, denies, netWorth, xp, deaths int
 	}{

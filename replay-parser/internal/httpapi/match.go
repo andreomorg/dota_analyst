@@ -19,7 +19,7 @@ import (
 // 16 MB: anything near it still means a collector went wrong (event-by-event data, a loop) and is refused.
 const maxMatchResponseBytes = 16 << 20
 
-// match answers POST /v1/match: the same request, limits and errors as /v1/laning, the whole match as the answer
+// match answers POST /v1/match: the same request, limits and errors as the laning rule, the whole match as the answer
 // (the matchdata package is the contract).
 func (s *server) match(w http.ResponseWriter, r *http.Request) {
 	s.serveReplay(w, r, func(ctx context.Context, replay io.Reader) (respondFunc, error) {

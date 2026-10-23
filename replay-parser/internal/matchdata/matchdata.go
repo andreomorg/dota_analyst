@@ -53,7 +53,7 @@ type Match struct {
 	Objectives Objectives `json:"objectives"`
 }
 
-// Laning is the laning phase, by the same rule as POST /v1/laning (package laning): each player's lane is the zone
+// Laning is the laning phase, by the same rule as POST the laning rule (package laning): each player's lane is the zone
 // where their living hero spent the most seconds between 1:00 and 10:00 of the game clock, if it holds at least 35%
 // of them, else "roaming".
 type Laning struct {

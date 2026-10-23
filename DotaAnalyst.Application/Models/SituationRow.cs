@@ -351,7 +351,7 @@ public sealed record SituationRow(
     // (DATA-D15; documents without items/abilities.cooldownChanges read exactly as before). Once a v2 export is saved,
     // any further change bumps the version.
     // P4a-c (23/10/2026), before any v2 export: patch terrain, local mobile vision and living flying couriers.
-    public const int FeatureVersion = 2;
+    public const int FeatureVersion = 3;
     // GOLD5 before the first v2 export: BuybackReady uses replicated cooldown evidence; no assumed /12 price.
 
     public static SituationRow From(HeroSituation s, bool activityKnown)

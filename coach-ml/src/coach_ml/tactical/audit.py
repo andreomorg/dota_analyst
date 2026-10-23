@@ -16,7 +16,7 @@ def validate_request(request, profile=None):
     try:
         if profile is not None:
             require(request.get('task') == profile, 'Tactical request/profile mismatch')
-        if request.get('task') == 'tactical-review-v5':
+        if request.get('task') in ('tactical-review-v5', 'tactical-review-v52'):
             return _validate_v5(request)
         return _validate_request(request)
     except (KeyError, TypeError, AttributeError, IndexError) as error:
@@ -31,7 +31,7 @@ def _validate_v5(request):
     require(len(by_id) == len(facts) and {'situation', 'roster'} <= set(by_id),
             'Missing or duplicate v5 facts')
     legacy = {**request, 'schemaVersion': 1, 'task': 'tactical-review-v1',
-              'facts': [f for f in facts if f['id'] not in ('situation', 'roster')]}
+              'facts': [f for f in facts if f['id'] not in ('situation', 'roster', 'signals')]}
     coverage = by_id['positions']['value']
     source = {'anchorSeconds': request['anchorSeconds'], 'positions': coverage['samples'],
               'missingHeroPositions': coverage['missingHeroPositions'],
@@ -46,6 +46,9 @@ def _validate_v5(request):
     situation = None if value is None else {
         field: value[group][field] for field, (group, _, _) in FIELDS.items() if field in value.get(group, {})}
     snapshot = {'anchorSeconds': request['anchorSeconds'], 'situation': situation}
+    if request.get('task') == 'tactical-review-v52':
+        require('signals' in by_id, 'Missing Domain signals')
+        snapshot['signals'] = by_id['signals']['value']
     if value is not None and 'rotas' in value:
         # The routes travel as their own snapshot; flattened into the 'rotas' group by the projection.
         snapshot['escape'] = unflatten_escape(value['rotas'])
@@ -59,6 +62,9 @@ def _validate_v5(request):
         'schemaVersion': 5, 'decision': {**legacy, 'scenes': [{'atOrBeforeAnchor': source}]},
         'heroes': heroes, 'situations': [snapshot]}, 0)
     require(canonical(expected) == canonical(request), 'Noncanonical situated request')
+    if request.get('task') == 'tactical-review-v52':
+        from .policy_v3 import audit_agreement
+        audit_agreement(request)
     return request
 
 
@@ -134,8 +140,9 @@ def audit_sft(dataset, metadata, manifest, partition, profile='tactical-review-v
     from ..audit import load_manifest
     from .pipeline import SYSTEM
     from .prompt_v5 import SYSTEM_V5
-    require(profile in ('tactical-review-v1', 'tactical-review-v5'), 'Invalid tactical profile')
-    system = SYSTEM_V5 if profile == 'tactical-review-v5' else SYSTEM
+    from .prompt_v52 import system_for
+    require(profile in ('tactical-review-v1', 'tactical-review-v5', 'tactical-review-v52'), 'Invalid tactical profile')
+    system = system_for(profile, SYSTEM)
     allowed = {'train':{'train','train-known'}, 'validation':{'validation-new','validation-known'}}
     require(partition in allowed, 'Tactical training audit excludes reserved tests and validations')
     matches = load_manifest(manifest)
@@ -173,6 +180,11 @@ def audit_sft(dataset, metadata, manifest, partition, profile='tactical-review-v
             from .policy_v2 import target_for
             require(meta.get('policyVersion') == 2 and target_for(request) == (meta.get('policyRule'), target),
                     'Deterministic target does not reproduce from its policy')
+        elif profile == 'tactical-review-v52':
+            from .policy_v3 import audit_agreement
+            require(meta.get('labelOrigin') == 'deterministic-policy-v3' and meta.get('policyVersion') == 3
+                    and audit_agreement(request) == (meta.get('policyRule'), target),
+                    'Signal target does not reproduce from its policy')
         else:
             require(meta.get('labelOrigin') == 'model-generated-and-model-critiqued', 'Missing provisional review provenance')
             for name in ('sourcePredictionsSha256','criticIdentitySha256'):

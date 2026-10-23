@@ -19,6 +19,7 @@ def main(argv=None):
                             ("serve", "Run the authenticated internal review service"),
                             ("run-control", "Inspect or request cooperative pause for a managed run"),
                             ("promotion-check", "Validate and record explicit promotion without installing a model"),
+                            ("tactical-content-evaluate", "Compare saved tactical rules, actions and numbers with policy targets"),
                             ("tactical-infer", "Run separate development-only tactical inference without approving labels"),
                             ("tactical-review", "Critique tactical outputs with explicit provisional provenance"),
                             ("tactical-curate", "Export aligned provisional tactical labels without starting training"),
@@ -69,6 +70,9 @@ def main(argv=None):
     if args.command == "snapshot-evaluation":
         from .snapshot import main as snapshot_main
         return snapshot_main(remaining)
+    if args.command == "tactical-content-evaluate":
+        from .tactical.content_evaluation import main as content_main
+        return content_main(remaining)
     if args.command == "tactical-infer":
         from .tactical.pipeline import main as tactical_main
         return tactical_main(remaining)

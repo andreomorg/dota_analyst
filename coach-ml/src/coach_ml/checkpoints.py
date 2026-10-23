@@ -14,6 +14,10 @@ def identity(pointer, freeze_hash):
     step, cursor = pointer.get('step'), pointer.get('cursor')
     require(type(step) is int and step > 0 and type(cursor) is int and cursor > 0,
             'Invalid checkpoint counters')
+    if 'epoch' in pointer or 'cursorInEpoch' in pointer:
+        require(type(pointer.get('epoch')) is int and 0 <= pointer['epoch'] <= 4
+                and type(pointer.get('cursorInEpoch')) is int and pointer['cursorInEpoch'] >= 0,
+                'Invalid checkpoint epoch counters')
     require(pointer.get('directory') == f'checkpoint-{step:06d}'
             and re.fullmatch(r'checkpoint-[0-9]{6,8}', pointer['directory']),
             'Invalid checkpoint directory')

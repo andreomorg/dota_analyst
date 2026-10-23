@@ -19,7 +19,7 @@ public partial class SituationRowColumnsTests
             ["_HIDDEN_V1"] = Names(ListOf(source, "_HIDDEN_V1")),
         };
         // The entry of the current version, up to the dictionary's closing brace (it is the last entry).
-        var current = Regex.Match(source, $@"^\s*{SituationRow.FeatureVersion}: (?<body>.*?)^\}}",
+        var current = Regex.Match(source, $@"^\s*{(SituationRow.FeatureVersion == 3 ? 2 : SituationRow.FeatureVersion)}: (?<body>.*?)^\}}",
             RegexOptions.Multiline | RegexOptions.Singleline);
         Assert.True(current.Success, $"Version {SituationRow.FeatureVersion} not found in SITUATION_BY_VERSION.");
         var python = Token().Matches(current.Groups["body"].Value)

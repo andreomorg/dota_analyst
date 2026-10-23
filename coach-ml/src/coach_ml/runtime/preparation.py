@@ -30,7 +30,7 @@ def prepare(ROOT, cfg, encode_split, torch, os, attach, load_base, time, batch, 
     norm = torch.nn.utils.clip_grad_norm_(parameters, 1.0)
     assert bool(torch.isfinite(norm)) and float(norm) > 0
     torch.cuda.synchronize()
-    result = {'scenes': len(train), 'validation': len(validation), 'dtype': str(dtype), 'gpu': torch.cuda.get_device_name(), 'maximumTokens': max((len(p) + len(t) for p, t in train + validation)), 'worstMicrobatchSeconds': time.perf_counter() - began, 'peakAllocatedBytes': torch.cuda.max_memory_allocated(), 'trainableParameters': sum((p.numel() for p in parameters)), 'microBatches': math.ceil(len(train) / cfg['microBatch']), 'optimizerSteps': math.ceil(math.ceil(len(train) / cfg['microBatch']) / cfg['accumulation']), 'optimizerUpdated': False, 'testOpened': False}
+    result = {'scenes': len(train), 'validation': len(validation), 'dtype': str(dtype), 'gpu': torch.cuda.get_device_name(), 'maximumTokens': max((len(p) + len(t) for p, t in train + validation)), 'worstMicrobatchSeconds': time.perf_counter() - began, 'peakAllocatedBytes': torch.cuda.max_memory_allocated(), 'trainableParameters': sum((p.numel() for p in parameters)), 'microBatches': math.ceil(len(train) / cfg['microBatch']), 'optimizerSteps': math.ceil(math.ceil(len(train) / cfg['microBatch']) / cfg['accumulation']) * cfg.get('epochs', 1), 'optimizerUpdated': False, 'testOpened': False}
     atomic_json(ROOT / 'preflight.json', result)
     capability = experiment_capability(ROOT, cfg)
     atomic_json(ROOT / 'model-capability.json', capability)

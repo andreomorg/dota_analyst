@@ -1,0 +1,23 @@
+{
+  "model": "Qwen/Qwen3-1.7B",
+  "revision": "REPLACE_WITH_VERIFIED_40_HEX_COMMIT",
+  "profile": "tactical-review-v52",
+  "hardwareProfile": "rtx3080-10gb",
+  "memoryBudgetGiB": 10,
+  "samples": 1,
+  "validationSamples": 1,
+  "seed": 42,
+  "epochs": 1,
+  "microBatch": 1,
+  "accumulation": 16,
+  "learningRate": 0.0001,
+  "warmupFraction": 0.02,
+  "loraRank": 16,
+  "loraAlpha": 32,
+  "targetModules": ["q_proj", "v_proj"],
+  "gradientCheckpointing": true,
+  "maxTrainingTokens": 3584,
+  "maxNewTokens": 384,
+  "inferenceBatch": 1,
+  "checkpointSteps": 25
+}

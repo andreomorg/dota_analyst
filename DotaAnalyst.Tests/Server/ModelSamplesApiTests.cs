@@ -66,7 +66,7 @@ public sealed class ModelSamplesApiTests : IDisposable
         var root = json.RootElement;
         var first = root.GetProperty("samples")[0].GetProperty("situation");
 
-        Assert.Equal((2, "1", 10, 15), (root.GetProperty("featureVersion").GetInt32(), root.GetProperty("matchId").GetString(),
+        Assert.Equal((3, "1", 10, 15), (root.GetProperty("featureVersion").GetInt32(), root.GetProperty("matchId").GetString(),
             root.GetProperty("sampleEverySeconds").GetInt32(), root.GetProperty("horizonSeconds").GetInt32()));
         // 0, 10 ... 40 for the one hero with positions (the match ends at 1:00); it dies at 0:25.
         Assert.Equal(5, root.GetProperty("samples").GetArrayLength());

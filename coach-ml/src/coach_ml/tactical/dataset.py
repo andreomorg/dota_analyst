@@ -7,6 +7,7 @@ from ..core.validation import require
 from .pipeline import load_selection, score_generation, SYSTEM
 from .curation import validate_critique
 from .prompt_v5 import SYSTEM_V5
+from .prompt_v52 import system_for
 from .audit import validate_request
 from .facts import audit_candidate_facts
 
@@ -85,15 +86,15 @@ def main(argv=None):
     parser.add_argument('--partition', choices=['development','validation-diagnostic'], default='development')
     parser.add_argument('--actions',type=Path,help='Opt-in C# action receipt directory (development only)')
     parser.add_argument('--patches',type=Path,help='Opt-in audited development patch metadata directory')
-    parser.add_argument('--profile', choices=['tactical-review-v1', 'tactical-review-v5'], default='tactical-review-v1')
+    parser.add_argument('--profile', choices=['tactical-review-v1', 'tactical-review-v5', 'tactical-review-v52'], default='tactical-review-v1')
     parser.add_argument('--situated-requests', type=Path,
                         help='Aligned canonical v5 requests for the selected source scenes')
     args = parser.parse_args(argv)
-    system = SYSTEM_V5 if args.profile == 'tactical-review-v5' else SYSTEM
+    system = system_for(args.profile, SYSTEM)
     require(args.minimum_accepted > 0, 'Minimum acceptance must be explicit and positive')
     require(not args.output.exists(), 'Curated output must be new')
     cases = load_selection(args.source,args.index,args.bundle,args.include_support,args.partition,args.actions,args.patches)
-    if args.profile == 'tactical-review-v5':
+    if args.profile in ('tactical-review-v5', 'tactical-review-v52'):
         require(args.situated_requests is not None, 'V5 requires aligned situated requests')
         situated = parse_json(args.situated_requests.read_text(encoding='utf-8-sig'))
         require(type(situated) is list and len(situated) == len(cases), 'Incomplete situated requests')
@@ -102,7 +103,7 @@ def main(argv=None):
             validate_request(request, args.profile)
             shared = {**request, 'schemaVersion': 1, 'task': 'tactical-review-v1',
                       'unknowns': legacy['unknowns'],
-                      'facts': [f for f in request['facts'] if f['id'] not in ('situation', 'roster')]}
+                      'facts': [f for f in request['facts'] if f['id'] not in ('situation', 'roster', 'signals')]}
             require(canonical(shared) == canonical(legacy), 'Situated source scene mismatch')
             aligned.append((record, request))
         cases = aligned

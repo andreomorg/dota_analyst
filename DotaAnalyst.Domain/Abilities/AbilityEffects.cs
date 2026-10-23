@@ -36,7 +36,7 @@ public enum AbilityEffect
 // - the internal key (lion_voodoo is a hex) and, for the common items, an explicit list (the item texts do not say
 //   "spell immunity" for Black King Bar, nor "escape" for Blink Dagger).
 // A heuristic over the game's own words: an effect it does not recognise is simply left out; it never invents one.
-public static class AbilityEffects
+public static partial class AbilityEffects
 {
     public static bool IsDisable(AbilityEffect effect) =>
         effect is AbilityEffect.Stun or AbilityEffect.Root or AbilityEffect.Silence or AbilityEffect.Hex or AbilityEffect.Disarm
@@ -140,9 +140,11 @@ public static class AbilityEffects
 
     private static readonly string[] DamageHeaders = ["DAMAGE", "BASE DAMAGE", "IMPACT DAMAGE", "INITIAL DAMAGE", "MAX DAMAGE"];
 
-    public static IReadOnlySet<AbilityEffect> Of(AbilityDetails ability)
+    public static IReadOnlySet<AbilityEffect> Of(AbilityDetails ability, int version = 1)
     {
         ArgumentNullException.ThrowIfNull(ability);
+        if (version == 2) return OfV2(ability);
+        ArgumentOutOfRangeException.ThrowIfNotEqual(version, 1);
         var effects = Read(ability.Key, ability.Description, ability.Values);
         // A damage attribute on an active enemy-targeted spell with a damage type: a nuke (passives/auras excluded).
         if (!ability.IsPassive && ability.DamageType != AbilityDamageType.None

@@ -22,9 +22,9 @@ public static class NextRegionSampleBuilder
     // Null when the analysis lacks what a situation needs (HeroSituationBuilder.From).
     public static IReadOnlyList<NextRegionSample>? Build(
         ReplayAnalysis replay, IReadOnlyList<HeroPositions> positions, ReplayActivity? activity = null,
-        GameCatalog? catalog = null, ReplayAdditionalFacts? facts = null)
+        GameCatalog? catalog = null, ReplayAdditionalFacts? facts = null, int featureVersion = 2)
     {
-        if (HeroSituationBuilder.From(replay, positions, activity, catalog, facts) is not { } situations)
+        if (HeroSituationBuilder.From(replay, positions, activity, catalog, facts, featureVersion) is not { } situations)
         {
             return null;
         }

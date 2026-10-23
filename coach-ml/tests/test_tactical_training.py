@@ -37,6 +37,53 @@ def write_case(root, stem, match='1', hero=1):
 
 
 class TacticalTrainingTests(unittest.TestCase):
+    def test_v52_assembly_and_inspection_need_policy_provenance_without_fake_critic(self):
+        from coach_ml.tactical.prompt_v52 import SYSTEM_V52
+        from coach_ml.tactical.policy_v3 import target_for
+        from test_tactical_policy_v2 import context, CASES
+        from test_tactical_policy_v3 import signal
+        from coach_ml.tactical.situated import project_situated_scene
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            directories = []
+            for name, match, anchor in [('train', '1', 100), ('validation', '2', 110)]:
+                directory = root / name
+                directory.mkdir()
+                record, meta = write_case(directory, 'source', match)
+                source = context(CASES[0][0])
+                source['decision']['scenes'][0]['atOrBeforeAnchor']['anchorSeconds'] = anchor
+                source['situations'][0].update(anchorSeconds=anchor, signals=[signal(1, CASES[0][0])])
+                request = project_situated_scene(source, 0)
+                rule, target = target_for(request)
+                meta.update(exampleId=f'{match}/1/scene/tactical-review-v52', request=request, target=target,
+                            labelOrigin='deterministic-policy-v3', policyVersion=3, policyRule=rule)
+                meta.pop('sourcePredictionsSha256'); meta.pop('criticIdentitySha256')
+                for message, content in zip(record['messages'], [SYSTEM_V52, canonical(request), canonical(target)]):
+                    message['content'] = content
+                (directory / 'provisional-sft.jsonl').write_text(canonical(record) + '\n')
+                (directory / 'metadata.json').write_text(canonical([meta]))
+                (directory / 'curation-audit.json').write_text(canonical({
+                    'profile': 'tactical-review-v52', 'experimentalDataReady': True, 'provisionalAccepted': 1,
+                    'humanReviewed': False, 'tacticalQualityApproved': False,
+                    'labelOrigin': 'deterministic-policy-v3', 'policyVersion': 3}))
+                directories.append(directory)
+            cfg = json.loads((Path(__file__).parents[1] / 'configs/lora.example.json').read_text())
+            cfg.update(profile='tactical-review-v52', samples=1, validationSamples=1)
+            (root / 'config.json').write_text(canonical(cfg))
+            manifest = root / 'manifest.json'
+            manifest.write_text(canonical({'matches': [{'matchId': match, 'sourceHash': 'a' * 64, 'split': split}
+                for match, split in [('1', 'train'), ('2', 'validation-new')]]}))
+            cache = root / 'cache'
+            (cache / 'hub' / ('models--' + cfg['model'].replace('/', '--')) / 'snapshots' / cfg['revision']).mkdir(parents=True)
+            experiment = root / 'experiment'
+            assembled = assemble(*directories, root / 'config.json', manifest, experiment,
+                                 minimum_train=1, minimum_validation=1)
+            self.assertTrue(assembled['inputIsolationPassed'])
+            self.assertEqual((experiment / 'instructions.txt').read_text(), SYSTEM_V52)
+            inspected = inspect_experiment(experiment, cache, manifest)
+            self.assertFalse(inspected['gpuInitialized'])
+            self.assertEqual(inspected['profile'], 'tactical-review-v52')
+
     def test_support_provenance_cannot_carry_extra_future_outcome_fields(self):
         request = project_scene(*fixture())
         support = {'heroId':1,'anchorSeconds':100,'allyHeroId':2,'expectedPairedSeconds':11,'observedPairedSeconds':6,

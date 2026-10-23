@@ -12,6 +12,24 @@ namespace DotaAnalyst.Tests.Domain;
 public class HeroSituationBuilderTests
 {
     [Fact]
+    public void KitClassifierIsSelectedByFeatureVersion()
+    {
+        var spell = new AbilityDetails("shackles_fixture", "fixture", "Disabling the enemy.", ["Unit Target"],
+            AbilityTargetTeam.Enemy, [], AbilityDamageType.None, false, Dispellable.Unknown, [], [], []);
+        // CD14 identity is required to interpret this paraphrase.
+        spell = spell with { Key = "shadow_shaman_shackles" };
+        var catalog = new GameCatalog(Abilities: new Dictionary<string, AbilityDetails> { [spell.Key] = spell },
+            Kits: new Dictionary<int, HeroKit> { [6] = new(6, [spell.Key], [], []) });
+        var replay = new ReplayAnalysis(Match(), 180, Players, Timeline, [], [], objectives: []);
+        var paths = new[] { Path(1, 100), Path(6, 100) };
+        var legacy = HeroSituationBuilder.From(replay, paths, catalog: catalog)!.At(1, 100)!;
+        var v2 = HeroSituationBuilder.From(replay, paths, catalog: catalog, featureVersion: 2)!.At(1, 100)!;
+        var v3 = HeroSituationBuilder.From(replay, paths, catalog: catalog, featureVersion: 3)!.At(1, 100)!;
+        Assert.Equal(0, legacy.Kit.EnemiesWithStun);
+        Assert.Equal(legacy, v2);
+        Assert.Equal(1, v3.Kit.EnemiesWithStun);
+    }
+    [Fact]
     public void BuybackReadsReplicatedCooldownInsteadOfAnAssumedPrice()
     {
         var activity = new ReplayActivity([], [], []) { EconomyStates = [new(1, 100, 13000, 5000, 5000, 50, 0)] };

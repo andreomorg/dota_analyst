@@ -1,0 +1,16 @@
+# Isolated BF16 text runtime. Never install the legacy [train] extra in this image.
+torch==2.8.0
+torchvision==0.23.0
+triton==3.4.0
+xformers==0.0.32.post2
+torchao==0.13.0
+unsloth==2026.10.8
+unsloth_zoo==2026.10.8
+transformers==5.17.0
+peft==0.21.2
+accelerate==1.10.1
+safetensors==0.8.0
+numpy==2.3.2
+flash-linear-attention==0.5.2
+fla-core==0.5.2
+causal-conv1d @ https://github.com/Dao-AILab/causal-conv1d/releases/download/v1.7.0/causal_conv1d-1.7.0%2Bcu12torch2.8cxx11abiTRUE-cp311-cp311-linux_x86_64.whl#sha256=b28c3657a9d6855e1f95bc912ab94f893434276b437dec8008c92c9f38b6a1f4

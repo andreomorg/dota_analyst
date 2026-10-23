@@ -38,7 +38,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(prog='coach-ml audit-experiment', description=__doc__)
     parser.add_argument('--experiment', required=True, type=Path)
     parser.add_argument('--manifest', required=True, type=Path)
-    parser.add_argument('--profile', choices=['factual-review', 'competency-review-v1', 'tactical-review-v1', 'tactical-review-v5'], default='factual-review')
+    parser.add_argument('--profile', choices=['factual-review', 'competency-review-v1', 'tactical-review-v1', 'tactical-review-v5', 'tactical-review-v52'], default='factual-review')
     args = parser.parse_args(argv)
     try:
         report = audit_experiment(args.experiment, args.manifest, args.profile)

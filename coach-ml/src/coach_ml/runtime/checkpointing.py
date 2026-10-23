@@ -4,8 +4,9 @@ def save_training_checkpoint(step, output, model, torch, optimizer, cursor, entr
     folder = output / (name + '.partial')
     folder.mkdir(exist_ok=False)
     model.save_pretrained(folder, safe_serialization=True)
-    torch.save({'optimizer': optimizer.state_dict(), 'cursor': cursor, 'step': step, 'elapsedSeconds': entry['elapsedSeconds'], 'pythonRandom': random.getstate(), 'torchRandom': torch.get_rng_state(), 'cudaRandom': torch.cuda.get_rng_state_all()}, folder / 'state.pt')
-    checkpoint = {'directory': name, 'cursor': cursor, 'step': step, 'freezeHash': sha(ROOT / 'freeze.json')}
+    position = {key: entry[key] for key in ('epoch', 'cursorInEpoch') if key in entry}
+    torch.save({'optimizer': optimizer.state_dict(), 'cursor': cursor, 'step': step, 'elapsedSeconds': entry['elapsedSeconds'], 'pythonRandom': random.getstate(), 'torchRandom': torch.get_rng_state(), 'cudaRandom': torch.cuda.get_rng_state_all(), **position}, folder / 'state.pt')
+    checkpoint = {'directory': name, 'cursor': cursor, 'step': step, 'freezeHash': sha(ROOT / 'freeze.json'), **position}
     seal_checkpoint(folder, checkpoint)
     folder.rename(output / name)
     verify_checkpoint(output, checkpoint, checkpoint['freezeHash'])

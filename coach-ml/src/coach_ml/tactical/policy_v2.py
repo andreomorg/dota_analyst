@@ -80,6 +80,10 @@ def target_for(request):
         if applies:
             rule_id, details = f'R{index}', content
             break
+    return render_target(request, rule_id, details, situation, get)
+
+
+def render_target(request, rule_id, details, situation, get):
     opening = ('Comparar', 'Revisar', 'Examinar', 'Conferir')[int(digest(request)[:8], 16) % 4]
     refs = ['situation']
     candidate = {

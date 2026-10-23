@@ -50,7 +50,10 @@ def execute(stage, experiment, model_cache, manifest, backend: TrainingBackend, 
         try:
             backend(stage, root, Path(model_cache).resolve())
         except ImportError as exc:
-            raise AuditError('Training dependencies unavailable; install the train extra in a compatible ML environment') from exc
+            message = ('Qwen3.5 dependencies unavailable; use the isolated qwen35 runtime image'
+                       if report['model'].startswith('Qwen/Qwen3.5-') else
+                       'Training dependencies unavailable; install the train extra in a compatible ML environment')
+            raise AuditError(message) from exc
         except AssertionError as exc:
             raise AuditError('Training invariant failed: ' + (str(exc) or 'runtime validation')) from exc
         if stage == 'run' and not (root / 'evaluation-audit.json').exists():

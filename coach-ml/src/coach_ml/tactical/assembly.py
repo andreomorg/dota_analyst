@@ -10,6 +10,7 @@ from ..datasets import audit_experiment
 from ..experiments.preparation import load_config
 from .pipeline import SYSTEM
 from .prompt_v5 import SYSTEM_V5
+from .prompt_v52 import system_for
 
 
 def normalize_metadata(meta, audit):
@@ -18,9 +19,14 @@ def normalize_metadata(meta, audit):
     scene = f"{provenance['matchId']}/{provenance['heroId']}/{provenance['sceneId']}"
     expected = {'matchId':provenance['matchId'],'heroId':provenance['heroId'],'episodeId':provenance['sceneId'],
                 'sourceHash':provenance['sourceMatchHash'],'sourceSceneId':scene,
-                'exampleId':scene+'/'+audit.get('profile', 'tactical-review-v1'),'provisionalAccepted':True,
-                'sourcePredictionsSha256':audit['sourcePredictionsSha256'],
-                'criticIdentitySha256':audit['criticIdentitySha256']}
+                'exampleId':scene+'/'+audit.get('profile', 'tactical-review-v1'),'provisionalAccepted':True}
+    if audit.get('profile') == 'tactical-review-v52':
+        require(audit.get('labelOrigin') == 'deterministic-policy-v3' and audit.get('policyVersion') == 3,
+                'Signal corpus requires deterministic policy provenance')
+        expected.update(labelOrigin='deterministic-policy-v3', policyVersion=3)
+    else:
+        expected.update(sourcePredictionsSha256=audit['sourcePredictionsSha256'],
+                        criticIdentitySha256=audit['criticIdentitySha256'])
     for key, item in expected.items():
         require(key not in value or value[key] == item, 'Curated metadata identity differs: '+key)
         value[key] = item
@@ -34,7 +40,7 @@ def assemble(train, validation, config, manifest, output, minimum_train=3000, mi
     require(minimum_train > 0 and minimum_validation > 0, 'Positive dataset minimums required')
     cfg = parse_json(Path(config).read_text(encoding='utf-8-sig'))
     profile = cfg.get('profile')
-    require(profile in ('tactical-review-v1', 'tactical-review-v5'), 'Explicit tactical training profile required')
+    require(profile in ('tactical-review-v1', 'tactical-review-v5', 'tactical-review-v52'), 'Explicit tactical training profile required')
     prepared, fingerprints = {}, {}
     for stem, directory, minimum in (('development',train,minimum_train),('validation',validation,minimum_validation)):
         veto = directory/'assistant-review-veto.json'
@@ -57,7 +63,7 @@ def assemble(train, validation, config, manifest, output, minimum_train=3000, mi
     for stem,(directory,metadata) in prepared.items():
         (output/(stem+'.jsonl')).write_bytes((directory/'provisional-sft.jsonl').read_bytes())
         (output/(stem+'-metadata.json')).write_text(canonical(metadata)+'\n',encoding='utf-8')
-    (output/'instructions.txt').write_text(SYSTEM_V5 if profile == 'tactical-review-v5' else SYSTEM,encoding='utf-8')
+    (output/'instructions.txt').write_text(system_for(profile, SYSTEM),encoding='utf-8')
     (output/'experimental-authorization.json').write_text(canonical({
         'scope':'User-requested separate tactical learning experiment; provisional labels, no promotion'})+'\n',encoding='utf-8')
     joint = audit_experiment(output,manifest,profile)

@@ -46,7 +46,7 @@ public sealed partial class HeroSituationBuilder
 
     private HeroSituationBuilder(
         ReplayAnalysis replay, MatchStatTimeline stats, IReadOnlyList<HeroPositions> positions, ReplayActivity? activity,
-        GameCatalog catalog, ReplayAdditionalFacts? facts)
+        GameCatalog catalog, ReplayAdditionalFacts? facts, int featureVersion)
     {
         terrainMap = catalog.Map;
         mapFacts = facts;
@@ -55,7 +55,7 @@ public sealed partial class HeroSituationBuilder
         kits = catalog.Kits;
         abilityDetails = catalog.Abilities;
         neutralRules = catalog.Neutrals;
-        abilityEffects = catalog.Abilities?.ToDictionary(ability => ability.Key, ability => AbilityEffects.Of(ability.Value));
+        abilityEffects = catalog.Abilities?.ToDictionary(ability => ability.Key, ability => AbilityEffects.Of(ability.Value, featureVersion >= 3 ? 2 : 1));
         this.replay = replay;
         this.stats = stats;
         this.activity = activity;
@@ -71,9 +71,11 @@ public sealed partial class HeroSituationBuilder
     // them unknown.
     public static HeroSituationBuilder? From(
         ReplayAnalysis replay, IReadOnlyList<HeroPositions> positions, ReplayActivity? activity = null,
-        GameCatalog? catalog = null, ReplayAdditionalFacts? facts = null)
+        GameCatalog? catalog = null, ReplayAdditionalFacts? facts = null, int featureVersion = 2)
     {
         ArgumentNullException.ThrowIfNull(replay);
+        ArgumentOutOfRangeException.ThrowIfLessThan(featureVersion, 1);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(featureVersion, 3);
         ArgumentNullException.ThrowIfNull(positions);
         if (replay.Deaths is null || replay.Wards is null || replay.Objectives is null
             || MatchStatTimeline.From(replay) is not { } stats)
@@ -81,7 +83,7 @@ public sealed partial class HeroSituationBuilder
             return null;
         }
 
-        return new HeroSituationBuilder(replay, stats, positions, activity, catalog ?? GameCatalog.Empty, facts);
+        return new HeroSituationBuilder(replay, stats, positions, activity, catalog ?? GameCatalog.Empty, facts, featureVersion);
     }
 
     // Whether the replay's activity was read: without it, RecentActivity is Unknown (not "nothing was used").

@@ -134,7 +134,10 @@ def project_situated_scene(context, index):
     require(type(index) is int and 0 <= index < len(decision['scenes']), 'Invalid scene index')
     require(len(context['situations']) == len(decision['scenes']), 'Situation count mismatch')
     for snapshot in context['situations']:
-        _keys(snapshot, ('anchorSeconds', 'situation', 'escape'))
+        _keys(snapshot, ('anchorSeconds', 'situation', 'escape', 'signals'))
+        if 'signals' in snapshot:
+            from .policy_v3 import validate_signals
+            validate_signals(snapshot['signals'])
         escape = snapshot.get('escape')
         if escape is not None:
             _keys(escape, ROUTE_FIELDS)
@@ -200,4 +203,10 @@ def project_situated_scene(context, index):
     ])
     request['schemaVersion'] = 5
     request['task'] = 'tactical-review-v5'
+    if 'signals' in snapshot:
+        request['task'] = 'tactical-review-v52'
+        request['facts'].append({
+            'id': 'signals', 'kind': 'anchor-signals', 'sampleSeconds': anchor,
+            'value': copy.deepcopy(snapshot['signals']), 'source': 'situated-decision-document:signals',
+            'perspective': 'team-visible', 'limitations': ['Sinais determinísticos; não demonstram uma opção superior.']})
     return request

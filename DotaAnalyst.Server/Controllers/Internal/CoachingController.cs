@@ -19,7 +19,8 @@ public sealed class CoachingController(ReviewCoachingHandler handler, GetSituate
     /// <summary>The v5 decision context (v1 scenes + the team-visible situation at each anchor) of one hero in a kept
     /// replay, for the local coach corpus.</summary>
     [HttpGet("situated-decisions/{matchId}/{heroId}")]
-    public async Task<IActionResult> SituatedDecisions(long matchId, int heroId, CancellationToken cancellationToken)
+    public async Task<IActionResult> SituatedDecisions(long matchId, int heroId, CancellationToken cancellationToken,
+        [FromQuery] bool includeSignals = false)
     {
         var options = settings.Value;
         if (!options.Enabled) return NotFound();
@@ -28,7 +29,7 @@ public sealed class CoachingController(ReviewCoachingHandler handler, GetSituate
             return Problem(statusCode: 400, title: "Invalid match or hero ID.");
         try
         {
-            var result = await situated.HandleAsync(id, heroId, cancellationToken);
+            var result = await situated.HandleAsync(id, heroId, cancellationToken, includeSignals);
             if (result is null) return NotFound();
             // The decision block stays byte-compatible with the v1 decision documents (numeric enums), which the
             // existing projection reads; heroes and situations follow the API's text enums (v5 contract).

@@ -37,13 +37,18 @@ def experiment_capability(root, cfg):
         for row in iter_json_array(root / (stem + '-metadata.json')):
             policies.add(row['request'].get('reviewPolicyVersion', 1))
     require(policies and all(type(value) is int and value in (1, 2) for value in policies), 'Unknown review policy')
-    return {'schemaVersion': 1, 'task': profile, 'inputSchema': profile + ':request-v1',
+    result = {'schemaVersion': 1, 'task': profile, 'inputSchema': profile + ':request-v1',
             'outputSchema': profile + ':response-v1', 'policyVersions': sorted(policies),
             'baseModel': cfg['model'], 'baseRevision': cfg['revision'], 'tokenizerRevision': cfg['revision'],
             'chatTemplate': 'no-thinking-assistant-eos-v1',
-            'evaluator': 'tactical-contract-and-lexical-v1' if profile in ('tactical-review-v1', 'tactical-review-v5') else 'coach-ml-paired-evaluation-v2',
+            'evaluator': 'tactical-contract-and-lexical-v1' if profile in ('tactical-review-v1', 'tactical-review-v5', 'tactical-review-v52') else 'coach-ml-paired-evaluation-v2',
             'datasetHashes': {f'{stem}.jsonl': file_hash(root / (stem + '.jsonl'))
                               for stem in ('development', 'validation')}}
+    if cfg.get('runtime') == 'qwen35-text-bf16-v1':
+        result['runtime'] = cfg['runtime']
+        result['precision'] = cfg['precision']
+        result['textOnly'] = True
+    return result
 
 
 def require_compatible(capability, task, input_schema, output_schema):

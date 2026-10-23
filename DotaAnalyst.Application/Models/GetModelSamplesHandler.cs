@@ -27,27 +27,29 @@ public sealed record ModelSamplesResult<T>(ModelSamplesStatus Status, ModelSampl
 // whether the build's files belong to it.
 public sealed class GetModelSamplesHandler(IArchivedReplaySource replays, GameCatalogLoader catalogs, IGamePatchCatalog? patchCatalog = null)
 {
-    public Task<ModelSamplesResult<DeathRiskSampleRow>> DeathRiskAsync(MatchId matchId, CancellationToken cancellationToken) =>
+    public Task<ModelSamplesResult<DeathRiskSampleRow>> DeathRiskAsync(MatchId matchId, CancellationToken cancellationToken, int featureVersion = SituationRow.FeatureVersion) =>
         HandleAsync(matchId, DeathRiskSampleBuilder.SampleEverySeconds, DeathRiskSampleBuilder.HorizonSeconds,
-            (replay, catalog) => DeathRiskSampleBuilder.Build(replay.Analysis, replay.Positions, replay.Activity, catalog, replay.Facts)?
+            (replay, catalog) => DeathRiskSampleBuilder.Build(replay.Analysis, replay.Positions, replay.Activity, catalog, replay.Facts, featureVersion)?
                 .Select(sample => new DeathRiskSampleRow(
                     SituationRow.From(sample.Situation, replay.Activity is not null), sample.DiesSoon, sample.DiedAtSeconds))
                 .ToList(),
-            cancellationToken);
+            featureVersion, cancellationToken);
 
-    public Task<ModelSamplesResult<NextRegionSampleRow>> NextRegionAsync(MatchId matchId, CancellationToken cancellationToken) =>
+    public Task<ModelSamplesResult<NextRegionSampleRow>> NextRegionAsync(MatchId matchId, CancellationToken cancellationToken, int featureVersion = SituationRow.FeatureVersion) =>
         HandleAsync(matchId, NextRegionSampleBuilder.SampleEverySeconds, NextRegionSampleBuilder.HorizonSeconds,
-            (replay, catalog) => NextRegionSampleBuilder.Build(replay.Analysis, replay.Positions, replay.Activity, catalog, replay.Facts)?
+            (replay, catalog) => NextRegionSampleBuilder.Build(replay.Analysis, replay.Positions, replay.Activity, catalog, replay.Facts, featureVersion)?
                 .Select(sample => new NextRegionSampleRow(
                     SituationRow.From(sample.Situation, replay.Activity is not null), sample.RegionLater))
                 .ToList(),
-            cancellationToken);
+            featureVersion, cancellationToken);
 
     private async Task<ModelSamplesResult<T>> HandleAsync<T>(
         MatchId matchId, int sampleEverySeconds, int horizonSeconds,
         Func<ArchivedReplay, GameCatalog, IReadOnlyList<T>?> rows,
-        CancellationToken cancellationToken)
+        int featureVersion, CancellationToken cancellationToken)
     {
+        ArgumentOutOfRangeException.ThrowIfLessThan(featureVersion, 2);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(featureVersion, SituationRow.FeatureVersion);
         if (await replays.FindAsync(matchId, cancellationToken) is not { } replay)
         {
             return new(ModelSamplesStatus.NoDocument, null);
@@ -58,7 +60,7 @@ public sealed class GetModelSamplesHandler(IArchivedReplaySource replays, GameCa
         var patch = GamePatch.For(patches, replay.StartedAt);
         return rows(replay, catalog) is { } samples
             ? new(ModelSamplesStatus.Found, new ModelSampleSet<T>(
-                SituationRow.FeatureVersion, matchId.ToString(), sampleEverySeconds, horizonSeconds, samples, build?.Id,
+                featureVersion, matchId.ToString(), sampleEverySeconds, horizonSeconds, samples, build?.Id,
                 patch?.Name, build is not null && patch is not null ? GamePatch.BuildBelongsTo(build, patch, patches) : null))
             : new(ModelSamplesStatus.Outdated, null);
     }

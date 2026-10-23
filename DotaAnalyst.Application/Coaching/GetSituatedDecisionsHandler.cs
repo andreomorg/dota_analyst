@@ -18,7 +18,8 @@ public sealed class GetSituatedDecisionsHandler(
 {
     public const int SchemaVersion = 5;
 
-    public async Task<SituatedDecisionContext?> HandleAsync(MatchId matchId, int heroId, CancellationToken cancellationToken)
+    public async Task<SituatedDecisionContext?> HandleAsync(MatchId matchId, int heroId, CancellationToken cancellationToken,
+        bool includeSignals = false)
     {
         if (await replays.FindAsync(matchId, cancellationToken) is not { } replay
             || replay.Analysis.Players.All(player => player.HeroId != heroId))
@@ -35,7 +36,24 @@ public sealed class GetSituatedDecisionsHandler(
                 ? CoachingSituationSnapshot.From(situation, replay.Activity is not null)
                 : null,
                 builder?.EscapeAt(heroId, anchor) is { } escape ? CoachingEscapeSnapshot.From(escape) : null)).ToList();
+        if (includeSignals)
+        {
+            situations = situations.Select(anchor => anchor with { Signals = SignalsOf(anchor) }).ToList();
+        }
         return new(SchemaVersion, decision, await HeroesOfAsync(replay, catalog, cancellationToken), situations);
+    }
+
+    private static IReadOnlyList<CoachingSceneSignal> SignalsOf(SituatedAnchor anchor)
+    {
+        if (anchor.Situation is not { } s) return [];
+        return CoachingSceneSignals.Of(new(
+            s.VisibleEnemiesWithinFightRange, s.AlliesWithinFightRange, s.HealthShare, s.NearestVisibleEnemyDistance,
+            s.EscapeItemReady, s.MyEscapeReady, s.DamageFromHeroesLast6Seconds, s.OnEnemySide, s.NearestAllyDistance,
+            s.MissingEnemies, s.MissingEnemyLastSeenSecondsAgo, s.AheadOfOwnWave, s.InOwnObserverVision,
+            s.OwnBuildingsUnderAttack, s.TeleportReady, s.UltimateReady, s.RoshanAlive, s.TeamNetWorthLead, s.HasAegis,
+            s.IntentDestinationOnEnemySide, s.IntentDestinationAdvance, anchor.Escape?.ToTower?.SeenShare,
+            anchor.Escape?.ToTower?.NearestSeenEnemyToPath, anchor.Escape?.ToTower?.PathLength,
+            anchor.Escape?.ToAlly?.PathLength, s.AllyPingsNearLast10));
     }
 
     private async Task<IReadOnlyList<SituatedHero>> HeroesOfAsync(ArchivedReplay replay, GameCatalog catalog,
@@ -64,7 +82,7 @@ public sealed class GetSituatedDecisionsHandler(
             return null;
         }
 
-        return kit.Abilities.SelectMany(ability => AbilityEffects.Of(abilities[ability])).Distinct().Order().ToList();
+        return kit.Abilities.SelectMany(ability => AbilityEffects.Of(abilities[ability], 2)).Distinct().Order().ToList();
     }
 
     private async Task<CoachingPatch> PatchOfAsync(MatchId matchId, DateTimeOffset? startedAt, GameBuild? build,

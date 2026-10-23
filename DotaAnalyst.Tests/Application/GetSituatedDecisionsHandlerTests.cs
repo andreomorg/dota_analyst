@@ -12,6 +12,38 @@ namespace DotaAnalyst.Tests.Application;
 
 public sealed class GetSituatedDecisionsHandlerTests
 {
+    private static readonly System.Text.Json.JsonSerializerOptions WebJson = new(System.Text.Json.JsonSerializerDefaults.Web);
+    [Theory]
+    [InlineData(2)]
+    [InlineData(3)]
+    public async Task ModelSamplesKeepBothVersionedProductionPaths(int version)
+    {
+        var catalogs = new Catalogs();
+        var handler = new GetModelSamplesHandler(
+            new Archive(new(Replay(), [new(1, [new(90, 0, 0)])])),
+            new GameCatalogLoader(catalogs, catalogs, catalogs, catalogs));
+        var death = (await handler.DeathRiskAsync(Id, CancellationToken.None, version)).Samples!;
+        var region = (await handler.NextRegionAsync(Id, CancellationToken.None, version)).Samples!;
+        Assert.Equal(version, death.FeatureVersion);
+        Assert.Equal(version, region.FeatureVersion);
+        Assert.True(Assert.Single(death.Samples).DiesSoon);
+        Assert.Single(region.Samples);
+        Assert.Equal(Assert.Single(death.Samples).Situation, Assert.Single(region.Samples).Situation);
+    }
+
+    [Fact]
+    public async Task SignalsAreOptInAndDoNotChangeLegacyScenes()
+    {
+        var handler = Handler(new(Replay(), [new(1, [new(90, 0, 0)])], StartedAt: DateTimeOffset.UnixEpoch));
+        var legacy = (await handler.HandleAsync(Id, 1, CancellationToken.None))!;
+        var current = (await handler.HandleAsync(Id, 1, CancellationToken.None, includeSignals: true))!;
+        Assert.All(legacy.Situations, anchor => Assert.Null(anchor.Signals));
+        Assert.All(current.Situations, anchor => Assert.NotNull(anchor.Signals));
+        Assert.Equal(legacy.Situations, current.Situations.Select(anchor => anchor with { Signals = null }));
+        var json = System.Text.Json.JsonSerializer.Serialize(legacy, WebJson);
+        Assert.DoesNotContain("\"signals\"", json, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void Snapshot_HasNoHiddenFieldAndEveryFieldIsAModelColumn()
     {

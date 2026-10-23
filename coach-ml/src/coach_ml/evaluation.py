@@ -54,7 +54,7 @@ def evaluate(experiment):
 def _evaluate(experiment):
     root = Path(experiment)
     config = root / 'config.json'
-    if config.exists() and parse_json(config.read_text(encoding='utf-8-sig')).get('profile') in ('tactical-review-v1', 'tactical-review-v5'):
+    if config.exists() and parse_json(config.read_text(encoding='utf-8-sig')).get('profile') in ('tactical-review-v1', 'tactical-review-v5', 'tactical-review-v52'):
         from .tactical.evaluation import evaluate_tactical
         return evaluate_tactical(root)
     destination = root / 'evaluation-audit.json'

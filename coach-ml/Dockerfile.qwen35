@@ -1,0 +1,13 @@
+# Separate from all legacy training/service images; CUDA kernels target Ampere via a pinned binary wheel.
+FROM pytorch/pytorch@sha256:417bd75df6365104c283ea4c1651fb3530d9eb5a4c2fafa51943cff2a94e6385
+WORKDIR /opt/coach-ml
+ENV TORCH_CUDA_ARCH_LIST=8.6 TOKENIZERS_PARALLELISM=false PYTHONUNBUFFERED=1
+COPY requirements-qwen35.txt constraints-qwen35.txt /opt/qwen35/
+RUN python -m pip install --no-cache-dir --report /opt/qwen35/install-report.json -c /opt/qwen35/constraints-qwen35.txt -r /opt/qwen35/requirements-qwen35.txt
+COPY . .
+RUN python -m pip install --no-cache-dir --no-deps . && python -m pip check
+ENV HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 HF_HUB_DISABLE_TELEMETRY=1
+ENV COACH_ML_RUN_STORE=/run-state/runs.sqlite3
+LABEL org.dotaanalyst.runtime="qwen35-text-bf16-v1"
+ENTRYPOINT ["coach-ml"]
+CMD ["--help"]

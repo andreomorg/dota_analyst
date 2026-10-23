@@ -30,8 +30,11 @@ public sealed record SituatedHero(int HeroId, string Name, Team Team, IReadOnlyL
 /// <param name="Situation">The team-visible situation; null when the hero had no sample there or was dead.</param>
 /// <param name="Escape">v5.1: ground routes from the hero to its nearest standing tower (or fountain) and nearest
 /// ally, with what the team saw along them; null when the hero had no sample, a route is null when unknown.</param>
+/// <param name="Signals">v5.2 opt-in: ordered active rules and their cited visible values; omitted in older scenes.</param>
 public sealed record SituatedAnchor(int AnchorSeconds, CoachingSituationSnapshot? Situation,
-    CoachingEscapeSnapshot? Escape = null);
+    CoachingEscapeSnapshot? Escape = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    IReadOnlyList<CoachingSceneSignal>? Signals = null);
 
 /// <summary>The visible part of the escape routes at an anchor (never the hidden enemies near the path).</summary>
 public sealed record CoachingEscapeSnapshot(CoachingRouteSnapshot? ToTower, CoachingRouteSnapshot? ToAlly)

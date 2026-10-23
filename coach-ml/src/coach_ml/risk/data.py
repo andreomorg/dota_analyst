@@ -153,6 +153,10 @@ ROLE_INFERRED_UNTIL = 600
 BLOCK_ROWS = 100_000
 
 
+# v3 changes only the classifier semantics, preserving the v2 feature groups.
+VISIBLE_BY_VERSION[3] = list(VISIBLE_BY_VERSION[2])
+HIDDEN_BY_VERSION[3] = list(HIDDEN_BY_VERSION[2])
+
 def read_export(folder):
     """The export manifest after checking every file against its hash."""
     folder = Path(folder)

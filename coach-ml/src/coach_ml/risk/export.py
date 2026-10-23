@@ -113,6 +113,8 @@ SITUATION_BY_VERSION = {
 # Each model's label columns, after the situation; and the API route of its samples.
 LABELS = {'death-risk': ['diesSoon', 'diedAtSeconds'], 'next-region': ['regionLater']}
 ROUTES = {'death-risk': 'death-risk', 'next-region': 'next-region'}
+# Same columns, versioned kit semantics (AbilityEffects v2).
+SITUATION_BY_VERSION[3] = list(SITUATION_BY_VERSION[2])
 FEATURE_VERSION = max(SITUATION_BY_VERSION)
 
 

@@ -34,7 +34,7 @@ def evaluate_tactical(root):
     metadata = list(iter_json_array(root/'validation-metadata.json'))
     require(bool(metadata), 'Empty tactical validation')
     profile = parse_json((root/'config.json').read_text(encoding='utf-8-sig')).get('profile') if (root/'config.json').exists() else 'tactical-review-v1'
-    require(profile in ('tactical-review-v1', 'tactical-review-v5'), 'Invalid tactical profile')
+    require(profile in ('tactical-review-v1', 'tactical-review-v5', 'tactical-review-v52'), 'Invalid tactical profile')
     identities = set()
     for index, meta in enumerate(metadata):
         require(type(meta.get('row')) is int and meta['row'] == index, 'Tactical evaluation metadata order mismatch')

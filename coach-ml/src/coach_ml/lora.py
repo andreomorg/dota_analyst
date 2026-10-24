@@ -1,23 +1,27 @@
 """Versioned LoRA runtime for new offline experiments; legacy runs retain their frozen code."""
+from .runtime.ports import GenerationJob, GenerationResources, ModelRuntime
 
-def run(stage, experiment, model_cache, runtime=None):
-    from .runtime.generation import predict
-    from .runtime.optimization import train_epoch
-    from .runtime.preparation import prepare
+
+def run(stage, experiment, model_cache, runtime: ModelRuntime | None = None):
     import gc
     import json
     import math
     import os
-    from pathlib import Path
     import random
     import time
+    from pathlib import Path
+
     import torch
     from peft import LoraConfig, PeftModel, get_peft_model
     from transformers import AutoModelForCausalLM, AutoTokenizer
-    from .environment import runtime_environment, runtime_code_hashes
-    from .hashing import file_hash
+
     from .checkpoints import seal_checkpoint, verify_checkpoint
+    from .environment import runtime_code_hashes, runtime_environment
+    from .hashing import file_hash
     from .predictions import prediction_prefix
+    from .runtime.generation import predict_job
+    from .runtime.optimization import train_epoch
+    from .runtime.preparation import prepare
     ROOT = Path(experiment)
     cfg = json.loads((ROOT / 'config.json').read_text(encoding='utf-8-sig'))
     CACHE = Path(model_cache) / 'hub' / ('models--' + cfg['model'].replace('/', '--')) / 'snapshots'
@@ -124,7 +128,10 @@ def run(stage, experiment, model_cache, runtime=None):
         atomic_json(ROOT / 'live-status.json', {'status': 'evaluating', 'trainingComplete': True})
         from .experiments.control import phase
         phase('generating')
-        predict(output, json, ROOT, validation, load_base, PeftModel, tokenizer, cfg, torch, time, gc, prediction_prefix)
+        predict_job(
+            GenerationJob(root=ROOT, output=output, cfg=cfg, validation=validation, tokenizer=tokenizer),
+            GenerationResources(torch=torch, json=json, time=time, gc=gc, load_base=load_base,
+                                adapter_loader=PeftModel, prediction_prefix=prediction_prefix))
         atomic_json(ROOT / 'live-status.json', {'status': 'training-and-generation-complete', 'trainingComplete': True, 'promoted': False})
     else:
         raise ValueError(stage)

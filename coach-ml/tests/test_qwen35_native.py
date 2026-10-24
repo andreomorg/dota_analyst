@@ -32,10 +32,44 @@ class Qwen35NativeTests(unittest.TestCase):
         messages = [{'role': 'system', 'content': 'Responda somente com o JSON solicitado.'},
                     {'role': 'user', 'content': 'Exemplo sintético de teste.'},
                     {'role': 'assistant', 'content': answer}]
-        prefix, target = encode_example(messages, tokenizer, {'maxTrainingTokens': 3584})
+        prefix, target = encode_example(messages, tokenizer, {'maxTrainingTokens': 3584, 'maxNewTokens': 512})
         self.assertTrue(prefix)
         self.assertEqual(target.count(tokenizer.eos_token_id), 1)
         self.assertEqual(tokenizer.decode(target, skip_special_tokens=True), answer)
+        self.assertFalse(torch.cuda.is_initialized())
+
+    def test_official_tokenizer_rejects_injected_boundaries_and_overlong_answer(self):
+        from transformers import AutoTokenizer
+        from coach_ml.runtime_qwen35.encoding import encode_example
+        tokenizer = AutoTokenizer.from_pretrained(os.environ['COACH_ML_QWEN35_SNAPSHOT'], local_files_only=True)
+        messages = [{'role': role, 'content': content} for role, content in
+                    [('system', 'Responda em JSON.'), ('user', 'Cena de teste.'), ('assistant', '{"testOnly":true}')]]
+        _, target = encode_example(messages, tokenizer, {'maxTrainingTokens': 3584, 'maxNewTokens': 512})
+        with self.assertRaisesRegex(AuditError, 'generation budget'):
+            encode_example(messages, tokenizer, {'maxTrainingTokens': 3584, 'maxNewTokens': len(target) - 1})
+        for token in ('<|im_end|>', '<|im_start|>', '<think>'):
+            bad = [dict(message) for message in messages]
+            bad[1]['content'] += token
+            with self.subTest(token=token), self.assertRaisesRegex(AuditError, 'control token'):
+                encode_example(bad, tokenizer, {'maxTrainingTokens': 3584, 'maxNewTokens': 512})
+
+    def test_audit_uses_official_tokenizer_offline_without_weights(self):
+        from coach_ml.runtime_qwen35.audit import audit
+        from test_qwen35_runtime import config
+        snapshot = Path(os.environ['COACH_ML_QWEN35_SNAPSHOT'])
+        messages = [{'role': role, 'content': text} for role, text in
+                    [('system', 'Responda em JSON.'), ('user', 'Cena sintética.'), ('assistant', '{"testOnly":true}')]]
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            (root / 'config.json').write_text(json.dumps(config()))
+            for split in ('development', 'validation'):
+                (root / (split + '.jsonl')).write_text(json.dumps({'messages': messages}) + '\n')
+                (root / (split + '-metadata.json')).write_text(json.dumps([{'row': 0, 'policyRule': 'R0'}]))
+            result = audit(root, snapshot)
+        self.assertTrue(result['passed'])
+        self.assertGreater(result['datasets']['development']['maxTargetTokens'], 1)
+        self.assertFalse(result['modelWeightsLoaded'])
+        import torch
         self.assertFalse(torch.cuda.is_initialized())
 
     def test_real_tiny_text_checkpoint_rejects_wrong_tensor_shape(self):

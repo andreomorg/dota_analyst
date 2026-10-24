@@ -1,8 +1,10 @@
 """Streaming JSON metadata and JSONL readers."""
 import json
 from pathlib import Path
+
 from .json import DECODER, parse_json
 from .validation import AuditError, require
+
 
 def iter_json_array(file, chunk_size=65536):
     """Stream a metadata array, retaining at most a chunk plus the current object."""

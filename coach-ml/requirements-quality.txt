@@ -1,0 +1,2 @@
+# Tooling-only installation; never installed in frozen training environments.
+ruff==0.12.12

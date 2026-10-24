@@ -2,7 +2,9 @@
 import hashlib
 import json
 import math
+
 from .validation import AuditError
+
 
 def unique_object(pairs):
     result = {}

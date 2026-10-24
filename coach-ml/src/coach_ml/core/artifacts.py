@@ -1,5 +1,6 @@
 """Bounded JSON artifact diagnostics; never deserialize tensors."""
 from pathlib import Path
+
 from .json import parse_json
 from .validation import AuditError
 

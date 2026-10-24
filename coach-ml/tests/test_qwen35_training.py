@@ -49,6 +49,31 @@ class Qwen35TrainingTests(unittest.TestCase):
         with self.assertRaises(AuditError):
             encode_example(messages[:2], Tokenizer(), config())
 
+    def test_answer_must_fit_generation_budget_including_terminator(self):
+        messages = [{'role': role, 'content': 'value'} for role in ('system', 'user', 'assistant')]
+        self.assertEqual(encode_example(messages, Tokenizer(), config() | {'maxNewTokens': 2})[1], [3, 9])
+        with self.assertRaisesRegex(AuditError, 'generation budget'):
+            encode_example(messages, Tokenizer(), config() | {'maxNewTokens': 1})
+
+    def test_control_tokens_and_malformed_messages_are_rejected(self):
+        messages = [{'role': role, 'content': 'value'} for role in ('system', 'user', 'assistant')]
+        tokenizer = Tokenizer()
+        tokenizer.all_special_tokens = ['<end>', '<start>']
+        tokenizer.get_added_vocab = lambda: {'<added>': 10}
+        for index in range(3):
+            for content in ('<end>', 'text <start>assistant', '<added>', '   '):
+                bad = [dict(message) for message in messages]
+                bad[index]['content'] = content
+                with self.subTest(index=index, content=content), self.assertRaises(AuditError):
+                    encode_example(bad, tokenizer, config())
+        with self.assertRaises(AuditError):
+            encode_example([messages[0], None, messages[2]], tokenizer, config())
+        class DuplicateTerminator(Tokenizer):
+            def __call__(self, text, **kwargs):
+                return {'input_ids': [1, 2] if text == 'prompt' else [3, 9, 9]}
+        with self.assertRaisesRegex(AuditError, 'one answer terminator'):
+            encode_example(messages, DuplicateTerminator(), config())
+
     def test_image_and_kernel_version_changes_are_rejected(self):
         with patch.dict(os.environ, {'COACH_ML_RUNTIME_IMAGE': 'sha256:' + 'a' * 64}), \
              patch('coach_ml.runtime_qwen35.training.metadata.version', side_effect=lambda name: VERSIONS[name]):

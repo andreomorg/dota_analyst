@@ -1,7 +1,13 @@
 """Extracted phase; tensor dependencies are supplied by the composition runtime."""
-from ..experiments.control import pause_requested, TrainingPaused
+from ..experiments.control import TrainingPaused, pause_requested
+from .ports import GenerationJob, GenerationResources
 
-def predict(output, json, ROOT, validation, load_base, PeftModel, tokenizer, cfg, torch, time, gc, prediction_prefix):
+
+def predict_job(job: GenerationJob, resources: GenerationResources):
+    output, ROOT = job.output, job.root
+    validation, tokenizer, cfg = job.validation, job.tokenizer, job.cfg
+    json, torch, time, gc = resources.json, resources.torch, resources.time, resources.gc
+    load_base, PeftModel, prediction_prefix = resources.load_base, resources.adapter_loader, resources.prediction_prefix
     assert (output / 'training-result.json').is_file()
     metadata = json.loads((ROOT / 'validation-metadata.json').read_text(encoding='utf-8-sig'))
     assert len(metadata) == len(validation), 'Prediction metadata count mismatch'
@@ -18,11 +24,11 @@ def predict(output, json, ROOT, validation, load_base, PeftModel, tokenizer, cfg
         model.config.use_cache = True
         stop = model.generation_config.eos_token_id
         stops = set(stop if isinstance(stop, list) else [stop]) | {tokenizer.eos_token_id}
+        generated = ids = mask = None
         for start in range(0, len(validation), cfg['inferenceBatch']):
             if pause_requested():
                 del model
-                if 'generated' in locals():
-                    del generated, ids, mask
+                del generated, ids, mask
                 gc.collect()
                 torch.cuda.empty_cache()
                 raise TrainingPaused('Paused at a prediction batch boundary')
@@ -49,3 +55,9 @@ def predict(output, json, ROOT, validation, load_base, PeftModel, tokenizer, cfg
         del model, generated, ids, mask
         gc.collect()
         torch.cuda.empty_cache()
+
+
+def predict(output, json, ROOT, validation, load_base, PeftModel, tokenizer, cfg, torch, time, gc, prediction_prefix):
+    """Compatibility adapter for existing phase callers; the algorithm lives only in predict_job."""
+    return predict_job(GenerationJob(ROOT, output, cfg, validation, tokenizer),
+                       GenerationResources(torch, json, time, gc, load_base, PeftModel, prediction_prefix))

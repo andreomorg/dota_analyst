@@ -12,6 +12,7 @@ def main(argv=None):
                             ("coverage", "Measure hero/role/phase/task coverage and validation gaps"),
                             ("deduplicate", "Create an audited dataset without repeated model inputs"),
                             ("token-budget", "Measure local tokenizer budgets without loading weights"),
+                            ("qwen35-audit", "Audit Qwen3.5 encoding and budgets offline before GPU use"),
                             ("status", "Read experiment progress"),
                             ("build-curriculum", "Prepare a new provisional curriculum"),
                             ("evaluate", "Compare saved base/adapted predictions without ML"),
@@ -20,6 +21,9 @@ def main(argv=None):
                             ("run-control", "Inspect or request cooperative pause for a managed run"),
                             ("promotion-check", "Validate and record explicit promotion without installing a model"),
                             ("tactical-content-evaluate", "Compare saved tactical rules, actions and numbers with policy targets"),
+                            ("tactical-content-diagnostics", "Locate paired gains and regressions in an existing F3 report"),
+                            ("tactical-error-analysis", "Explain saved F3 errors without changing their scores"),
+                            ("tactical-supervision-audit", "Diagnose visible-input conflicts and deterministic label agreement"),
                             ("tactical-infer", "Run separate development-only tactical inference without approving labels"),
                             ("tactical-review", "Critique tactical outputs with explicit provisional provenance"),
                             ("tactical-curate", "Export aligned provisional tactical labels without starting training"),
@@ -52,6 +56,9 @@ def main(argv=None):
     if args.command == "deduplicate":
         from .curation import main as curation_main
         return curation_main(remaining)
+    if args.command == "qwen35-audit":
+        from .runtime_qwen35.audit import main as qwen35_audit_main
+        return qwen35_audit_main(remaining)
     if args.command == "token-budget":
         from .tokenization import main as tokenization_main
         return tokenization_main(remaining)
@@ -70,6 +77,15 @@ def main(argv=None):
     if args.command == "snapshot-evaluation":
         from .snapshot import main as snapshot_main
         return snapshot_main(remaining)
+    if args.command == "tactical-supervision-audit":
+        from .tactical.supervision_audit import main as supervision_main
+        return supervision_main(remaining)
+    if args.command == "tactical-error-analysis":
+        from .tactical.error_analysis import main as error_main
+        return error_main(remaining)
+    if args.command == "tactical-content-diagnostics":
+        from .tactical.content_diagnostics import main as diagnostics_main
+        return diagnostics_main(remaining)
     if args.command == "tactical-content-evaluate":
         from .tactical.content_evaluation import main as content_main
         return content_main(remaining)

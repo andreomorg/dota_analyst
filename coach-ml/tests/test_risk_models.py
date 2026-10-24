@@ -98,7 +98,7 @@ class RiskModelTests(unittest.TestCase):
 
         lib = ml()
         for hero_id in (-1, 255, 300):
-            def invalid_load(*args, **kwargs):
+            def invalid_load(*args, hero_id=hero_id, **kwargs):
                 features, labels, groups, extra = load(*args, **kwargs)
                 extra['heroId'][0] = hero_id
                 return features, labels, groups, extra

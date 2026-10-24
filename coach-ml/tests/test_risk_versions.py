@@ -53,8 +53,8 @@ class VersionTests(unittest.TestCase):
                 self.assertEqual(read_export(root)['featureVersion'], version)
 
     def test_v3_keeps_v2_columns_but_has_separate_version(self):
+        from coach_ml.risk.data import HIDDEN_BY_VERSION, VISIBLE_BY_VERSION
         from coach_ml.risk.export import FEATURE_VERSION, SITUATION_BY_VERSION
-        from coach_ml.risk.data import VISIBLE_BY_VERSION, HIDDEN_BY_VERSION
         self.assertEqual(FEATURE_VERSION, 3)
         self.assertEqual(SITUATION_BY_VERSION[3], SITUATION_BY_VERSION[2])
         self.assertIsNot(SITUATION_BY_VERSION[3], SITUATION_BY_VERSION[2])

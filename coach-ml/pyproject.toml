@@ -22,14 +22,22 @@ coach-ml = "coach_ml.cli:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 
-# Lint only the prediction-model code and its tests for now; the other modules keep their style until they are
-# touched (reformatting them all at once would hide real changes in one huge diff).
+# Expand checks incrementally; untouched legacy modules retain their existing style.
 [tool.ruff]
 line-length = 120
 target-version = "py311"
 # coach_ml is first-party (src layout): imports are grouped as standard library, then the project.
 src = ["src", "tests"]
 include = ["src/coach_ml/risk/**/*.py", "tests/test_risk_*.py", "tests/test_next_region.py", "tests/test_position_measure.py"]
+extend-include = [
+  "src/coach_ml/core/**/*.py", "src/coach_ml/runtime/ports.py", "src/coach_ml/runtime/generation.py",
+  "src/coach_ml/lora.py", "src/coach_ml/runtime_qwen35/audit.py",
+  "src/coach_ml/tactical/target_rendering.py", "src/coach_ml/tactical/policy_v2.py",
+  "src/coach_ml/tactical/policy_v3.py", "src/coach_ml/tactical/content_diagnostics.py",
+  "src/coach_ml/tactical/error_analysis.py", "src/coach_ml/tactical/supervision_audit.py",
+  "tests/test_architecture.py", "tests/test_audit_infrastructure.py", "tests/test_generation_composition.py",
+  "tests/test_target_rendering.py",
+]
 
 [tool.ruff.lint]
 # pyflakes (unused/undefined names), import order, bugbear (likely bugs).

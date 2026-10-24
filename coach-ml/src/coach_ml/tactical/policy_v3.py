@@ -1,10 +1,11 @@
 """Signal-driven targets. All decisions and cited values come from the Domain signals."""
 import copy
 import math
+
 from ..core.validation import require
-from .policy_v2 import render_target
-from .signal_wording import details_for, CITED_FIELDS
+from .signal_wording import CITED_FIELDS, details_for
 from .situated import FIELDS
+from .target_rendering import render_target
 
 NAMES = ('outnumbered', 'low-health', 'escape-ready-under-damage', 'isolated-enemy-side',
          'ahead-without-observer', 'teleport-defense', 'ultimate-window', 'roshan-window',
